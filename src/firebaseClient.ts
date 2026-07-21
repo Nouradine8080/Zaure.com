@@ -21,14 +21,14 @@ import {
 } from 'firebase/firestore';
 import { UserProfile, Circle, CircleMember, Capsule, Comment, Reaction, Message } from './types';
 
-// Detect Firebase config from import.meta.env
+// Detect Firebase config from import.meta.env or fallback to provided project configuration
 const firebaseConfig = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || '',
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || ''
+  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || 'AIzaSyDhuMBmcKHsoESsknVacAy5haI6PmK6aw8',
+  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || 'zaure-com.firebaseapp.com',
+  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || 'zaure-com',
+  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || 'zaure-com.firebasestorage.app',
+  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || '893077823490',
+  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || '1:893077823490:web:af344c02ef2e2ab492071b'
 };
 
 export const isFirebaseConfigured = !!(
