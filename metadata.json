@@ -1,0 +1,6 @@
+{
+  "name": "Zaure",
+  "description": "Réseau social d'apprentissage communautaire organisé en cercles de savoir pour l'Afrique de l'Ouest francophone et haoussa.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
