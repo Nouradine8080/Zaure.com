@@ -5,7 +5,10 @@ import {
   createUserWithEmailAndPassword, 
   signOut as firebaseSignOut,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  updateEmail,
+  updatePassword,
+  deleteUser
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -17,9 +20,10 @@ import {
   query, 
   where, 
   orderBy, 
-  deleteDoc 
+  deleteDoc,
+  updateDoc
 } from 'firebase/firestore';
-import { UserProfile, Circle, CircleMember, Capsule, Comment, Reaction, Message } from './types';
+import { UserProfile, Circle, CircleMember, Capsule, Comment, Reaction, Message, UserSettings, DEFAULT_USER_SETTINGS } from './types';
 
 // Detect Firebase config from import.meta.env or fallback to provided project configuration
 const firebaseConfig = {
@@ -944,5 +948,152 @@ export const zaureService = {
     db.messages.push(newMessage);
     db.saveMessages();
     return newMessage;
+  },
+
+  // ----------------------------------------------------
+  // USER SETTINGS & PREFERENCES MANAGEMENT
+  // ----------------------------------------------------
+  getUserSettings: async (userId: string): Promise<UserSettings> => {
+    const user = db.currentUser;
+    const baseSettings: UserSettings = {
+      ...DEFAULT_USER_SETTINGS,
+      nom: user?.nom || '',
+      email: user?.email || '',
+      bio: user?.bio || '',
+      avatar_url: user?.avatar_url || '',
+      langue_preferee: user?.langue_preferee || 'fr',
+      langue_interface: user?.langue_preferee || 'fr'
+    };
+
+    if (isFirebaseConfigured && dbFirestore) {
+      try {
+        const settingsDoc = await getDoc(doc(dbFirestore, 'user_settings', userId));
+        if (settingsDoc.exists()) {
+          return { ...baseSettings, ...settingsDoc.data() as UserSettings };
+        }
+      } catch (error) {
+        console.warn('Info - fetching user_settings from Firestore:', error);
+      }
+    }
+
+    // Local storage fallback
+    const local = localStorage.getItem(`zaure_settings_${userId}`);
+    if (local) {
+      try {
+        return { ...baseSettings, ...JSON.parse(local) };
+      } catch (e) {
+        // fallback
+      }
+    }
+    return baseSettings;
+  },
+
+  saveUserSettings: async (userId: string, newSettings: Partial<UserSettings>): Promise<boolean> => {
+    if (isFirebaseConfigured && dbFirestore) {
+      try {
+        await setDoc(doc(dbFirestore, 'user_settings', userId), newSettings, { merge: true });
+      } catch (error) {
+        console.warn('Info - saving user_settings to Firestore:', error);
+      }
+    }
+
+    // Also persist in local storage for fast client sync & offline support
+    const local = localStorage.getItem(`zaure_settings_${userId}`);
+    const existing = local ? JSON.parse(local) : {};
+    const merged = { ...existing, ...newSettings };
+    localStorage.setItem(`zaure_settings_${userId}`, JSON.stringify(merged));
+    return true;
+  },
+
+  updateUserProfile: async (
+    userId: string, 
+    updates: { nom?: string; bio?: string; avatar_url?: string; langue_preferee?: 'fr' | 'ha' | 'en' }
+  ): Promise<{ user: UserProfile | null, error: string | null }> => {
+    if (isFirebaseConfigured && dbFirestore) {
+      try {
+        await updateDoc(doc(dbFirestore, 'users', userId), updates);
+      } catch (error) {
+        console.warn('Info - updating user profile in Firestore:', error);
+      }
+    }
+
+    if (db.currentUser && db.currentUser.id === userId) {
+      db.currentUser = { ...db.currentUser, ...updates };
+      localStorage.setItem('zaure_current_user', JSON.stringify(db.currentUser));
+      const idx = db.users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        db.users[idx] = { ...db.users[idx], ...updates };
+        db.saveUsers();
+      }
+      return { user: db.currentUser, error: null };
+    }
+    return { user: null, error: 'Utilisateur non trouvé' };
+  },
+
+  changeUserEmail: async (newEmail: string): Promise<{ success: boolean; error: string | null }> => {
+    const user = db.currentUser;
+    if (!user) return { success: false, error: 'Utilisateur non connecté' };
+
+    if (isFirebaseConfigured && auth && auth.currentUser) {
+      try {
+        await updateEmail(auth.currentUser, newEmail);
+        if (dbFirestore) {
+          await updateDoc(doc(dbFirestore, 'users', user.id), { email: newEmail });
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Erreur lors de la mise à jour de l\'email' };
+      }
+    }
+
+    user.email = newEmail;
+    db.currentUser = user;
+    localStorage.setItem('zaure_current_user', JSON.stringify(user));
+    return { success: true, error: null };
+  },
+
+  changeUserPassword: async (newPassword: string): Promise<{ success: boolean; error: string | null }> => {
+    if (isFirebaseConfigured && auth && auth.currentUser) {
+      try {
+        await updatePassword(auth.currentUser, newPassword);
+        return { success: true, error: null };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Erreur lors du changement de mot de passe.' };
+      }
+    }
+    // Sandbox mock password change
+    return { success: true, error: null };
+  },
+
+  deleteAccount: async (userId: string): Promise<{ success: boolean; error: string | null }> => {
+    if (isFirebaseConfigured && dbFirestore) {
+      try {
+        await deleteDoc(doc(dbFirestore, 'users', userId));
+        await deleteDoc(doc(dbFirestore, 'user_settings', userId));
+        if (auth && auth.currentUser) {
+          await deleteUser(auth.currentUser);
+        }
+      } catch (err: any) {
+        console.warn('Error deleting account:', err);
+      }
+    }
+    db.currentUser = null;
+    localStorage.removeItem('zaure_current_user');
+    localStorage.removeItem(`zaure_settings_${userId}`);
+    return { success: true, error: null };
+  },
+
+  getAllUsersList: async (): Promise<UserProfile[]> => {
+    if (isFirebaseConfigured && dbFirestore) {
+      try {
+        const snap = await getDocs(collection(dbFirestore, 'users'));
+        const list: UserProfile[] = [];
+        snap.forEach(d => list.push(d.data() as UserProfile));
+        if (list.length > 0) return list;
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+    return db.users.length > 0 ? db.users : SEED_USERS;
   }
 };
+

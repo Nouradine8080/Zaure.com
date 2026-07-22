@@ -15,7 +15,8 @@ import {
   Check, 
   ArrowRight,
   ChevronDown,
-  Volume2
+  Volume2,
+  Settings
 } from 'lucide-react';
 import { zaureService } from './firebaseClient';
 import { Circle, Capsule, UserProfile } from './types';
@@ -23,9 +24,10 @@ import CircleCard from './components/CircleCard';
 import CapsuleCard from './components/CapsuleCard';
 import AudioRecorder from './components/AudioRecorder';
 import ChatView from './components/ChatView';
+import SettingsView from './components/SettingsView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'chat'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'chat' | 'settings'>('feed');
   const [mode, setMode] = useState<'cloud' | 'local'>('local');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
@@ -289,24 +291,31 @@ export default function App() {
             {currentUser ? (
               <div className="flex items-center gap-2.5">
                 {/* Identity information */}
-                <div className="text-right">
-                  <p className="text-xs font-bold text-white flex items-center gap-1 justify-end">
-                    <span>{currentUser.nom}</span>
-                    {currentUser.role === 'verifie' && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Vérifié" />}
-                    {currentUser.role === 'mentor' && <span className="w-2 h-2 rounded-full bg-amber-400" title="Mentor" />}
-                  </p>
-                  <p className="text-[9px] text-slate-400 capitalize">
-                    {currentUser.role === 'verifie' ? 'Professionnel Vérifié' : currentUser.role === 'mentor' ? 'Mentor' : 'Apprenant'} • {currentUser.langue_preferee.toUpperCase()}
-                  </p>
-                </div>
-
-                {currentUser.avatar_url ? (
-                  <img src={currentUser.avatar_url} alt={currentUser.nom} className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-500" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-9 h-9 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700">
-                    <User className="w-4.5 h-4.5 text-slate-400" />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('settings')}
+                  className="flex items-center gap-2.5 text-left hover:opacity-85 transition"
+                  title="Accéder aux réglages"
+                >
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-white flex items-center gap-1 justify-end">
+                      <span>{currentUser.nom}</span>
+                      {currentUser.role === 'verifie' && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Vérifié" />}
+                      {currentUser.role === 'mentor' && <span className="w-2 h-2 rounded-full bg-amber-400" title="Mentor" />}
+                    </p>
+                    <p className="text-[9px] text-slate-400 capitalize">
+                      {currentUser.role === 'verifie' ? 'Professionnel Vérifié' : currentUser.role === 'mentor' ? 'Mentor' : 'Apprenant'} • {currentUser.langue_preferee.toUpperCase()}
+                    </p>
                   </div>
-                )}
+
+                  {currentUser.avatar_url ? (
+                    <img src={currentUser.avatar_url} alt={currentUser.nom} className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-500" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-9 h-9 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700">
+                      <User className="w-4.5 h-4.5 text-slate-400" />
+                    </div>
+                  )}
+                </button>
 
                 <button
                   onClick={handleSignOut}
@@ -363,11 +372,55 @@ export default function App() {
             <MessageSquare className="w-4 h-4" />
             <span>Messagerie Directe</span>
           </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('settings');
+            }}
+            className={`px-4 py-3 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
+              activeTab === 'settings'
+                ? 'border-emerald-500 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-200'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Paramètres</span>
+          </button>
         </div>
       </nav>
 
       {/* 4. Core Body Section */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4" id="primary-app-layout">
+
+        {/* SETTINGS / PARAMÈTRES SCREEN */}
+        {activeTab === 'settings' && (
+          <div className="py-4 animate-fadeIn">
+            {currentUser ? (
+              <SettingsView
+                currentUser={currentUser}
+                onProfileUpdated={(updated) => setCurrentUser(updated)}
+                onSignOut={handleSignOut}
+              />
+            ) : (
+              <div className="bg-white border border-slate-100 rounded-2xl p-8 text-center max-w-md mx-auto my-12">
+                <Settings className="w-12 h-12 text-slate-300 mx-auto mb-4 stroke-1" />
+                <h3 className="font-bold text-slate-900 text-base">Identifiez-vous pour vos réglages</h3>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  Pour gérer votre profil, votre confidentialité, vos notifications et préférences enregistrées dans Firestore, vous devez vous connecter.
+                </p>
+                <button
+                  onClick={() => {
+                    setIsSignUp(false);
+                    setShowAuthModal(true);
+                  }}
+                  className="mt-6 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition shadow-sm"
+                >
+                  S'identifier maintenant
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* CHAT MESSAGERIE SCREEN */}
         {activeTab === 'chat' && (

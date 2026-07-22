@@ -81,3 +81,63 @@ export interface Mentorship {
   statut: 'en_attente' | 'actif' | 'termine';
   created_at: string;
 }
+
+export interface UserSettings {
+  // 1. Compte
+  nom: string;
+  bio: string;
+  avatar_url: string;
+  langue_preferee: 'fr' | 'ha' | 'en';
+  email: string;
+
+  // 2. Confidentialité
+  profil_visibilite: 'public' | 'cercles' | 'mentors';
+  capsules_visibilite: 'public' | 'cercles' | 'mentors';
+  messages_autorises: 'tous' | 'cercles' | 'mentors';
+  mentorat_autorise: 'tous' | 'verifies' | 'aucun';
+  utilisateurs_bloques: string[];
+
+  // 3. Notifications
+  notif_capsule: boolean;
+  notif_message: boolean;
+  notif_mentorat: boolean;
+  notif_reaction: boolean;
+  canal_notif: 'inapp' | 'email' | 'les_deux';
+
+  // 4. Contenu & langue
+  langue_interface: 'fr' | 'ha' | 'en';
+  traduction_auto: boolean;
+  telechargement_hors_ligne: boolean;
+
+  // 5. Cercles
+  masquer_suggestions: boolean;
+
+  // 6. Accessibilité / data
+  mode_faible_consommation: boolean;
+  taille_texte: 'normal' | 'grand' | 'tres_grand';
+}
+
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  nom: '',
+  bio: '',
+  avatar_url: '',
+  langue_preferee: 'fr',
+  email: '',
+  profil_visibilite: 'public',
+  capsules_visibilite: 'public',
+  messages_autorises: 'tous',
+  mentorat_autorise: 'tous',
+  utilisateurs_bloques: [],
+  notif_capsule: true,
+  notif_message: true,
+  notif_mentorat: true,
+  notif_reaction: true,
+  canal_notif: 'les_deux',
+  langue_interface: 'fr',
+  traduction_auto: true,
+  telechargement_hors_ligne: false,
+  masquer_suggestions: false,
+  mode_faible_consommation: false,
+  taille_texte: 'normal'
+};
+
