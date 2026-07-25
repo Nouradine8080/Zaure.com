@@ -21,7 +21,8 @@ import {
   where, 
   orderBy, 
   deleteDoc,
-  updateDoc
+  updateDoc,
+  onSnapshot
 } from 'firebase/firestore';
 import { UserProfile, Circle, CircleMember, Capsule, Comment, Reaction, Message, UserSettings, DEFAULT_USER_SETTINGS } from './types';
 
@@ -55,165 +56,15 @@ if (isFirebaseConfigured) {
 }
 
 // ----------------------------------------------------
-// LOCAL SANDBOX SEED DATA
+// LOCAL SANDBOX SEED DATA (Empty by default - no demo data)
 // ----------------------------------------------------
-const SEED_USERS: UserProfile[] = [
-  {
-    id: 'user-amina',
-    nom: 'Dr. Amina Diallo',
-    email: 'amina.diallo@zaure.org',
-    bio: 'Médecin généraliste à Dakar. Passionnée par la vulgarisation médicale et la formation des jeunes professionnels de santé.',
-    avatar_url: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=200',
-    role: 'verifie',
-    langue_preferee: 'fr'
-  },
-  {
-    id: 'user-ousmane',
-    nom: 'Ousmane Bello',
-    email: 'ousmane.bello@zaure.org',
-    bio: 'Enseignant bilingue Français-Haoussa à Maradi, Niger. Je partage des capsules quotidiennes pour apprendre le haoussa.',
-    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-    role: 'mentor',
-    langue_preferee: 'ha'
-  },
-  {
-    id: 'user-mahamadou',
-    nom: 'Mahamadou Garba',
-    email: 'mahamadou.garba@zaure.org',
-    bio: 'Étudiant en médecine. Curieux d\'apprendre et d\'échanger au sein de la communauté.',
-    avatar_url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200',
-    role: 'utilisateur',
-    langue_preferee: 'fr'
-  }
-];
-
-const SEED_CIRCLES: Circle[] = [
-  {
-    id: 'circle-sante',
-    nom: 'Santé & Premiers secours',
-    description: 'Gestes de secours, prévention du paludisme, nutrition et conseils de santé vérifiés par des professionnels.',
-    categorie: 'Médecine',
-    image: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=600'
-  },
-  {
-    id: 'circle-haoussa',
-    nom: 'Apprendre le Haoussa (Koyi Hausa)',
-    description: 'Espace d\'échange et d\'apprentissage de la langue haoussa : vocabulaire, expressions courantes et culture.',
-    categorie: 'Langues',
-    image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=600'
-  },
-  {
-    id: 'circle-medecine',
-    nom: 'Étudiants en médecine',
-    description: 'Partage de fiches cliniques, entraide sur les cours de sémiologie, pharmacologie et préparation des examens.',
-    categorie: 'Médecine',
-    image: 'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?auto=format&fit=crop&q=80&w=600'
-  },
-  {
-    id: 'circle-agri',
-    nom: 'Agriculture moderne & Sahel',
-    description: 'Discussions autour des techniques d\'irrigation, d\'agroécologie et de maraîchage adaptées au climat sahélien.',
-    categorie: 'Sciences',
-    image: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=600'
-  }
-];
-
-const SEED_MEMBERS: CircleMember[] = [
-  { user_id: 'user-amina', circle_id: 'circle-sante', role: 'moderateur', joined_at: '2026-01-10T12:00:00Z' },
-  { user_id: 'user-amina', circle_id: 'circle-medecine', role: 'moderateur', joined_at: '2026-01-10T12:00:00Z' },
-  { user_id: 'user-ousmane', circle_id: 'circle-haoussa', role: 'moderateur', joined_at: '2026-01-12T12:00:00Z' },
-  { user_id: 'user-mahamadou', circle_id: 'circle-sante', role: 'membre', joined_at: '2026-02-01T15:30:00Z' },
-  { user_id: 'user-mahamadou', circle_id: 'circle-medecine', role: 'membre', joined_at: '2026-02-01T15:32:00Z' },
-  { user_id: 'user-mahamadou', circle_id: 'circle-haoussa', role: 'membre', joined_at: '2026-02-01T15:34:00Z' }
-];
-
-const SEED_CAPSULES: Capsule[] = [
-  {
-    id: 'capsule-1',
-    auteur_id: 'user-amina',
-    circle_id: 'circle-sante',
-    type: 'texte',
-    contenu: '💡 PRÉVENTION DU PALUDISME\nLe paludisme reste la première cause de consultation. Pensez à toujours vérifier l\'utilisation systématique de moustiquaires imprégnées pour toute la famille. En cas de fièvre chez un enfant, un TDR (Test de Diagnostic Rapide) doit être effectué dans les 24h. Ne pratiquez pas d\'automédication !',
-    langue_dorigine: 'fr',
-    created_at: '2026-07-20T10:15:00Z',
-    auteur_nom: 'Dr. Amina Diallo',
-    auteur_role: 'verifie',
-    auteur_avatar: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=200',
-    circle_nom: 'Santé & Premiers secours'
-  },
-  {
-    id: 'capsule-2',
-    auteur_id: 'user-ousmane',
-    circle_id: 'circle-haoussa',
-    type: 'texte',
-    contenu: '🗣️ LEÇON DU JOUR : Salutations fondamentales en Haoussa\n\n- Sannu : Salut / Bonjour (général)\n- Ina kwana ? : Comment s\'est passé ton réveil ? (Bonjour le matin)\n- Ina wuni ? : Comment s\'est passée ta journée ? (Bonjour l\'après-midi)\n- Lafiya lau : Très bien, en paix (réponse standard)\n\nEntraînez-vous à les prononcer avec vos proches aujourd\'hui ! 🇳🇬 🇳🇪',
-    langue_dorigine: 'ha',
-    created_at: '2026-07-20T14:30:00Z',
-    auteur_nom: 'Ousmane Bello',
-    auteur_role: 'mentor',
-    auteur_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-    circle_nom: 'Apprendre le Haoussa (Koyi Hausa)'
-  },
-  {
-    id: 'capsule-3',
-    auteur_id: 'user-amina',
-    circle_id: 'circle-medecine',
-    type: 'texte',
-    contenu: '📚 SÉMIOLOGIE CARDIAQUE\n\nPour les étudiants qui préparent l\'examen clinique : n\'oubliez pas les 4 foyers d\'auscultation principaux :\n1. Foyer aortique (2e espace intercostal droit)\n2. Foyer pulmonaire (2e espace intercostal gauche)\n3. Foyer tricuspide (bas du sternum, xiphoïde)\n4. Foyer mitral (5e espace intercostal gauche, ligne médio-claviculaire).\n\nFaites une fiche de révision, c\'est incontournable !',
-    langue_dorigine: 'fr',
-    created_at: '2026-07-21T02:05:00Z',
-    auteur_nom: 'Dr. Amina Diallo',
-    auteur_role: 'verifie',
-    auteur_avatar: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=200',
-    circle_nom: 'Étudiants en médecine'
-  }
-];
-
-const SEED_COMMENTS: Comment[] = [
-  {
-    id: 'comment-1',
-    capsule_id: 'capsule-1',
-    auteur_id: 'user-mahamadou',
-    contenu: 'Merci beaucoup Docteur. C\'est un rappel crucial pour les familles, surtout en cette période d\'hivernage.',
-    created_at: '2026-07-20T11:00:00Z',
-    auteur_nom: 'Mahamadou Garba',
-    auteur_avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'comment-2',
-    capsule_id: 'capsule-2',
-    auteur_id: 'user-mahamadou',
-    contenu: 'Ina kwana Mallam Ousmane ! Merci pour ces bases de salutations.',
-    created_at: '2026-07-20T15:10:00Z',
-    auteur_nom: 'Mahamadou Garba',
-    auteur_avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200'
-  }
-];
-
-const SEED_REACTIONS: Reaction[] = [
-  { capsule_id: 'capsule-1', user_id: 'user-mahamadou', type: 'utile' },
-  { capsule_id: 'capsule-1', user_id: 'user-ousmane', type: 'merci' },
-  { capsule_id: 'capsule-2', user_id: 'user-mahamadou', type: 'merci' }
-];
-
-const SEED_MESSAGES: Message[] = [
-  {
-    id: 'msg-1',
-    sender_id: 'user-ousmane',
-    receiver_id: 'user-mahamadou',
-    content: 'Barkama Mahamadou ! Comment vas-tu ? Tu t\'en sors avec ton apprentissage du haoussa ?',
-    created_at: '2026-07-20T16:00:00Z',
-    sender_nom: 'Ousmane Bello'
-  },
-  {
-    id: 'msg-2',
-    sender_id: 'user-mahamadou',
-    receiver_id: 'user-ousmane',
-    content: 'Lafiya lau Mallam ! Oui, grâce à vos capsules quotidiennes, je commence à bien maîtriser les salutations de base.',
-    created_at: '2026-07-20T16:05:00Z',
-    sender_nom: 'Mahamadou Garba'
-  }
-];
+const SEED_USERS: UserProfile[] = [];
+const SEED_CIRCLES: Circle[] = [];
+const SEED_MEMBERS: CircleMember[] = [];
+const SEED_CAPSULES: Capsule[] = [];
+const SEED_COMMENTS: Comment[] = [];
+const SEED_REACTIONS: Reaction[] = [];
+const SEED_MESSAGES: Message[] = [];
 
 // Helper to load/save state from LocalStorage
 class LocalDatabase {
@@ -240,29 +91,66 @@ class LocalDatabase {
     const messagesData = localStorage.getItem('zaure_local_messages');
     const currentUserData = localStorage.getItem('zaure_current_user');
 
-    if (usersData) this.users = JSON.parse(usersData);
-    else { this.users = SEED_USERS; this.saveUsers(); }
+    const demoUserIds = ['user-amina', 'user-ousmane', 'user-mahamadou'];
+    const demoCircleIds = ['circle-sante', 'circle-haoussa', 'circle-medecine', 'circle-agri'];
 
-    if (circlesData) this.circles = JSON.parse(circlesData);
-    else { this.circles = SEED_CIRCLES; this.saveCircles(); }
+    if (usersData) {
+      this.users = (JSON.parse(usersData) as UserProfile[]).filter(u => !demoUserIds.includes(u.id));
+    } else {
+      this.users = [];
+      this.saveUsers();
+    }
 
-    if (membersData) this.members = JSON.parse(membersData);
-    else { this.members = SEED_MEMBERS; this.saveMembers(); }
+    if (circlesData) {
+      this.circles = (JSON.parse(circlesData) as Circle[]).filter(c => !demoCircleIds.includes(c.id));
+    } else {
+      this.circles = [];
+      this.saveCircles();
+    }
 
-    if (capsulesData) this.capsules = JSON.parse(capsulesData);
-    else { this.capsules = SEED_CAPSULES; this.saveCapsules(); }
+    if (membersData) {
+      this.members = (JSON.parse(membersData) as CircleMember[]).filter(m => !demoCircleIds.includes(m.circle_id) && !demoUserIds.includes(m.user_id));
+    } else {
+      this.members = [];
+      this.saveMembers();
+    }
 
-    if (commentsData) this.comments = JSON.parse(commentsData);
-    else { this.comments = SEED_COMMENTS; this.saveComments(); }
+    if (capsulesData) {
+      this.capsules = (JSON.parse(capsulesData) as Capsule[]).filter(c => !demoCircleIds.includes(c.circle_id) && !demoUserIds.includes(c.auteur_id));
+    } else {
+      this.capsules = [];
+      this.saveCapsules();
+    }
 
-    if (reactionsData) this.reactions = JSON.parse(reactionsData);
-    else { this.reactions = SEED_REACTIONS; this.saveReactions(); }
+    if (commentsData) {
+      this.comments = (JSON.parse(commentsData) as Comment[]).filter(c => !demoUserIds.includes(c.auteur_id));
+    } else {
+      this.comments = [];
+      this.saveComments();
+    }
 
-    if (messagesData) this.messages = JSON.parse(messagesData);
-    else { this.messages = SEED_MESSAGES; this.saveMessages(); }
+    if (reactionsData) {
+      this.reactions = (JSON.parse(reactionsData) as Reaction[]).filter(r => !demoUserIds.includes(r.user_id));
+    } else {
+      this.reactions = [];
+      this.saveReactions();
+    }
+
+    if (messagesData) {
+      this.messages = (JSON.parse(messagesData) as Message[]).filter(m => !demoUserIds.includes(m.sender_id) && !demoUserIds.includes(m.receiver_id));
+    } else {
+      this.messages = [];
+      this.saveMessages();
+    }
 
     if (currentUserData) {
-      this.currentUser = JSON.parse(currentUserData);
+      const parsedUser = JSON.parse(currentUserData);
+      if (parsedUser && demoUserIds.includes(parsedUser.id)) {
+        this.currentUser = null;
+        localStorage.removeItem('zaure_current_user');
+      } else {
+        this.currentUser = parsedUser;
+      }
     } else {
       this.currentUser = null;
     }
@@ -402,7 +290,7 @@ export const zaureService = {
         localStorage.setItem('zaure_current_user', JSON.stringify(user));
         return { user, error: null };
       }
-      return { user: null, error: 'Cet email n\'existe pas dans le Sandbox. Créez un compte ou utilisez un email de démonstration (ex: mahamadou.garba@zaure.org).' };
+      return { user: null, error: 'Cet email n\'existe pas dans le Sandbox. Veuillez créer un compte.' };
     }
   },
 
@@ -440,7 +328,10 @@ export const zaureService = {
       }
     } else {
       // Local Sandbox Mock Google Sign In
-      const defaultUser = db.users[2] || SEED_USERS[2];
+      const defaultUser = db.users[0] || null;
+      if (!defaultUser) {
+        return { user: null, error: 'Aucun compte disponible dans le Sandbox. Veuillez créer un compte.' };
+      }
       db.currentUser = defaultUser;
       localStorage.setItem('zaure_current_user', JSON.stringify(defaultUser));
       return { user: defaultUser, error: null };
@@ -459,10 +350,12 @@ export const zaureService = {
     localStorage.removeItem('zaure_current_user');
   },
 
-  switchSandboxUser: (userId: string): UserProfile => {
-    const user = db.users.find(u => u.id === userId) || db.users[2];
-    db.currentUser = user;
-    localStorage.setItem('zaure_current_user', JSON.stringify(user));
+  switchSandboxUser: (userId: string): UserProfile | null => {
+    const user = db.users.find(u => u.id === userId) || db.users[0] || null;
+    if (user) {
+      db.currentUser = user;
+      localStorage.setItem('zaure_current_user', JSON.stringify(user));
+    }
     return user;
   },
 
@@ -479,14 +372,6 @@ export const zaureService = {
         querySnapshot.forEach((doc) => {
           cloudCircles.push(doc.data() as Circle);
         });
-        
-        // Seed if empty in Cloud
-        if (cloudCircles.length === 0) {
-          for (const c of db.circles) {
-            await setDoc(doc(dbFirestore, 'circles', c.id), c);
-            cloudCircles.push(c);
-          }
-        }
         return cloudCircles.sort((a, b) => a.nom.localeCompare(b.nom));
       } catch (error) {
         console.warn('Info - fetching circles from Firebase:', error);
@@ -638,14 +523,6 @@ export const zaureService = {
             auteurNom = profile.nom;
             auteurRole = profile.role;
             auteurAvatar = profile.avatar_url || '';
-          } else {
-            // Fallback to seed users
-            const sUser = SEED_USERS.find(u => u.id === c.auteur_id);
-            if (sUser) {
-              auteurNom = sUser.nom;
-              auteurRole = sUser.role;
-              auteurAvatar = sUser.avatar_url || '';
-            }
           }
 
           finalCapsules.push({
@@ -860,52 +737,99 @@ export const zaureService = {
     return newComment;
   },
 
+  // Helper for deterministic conversation ID
+  getConversationId: (uid1: string, uid2: string): string => {
+    return [uid1, uid2].sort().join('_');
+  },
+
   // --- PRIVATE MESSAGES ---
+  subscribePrivateMessages: (otherUserId: string, callback: (messages: Message[]) => void): (() => void) => {
+    const user = db.currentUser;
+    if (!user) {
+      callback([]);
+      return () => {};
+    }
+
+    const convId = [user.id, otherUserId].sort().join('_');
+
+    if (isFirebaseConfigured && dbFirestore) {
+      try {
+        const messagesRef = collection(dbFirestore, 'conversations', convId, 'messages');
+        const q = query(messagesRef, orderBy('created_at', 'asc'));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const list: Message[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            list.push({
+              id: docSnap.id || data.id,
+              sender_id: data.sender_id || data.senderId || '',
+              receiver_id: data.receiver_id || data.receiverId || '',
+              content: data.content || '',
+              created_at: data.created_at || data.createdAt || new Date().toISOString(),
+              sender_nom: data.sender_nom || data.senderNom || 'Membre'
+            });
+          });
+
+          callback(list);
+        }, (error) => {
+          console.warn('Firestore onSnapshot error, fallback to local query:', error);
+          const localMsgs = db.messages
+            .filter(m => (m.sender_id === user.id && m.receiver_id === otherUserId) || (m.sender_id === otherUserId && m.receiver_id === user.id))
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          callback(localMsgs);
+        });
+
+        return unsubscribe;
+      } catch (e) {
+        console.warn('Error setting up onSnapshot listener:', e);
+      }
+    }
+
+    // Local / Sandbox Fallback Mode
+    const localMsgs = db.messages
+      .filter(m => (m.sender_id === user.id && m.receiver_id === otherUserId) || (m.sender_id === otherUserId && m.receiver_id === user.id))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    callback(localMsgs);
+
+    const interval = setInterval(() => {
+      const updatedMsgs = db.messages
+        .filter(m => (m.sender_id === user.id && m.receiver_id === otherUserId) || (m.sender_id === otherUserId && m.receiver_id === user.id))
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      callback(updatedMsgs);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  },
+
   getPrivateMessages: async (otherUserId: string): Promise<Message[]> => {
     const user = db.currentUser;
     if (!user) return [];
 
+    const convId = [user.id, otherUserId].sort().join('_');
+
     if (isFirebaseConfigured && dbFirestore) {
       try {
-        // Query both directions in Firestore
-        const q1 = query(
-          collection(dbFirestore, 'messages'), 
-          where('sender_id', '==', user.id), 
-          where('receiver_id', '==', otherUserId)
-        );
-        const q2 = query(
-          collection(dbFirestore, 'messages'), 
-          where('sender_id', '==', otherUserId), 
-          where('receiver_id', '==', user.id)
-        );
+        const messagesRef = collection(dbFirestore, 'conversations', convId, 'messages');
+        const q = query(messagesRef, orderBy('created_at', 'asc'));
+        const snapshot = await getDocs(q);
 
-        const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-        const combined: Message[] = [];
-        
-        snap1.forEach((doc) => { combined.push(doc.data() as Message); });
-        snap2.forEach((doc) => { combined.push(doc.data() as Message); });
-
-        const finalMessages: Message[] = [];
-        for (const m of combined) {
-          let senderNom = 'Utilisateur';
-          const uDoc = await getDoc(doc(dbFirestore, 'users', m.sender_id));
-          if (uDoc.exists()) {
-            senderNom = (uDoc.data() as UserProfile).nom;
-          } else {
-            const sUser = SEED_USERS.find(u => u.id === m.sender_id);
-            if (sUser) senderNom = sUser.nom;
-          }
-
-          finalMessages.push({
-            ...m,
-            sender_nom: senderNom
+        const list: Message[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          list.push({
+            id: docSnap.id || data.id,
+            sender_id: data.sender_id || data.senderId || '',
+            receiver_id: data.receiver_id || data.receiverId || '',
+            content: data.content || '',
+            created_at: data.created_at || data.createdAt || new Date().toISOString(),
+            sender_nom: data.sender_nom || data.senderNom || 'Membre'
           });
-        }
+        });
 
-        return finalMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        if (list.length > 0) return list;
       } catch (error) {
         console.warn('Info - fetching messages from Firebase:', error);
-        dbHasError = true;
       }
     }
 
@@ -922,24 +846,44 @@ export const zaureService = {
     const user = db.currentUser;
     if (!user) throw new Error('Utilisateur non connecté.');
 
+    const convId = [user.id, receiverId].sort().join('_');
+    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
+
     const newMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: messageId,
       sender_id: user.id,
       receiver_id: receiverId,
       content,
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
       sender_nom: user.nom
     };
 
     if (isFirebaseConfigured && dbFirestore) {
       try {
-        await setDoc(doc(dbFirestore, 'messages', newMessage.id), {
-          id: newMessage.id,
-          sender_id: newMessage.sender_id,
-          receiver_id: newMessage.receiver_id,
-          content: newMessage.content,
-          created_at: newMessage.created_at
+        const docRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+        await setDoc(docRef, {
+          id: messageId,
+          conversation_id: convId,
+          sender_id: user.id,
+          senderId: user.id,
+          receiver_id: receiverId,
+          receiverId: receiverId,
+          content: content,
+          created_at: nowIso,
+          createdAt: nowIso,
+          sender_nom: user.nom,
+          senderNom: user.nom
         });
+
+        await setDoc(doc(dbFirestore, 'messages', messageId), {
+          id: messageId,
+          conversation_id: convId,
+          sender_id: user.id,
+          receiver_id: receiverId,
+          content: content,
+          created_at: nowIso
+        }).catch(() => {});
       } catch (error) {
         console.warn('Info - inserting message in Firebase:', error);
       }
@@ -1093,7 +1037,7 @@ export const zaureService = {
         console.warn(e);
       }
     }
-    return db.users.length > 0 ? db.users : SEED_USERS;
+    return db.users;
   }
 };
 

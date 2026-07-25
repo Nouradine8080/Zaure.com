@@ -432,7 +432,7 @@ export default function App() {
                 <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4 stroke-1" />
                 <h3 className="font-bold text-slate-900 text-base">Identifiez-vous pour chatter</h3>
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  Pour échanger de manière privée avec Mallam Ousmane, le Dr. Amina ou d'autres membres, vous devez posséder un compte actif sur Zaure.
+                  Pour échanger de manière privée avec d'autres membres, vous devez posséder un compte actif sur Zaure.
                 </p>
                 <button
                   onClick={() => {
@@ -974,7 +974,7 @@ export default function App() {
 
               {!isSignUp && mode === 'local' && (
                 <p className="text-[10px] text-slate-400 italic">
-                  Note : En mode Sandbox, vous pouvez tester la connexion avec n'importe quel email valide, ou utiliser les adresses de démo (ex: <strong>mahamadou.garba@zaure.org</strong>).
+                  Note : Vous pouvez vous connecter avec votre adresse email enregistrée.
                 </p>
               )}
 

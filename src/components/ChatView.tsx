@@ -16,10 +16,10 @@ export default function ChatView({ currentUser }: ChatViewProps) {
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Load user contacts
+  // Load user contacts list
   useEffect(() => {
     const list = zaureService.getAvailableUsers();
-    // Filter out self
+    // Filter out current user from contacts list
     if (currentUser) {
       setUsers(list.filter((u) => u.id !== currentUser.id));
     } else {
@@ -27,59 +27,61 @@ export default function ChatView({ currentUser }: ChatViewProps) {
     }
   }, [currentUser]);
 
-  // Load messages when selectedUser changes
+  // Real-time Firestore subscription (onSnapshot) for the deterministic conversation
   useEffect(() => {
-    if (selectedUser) {
-      loadMessages();
-      // Poll for mock real-time effect every 4 seconds in local mode
-      const interval = setInterval(() => {
-        loadMessages();
-      }, 4000);
-      return () => clearInterval(interval);
+    if (!selectedUser || !currentUser) {
+      setMessages([]);
+      return;
     }
-  }, [selectedUser, currentUser]);
 
-  // Scroll to bottom on new messages
+    setIsLoading(true);
+    const unsubscribe = zaureService.subscribePrivateMessages(selectedUser.id, (msgs) => {
+      setMessages(msgs);
+      setIsLoading(false);
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [selectedUser?.id, currentUser?.id]);
+
+  // Scroll to bottom whenever messages list updates
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const loadMessages = async () => {
-    if (!selectedUser) return;
-    try {
-      const chatHistory = await zaureService.getPrivateMessages(selectedUser.id);
-      setMessages(chatHistory);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     if (!newMessageText.trim() || !selectedUser || !currentUser) return;
 
     const textToSend = newMessageText.trim();
     setNewMessageText('');
 
     try {
-      const sent = await zaureService.sendPrivateMessage(selectedUser.id, textToSend);
-      setMessages((prev) => [...prev, sent]);
-    } catch (e) {
-      console.error(e);
+      await zaureService.sendPrivateMessage(selectedUser.id, textToSend);
+      // onSnapshot handles appending the new message in real time
+    } catch (err) {
+      console.error("Erreur lors de l'envoi du message:", err);
     }
   };
 
   const formatTime = (isoString: string) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm h-[600px] flex overflow-hidden font-sans" id="chat-view-container">
+    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm h-[calc(100vh-200px)] md:h-[600px] min-h-[460px] max-h-[800px] flex overflow-hidden font-sans" id="chat-view-container">
       {/* 1. Contact List Pane */}
       <div
         className={`w-full md:w-80 border-r border-slate-100 flex flex-col bg-slate-50/50 ${
@@ -138,30 +140,31 @@ export default function ChatView({ currentUser }: ChatViewProps) {
         {selectedUser ? (
           <>
             {/* Header chat partner info */}
-            <div className="p-4 border-b border-slate-100 bg-white flex items-center gap-3">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-white flex items-center gap-3 shrink-0">
               <button
                 onClick={() => setSelectedUser(null)}
                 className="md:hidden p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 mr-1"
+                title="Retour aux discussions"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
 
               {selectedUser.avatar_url ? (
-                <img src={selectedUser.avatar_url} alt={selectedUser.nom} className="w-9 h-9 rounded-full object-cover" referrerPolicy="no-referrer" />
+                <img src={selectedUser.avatar_url} alt={selectedUser.nom} className="w-9 h-9 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
               ) : (
-                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
+                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center shrink-0">
                   <User className="w-5.5 h-5.5 text-slate-500" />
                 </div>
               )}
 
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <h4 className="font-bold text-slate-900 text-xs">{selectedUser.nom}</h4>
+                  <h4 className="font-bold text-slate-900 text-xs truncate">{selectedUser.nom}</h4>
                   {selectedUser.role === 'verifie' && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-emerald-50 text-emerald-700 rounded-md">Vérifié</span>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-emerald-50 text-emerald-700 rounded-md shrink-0">Vérifié</span>
                   )}
                   {selectedUser.role === 'mentor' && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-amber-50 text-amber-700 rounded-md">Mentor</span>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-amber-50 text-amber-700 rounded-md shrink-0">Mentor</span>
                   )}
                 </div>
                 <p className="text-[10px] text-slate-400 truncate max-w-xs md:max-w-md">{selectedUser.bio || 'Aucune biographie disponible.'}</p>
@@ -169,8 +172,12 @@ export default function ChatView({ currentUser }: ChatViewProps) {
             </div>
 
             {/* Conversation list */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.length === 0 ? (
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+              {isLoading && messages.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                  Chargement de la conversation...
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs text-center py-10">
                   <MessageSquare className="w-8 h-8 text-slate-300 mb-2 stroke-1" />
                   <p>Début de la conversation avec {selectedUser.nom}</p>
@@ -205,18 +212,28 @@ export default function ChatView({ currentUser }: ChatViewProps) {
             </div>
 
             {/* Send Message Form */}
-            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-2">
+            <form
+              onSubmit={handleSendMessage}
+              className="p-3 sm:p-4 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0 sticky bottom-0 z-20"
+            >
               <input
                 type="text"
                 placeholder={`Écrire à ${selectedUser.nom}...`}
                 value={newMessageText}
                 onChange={(e) => setNewMessageText(e.target.value)}
-                className="flex-1 px-3 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 bg-slate-50/50"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+                className="flex-1 min-w-0 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-slate-800 bg-slate-50/50"
               />
               <button
                 type="submit"
                 disabled={!newMessageText.trim()}
-                className="p-2.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 rounded-xl transition shadow-sm disabled:opacity-50 disabled:hover:bg-emerald-500"
+                className="p-2.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 rounded-xl transition shadow-sm disabled:opacity-50 disabled:hover:bg-emerald-500 shrink-0 flex items-center justify-center font-bold"
+                title="Envoyer le message"
               >
                 <Send className="w-4.5 h-4.5" />
               </button>
