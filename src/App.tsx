@@ -342,8 +342,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* 3. Main Container App Tabs Navigation */}
-      <nav className="bg-white border-b border-slate-100 shadow-xs w-full" id="main-navigation-tabs">
+      {/* 3. Main Container App Tabs Navigation (Desktop only) */}
+      <nav className="hidden md:block bg-white border-b border-slate-100 shadow-xs w-full" id="main-navigation-tabs">
         <div className="max-w-7xl w-full mx-auto px-4 flex gap-1 pt-2 overflow-x-auto">
           <button
             onClick={() => {
@@ -390,7 +390,7 @@ export default function App() {
       </nav>
 
       {/* 4. Core Body Section */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4" id="primary-app-layout">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 pb-24 md:pb-6" id="primary-app-layout">
 
         {/* SETTINGS / PARAMÈTRES SCREEN */}
         {activeTab === 'settings' && (
@@ -1035,6 +1035,45 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 5. Fixed Mobile Bottom Navigation Bar (< 768px) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg z-50 px-6 py-2 flex justify-around items-center" id="mobile-bottom-navigation">
+        <button
+          onClick={() => setActiveTab('feed')}
+          className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition ${
+            activeTab === 'feed'
+              ? 'text-emerald-600 font-bold'
+              : 'text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <BookOpen className={`w-5 h-5 ${activeTab === 'feed' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Cercles</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('chat')}
+          className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition ${
+            activeTab === 'chat'
+              ? 'text-emerald-600 font-bold'
+              : 'text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <MessageSquare className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Messages</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition ${
+            activeTab === 'settings'
+              ? 'text-emerald-600 font-bold'
+              : 'text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Réglages</span>
+        </button>
+      </nav>
 
     </div>
   );
