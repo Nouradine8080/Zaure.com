@@ -271,8 +271,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans" id="main-app-container">
       {/* 1. Header Banner */}
-      <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-sm" id="header-navbar">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-sm w-full" id="header-navbar">
+        <div className="max-w-7xl w-full mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="bg-emerald-500 text-slate-950 p-2 rounded-xl font-black text-xl tracking-wider shadow-inner flex items-center justify-center w-10 h-10">
               Z
@@ -343,8 +343,8 @@ export default function App() {
       </header>
 
       {/* 3. Main Container App Tabs Navigation */}
-      <nav className="bg-white border-b border-slate-100 shadow-xs" id="main-navigation-tabs">
-        <div className="max-w-7xl mx-auto px-4 flex gap-1 pt-2">
+      <nav className="bg-white border-b border-slate-100 shadow-xs w-full" id="main-navigation-tabs">
+        <div className="max-w-7xl w-full mx-auto px-4 flex gap-1 pt-2 overflow-x-auto">
           <button
             onClick={() => {
               setActiveTab('feed');
