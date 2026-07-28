@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, MessageSquare, Lightbulb, Heart, HelpCircle, CheckCircle2, Award, User, Clock, Languages, Volume2 } from 'lucide-react';
 import { Capsule, Comment, Reaction, UserProfile } from '../types';
 import { zaureService } from '../firebaseClient';
+import { useTranslation } from '../context/LanguageContext';
 
 interface CapsuleCardProps {
   capsule: Capsule;
@@ -10,6 +11,7 @@ interface CapsuleCardProps {
 }
 
 export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) {
+  const { t } = useTranslation();
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [showComments, setShowComments] = useState(false);
@@ -18,6 +20,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState('0:00');
   const [audioCurrentTime, setAudioCurrentTime] = useState('0:00');
+
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -149,10 +152,10 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
   };
 
   // Language mapping
-  const languageNames = {
-    fr: 'Français',
-    ha: 'Haoussa (Hausa)',
-    en: 'Anglais'
+  const languageNames: Record<string, string> = {
+    fr: t('lang.fr'),
+    ha: t('lang.ha'),
+    en: t('lang.en')
   };
 
   return (
@@ -180,13 +183,13 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
               {capsule.auteur_role === 'verifie' && (
                 <span className="flex items-center gap-0.5 px-2 py-0.5 bg-emerald-50 text-[10px] font-medium text-emerald-700 rounded-full border border-emerald-100">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>Vérifié</span>
+                  <span>{t('auth.role_verified')}</span>
                 </span>
               )}
               {capsule.auteur_role === 'mentor' && (
                 <span className="flex items-center gap-0.5 px-2 py-0.5 bg-amber-50 text-[10px] font-medium text-amber-700 rounded-full border border-amber-100">
                   <Award className="w-3 h-3 text-amber-600" />
-                  <span>Mentor</span>
+                  <span>{t('auth.role_mentor')}</span>
                 </span>
               )}
             </div>
@@ -223,7 +226,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
               <div className="flex-1">
                 <p className="text-xs font-bold text-slate-700 flex items-center gap-1">
                   <Volume2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                  <span>Écouter la capsule vocale</span>
+                  <span>{t('capsule.audio_title')}</span>
                 </p>
                 <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-2 relative">
                   <div
@@ -237,10 +240,6 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
                 </div>
               </div>
             </div>
-            {/* Short transcribed context/summary if present */}
-            <p className="text-xs text-slate-500 italic border-l-2 border-slate-200 pl-2.5 mt-1">
-              "Note vocale enregistrée par {capsule.auteur_nom} pour partager des connaissances orales de santé/langue."
-            </p>
           </div>
         ) : (
           <div>{capsule.contenu}</div>
@@ -260,7 +259,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
             }`}
           >
             <Lightbulb className={`w-4 h-4 ${hasReacted('utile') ? 'fill-amber-400 text-amber-500' : ''}`} />
-            <span className="font-medium">Utile</span>
+            <span className="font-medium">{t('capsule.react_useful')}</span>
             <span className="bg-white/60 px-1.5 py-0.2 rounded-full font-bold text-[10px] border border-slate-100">
               {getReactionCount('utile')}
             </span>
@@ -276,7 +275,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
             }`}
           >
             <Heart className={`w-4 h-4 ${hasReacted('merci') ? 'fill-rose-400 text-rose-500' : ''}`} />
-            <span className="font-medium">Merci</span>
+            <span className="font-medium">{t('capsule.react_thanks')}</span>
             <span className="bg-white/60 px-1.5 py-0.2 rounded-full font-bold text-[10px] border border-slate-100">
               {getReactionCount('merci')}
             </span>
@@ -292,7 +291,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
             }`}
           >
             <HelpCircle className={`w-4 h-4 ${hasReacted('question') ? 'fill-indigo-100 text-indigo-500' : ''}`} />
-            <span className="font-medium">Question ?</span>
+            <span className="font-medium">{t('capsule.react_question')}</span>
             <span className="bg-white/60 px-1.5 py-0.2 rounded-full font-bold text-[10px] border border-slate-100">
               {getReactionCount('question')}
             </span>
@@ -309,7 +308,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
           }`}
         >
           <MessageSquare className="w-4 h-4" />
-          <span className="font-medium">Commenter</span>
+          <span className="font-medium">{t('capsule.comments_count')}</span>
           <span className="bg-white/60 px-1.5 py-0.2 rounded-full font-bold text-[10px] border border-slate-100">
             {comments.length}
           </span>
@@ -319,11 +318,11 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
       {/* Expanded Comments List & Creation Form */}
       {showComments && (
         <div className="mt-4 pt-4 border-t border-slate-100 bg-slate-50/50 -mx-5 -mb-5 px-5 pb-5 rounded-b-2xl">
-          <h5 className="font-semibold text-slate-700 text-xs mb-3">Discussions communautaires</h5>
+          <h5 className="font-semibold text-slate-700 text-xs mb-3">{t('capsule.comments_count')}</h5>
           
           <div className="space-y-3 max-h-60 overflow-y-auto mb-4 pr-1">
             {comments.length === 0 ? (
-              <p className="text-xs text-slate-400 italic text-center py-2">Aucun commentaire pour le moment. Soyez le premier à poser une question ou remercier l'auteur !</p>
+              <p className="text-xs text-slate-400 italic text-center py-2">{t('chat.no_messages')}</p>
             ) : (
               comments.map((comment) => (
                 <div key={comment.id} className="flex gap-2.5 items-start text-xs bg-white p-3 rounded-xl border border-slate-100">
@@ -355,7 +354,7 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
             <form onSubmit={handleAddComment} className="flex gap-2">
               <input
                 type="text"
-                placeholder="Rédigez votre réponse ou question constructive..."
+                placeholder={t('capsule.comment_placeholder')}
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800"
@@ -365,12 +364,10 @@ export default function CapsuleCard({ capsule, currentUser }: CapsuleCardProps) 
                 disabled={!newCommentText.trim()}
                 className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-bold text-xs rounded-xl transition shadow-sm disabled:opacity-50 disabled:hover:bg-emerald-500"
               >
-                Envoyer
+                {t('capsule.comment_submit')}
               </button>
             </form>
-          ) : (
-            <p className="text-xs text-slate-400 italic text-center">Connectez-vous pour participer à l'échange.</p>
-          )}
+          ) : null}
         </div>
       )}
     </div>

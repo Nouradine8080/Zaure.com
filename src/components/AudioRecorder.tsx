@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Mic, Square, Trash, Play, Pause, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
+import { useTranslation } from '../context/LanguageContext';
 
 interface AudioRecorderProps {
   onAudioReady: (base64Audio: string) => void;
@@ -7,6 +8,7 @@ interface AudioRecorderProps {
 }
 
 export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderProps) {
+  const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [base64Data, setBase64Data] = useState<string | null>(null);
@@ -14,6 +16,7 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [simulationActive, setSimulationActive] = useState(false);
+
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -150,9 +153,9 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
   return (
     <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl text-slate-100 shadow-md max-w-md mx-auto" id="audio-recorder-container">
       <div className="text-center mb-4">
-        <h4 className="font-bold text-white text-base">Capsule Vocale 🎤</h4>
+        <h4 className="font-bold text-white text-base">{t('capsule.audio_title')} 🎤</h4>
         <p className="text-xs text-slate-400 mt-1">
-          {isRecording ? 'Enregistrement en cours...' : audioUrl ? 'Votre message est prêt' : 'Enregistrez un conseil ou un enseignement'}
+          {isRecording ? t('audio.recording') : audioUrl ? t('audio.ready') : t('audio.record_btn')}
         </p>
       </div>
 
@@ -181,12 +184,12 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
             >
               {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-slate-950" />}
             </button>
-            <span className="text-sm font-mono text-emerald-400">Écouter la capsule ({formatTime(duration)})</span>
+            <span className="text-sm font-mono text-emerald-400">{t('audio.play_btn')} ({formatTime(duration)})</span>
           </div>
         ) : (
           <div className="text-slate-500 flex flex-col items-center gap-1.5 text-xs">
             <Mic className="w-6 h-6 text-slate-600" />
-            <span>Appuyez sur le micro pour parler</span>
+            <span>{t('audio.record_btn')}</span>
           </div>
         )}
 
@@ -207,14 +210,14 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
               className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-semibold rounded-xl transition shadow-md text-sm"
             >
               <Mic className="w-4 h-4" />
-              <span>Enregistrer</span>
+              <span>{t('audio.record_btn')}</span>
             </button>
             <button
               onClick={startSimulation}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-emerald-400 rounded-xl transition text-sm font-medium"
             >
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Simuler (Test)</span>
+              <span>Test</span>
             </button>
           </>
         )}
@@ -226,7 +229,7 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
             className={`flex items-center gap-2 px-5 py-2.5 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-xl transition shadow-md text-sm ${simulationActive ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Square className="w-4 h-4" />
-            <span>{simulationActive ? 'Enregistrement test...' : 'Arrêter'}</span>
+            <span>{t('audio.stop_btn')}</span>
           </button>
         )}
 
@@ -237,13 +240,13 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
               className="flex items-center gap-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition text-sm"
             >
               <Trash className="w-4 h-4" />
-              <span>Recommencer</span>
+              <span>{t('audio.rerecord')}</span>
             </button>
             <button
               onClick={handlePublish}
               className="flex items-center gap-1 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-xl transition shadow-md text-sm"
             >
-              <span>Publier</span>
+              <span>{t('capsule.submit')}</span>
             </button>
           </>
         )}
@@ -252,9 +255,10 @@ export default function AudioRecorder({ onAudioReady, onCancel }: AudioRecorderP
           onClick={onCancel}
           className="px-4 py-2.5 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition text-sm"
         >
-          Annuler
+          {t('common.cancel')}
         </button>
       </div>
     </div>
   );
+
 }

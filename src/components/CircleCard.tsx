@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users, LogIn, LogOut, Check } from 'lucide-react';
 import { Circle, UserProfile } from '../types';
+import { useTranslation } from '../context/LanguageContext';
 
 interface CircleCardProps {
   circle: Circle;
@@ -13,6 +14,7 @@ interface CircleCardProps {
 }
 
 export default function CircleCard({ circle, isJoined, onToggleJoin, onSelect, isActive, currentUser }: CircleCardProps) {
+  const { t } = useTranslation();
   return (
     <div
       className={`border rounded-2xl overflow-hidden transition-all duration-200 bg-white flex flex-col justify-between ${
@@ -49,49 +51,48 @@ export default function CircleCard({ circle, isJoined, onToggleJoin, onSelect, i
 
         {/* Action Controls */}
         <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between gap-2">
-          {currentUser ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleJoin();
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition w-full justify-center ${
-                isJoined
-                  ? 'bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 active:bg-red-100'
-                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-sm active:bg-emerald-600'
-              }`}
-            >
-              {isJoined ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Membre</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Rejoindre</span>
-                </>
-              )}
-            </button>
-          ) : (
-            <span className="text-[10px] text-slate-400 italic">Inscrivez-vous pour rejoindre</span>
-          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleJoin();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition flex-1 justify-center ${
+              isJoined
+                ? 'bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 active:bg-red-100'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-sm active:bg-emerald-600'
+            }`}
+          >
+            {isJoined ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Membre</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Rejoindre</span>
+              </>
+            )}
+          </button>
 
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSelect();
             }}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition flex items-center gap-1 shrink-0 ${
               isActive
-                ? 'bg-emerald-500 border-emerald-500 text-slate-950'
-                : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-emerald-500 border-emerald-500 text-slate-950 shadow-xs'
+                : 'border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
             }`}
           >
-            Voir
+            <span>Voir</span>
           </button>
         </div>
       </div>
     </div>
   );
 }
+

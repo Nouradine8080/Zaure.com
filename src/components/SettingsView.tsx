@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, UserSettings, DEFAULT_USER_SETTINGS, Circle } from '../types';
 import { zaureService } from '../firebaseClient';
+import { useTranslation } from '../context/LanguageContext';
 
 interface SettingsViewProps {
   currentUser: UserProfile;
@@ -35,6 +36,7 @@ interface SettingsViewProps {
 }
 
 export default function SettingsView({ currentUser, onProfileUpdated, onSignOut }: SettingsViewProps) {
+  const { language, setLanguage, t } = useTranslation();
   const [activeSection, setActiveSection] = useState<'compte' | 'confidentialite' | 'notifications' | 'contenu' | 'cercles' | 'accessibilite' | 'apropos'>('compte');
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -108,6 +110,9 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
   const updateSettingField = async <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
+    if (key === 'langue_interface' || key === 'langue_preferee') {
+      setLanguage(value as any);
+    }
     await zaureService.saveUserSettings(currentUser.id, { [key]: value });
     showToast('Préférence enregistrée dans Firestore');
   };
@@ -115,6 +120,9 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
   // Account updates
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (languePreferee) {
+      setLanguage(languePreferee);
+    }
     const { user, error } = await zaureService.updateUserProfile(currentUser.id, {
       nom,
       bio,
@@ -191,6 +199,18 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
       await zaureService.joinCircle(circleId, currentUser.id);
       setJoinedCircleIds(prev => [...prev, circleId]);
       showToast('Cercle rejoint avec succès');
+    }
+  };
+
+  // Circle delete
+  const handleDeleteCircle = async (circleId: string) => {
+    const success = await zaureService.deleteCircle(circleId);
+    if (success) {
+      setAllCircles(prev => prev.filter(c => c.id !== circleId));
+      setJoinedCircleIds(prev => prev.filter(id => id !== circleId));
+      showToast('Cercle supprimé');
+    } else {
+      showToast('Erreur lors de la suppression');
     }
   };
 
@@ -391,15 +411,19 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Langue préférée</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">{t('settings.account.pref_lang')}</label>
                     <select
                       value={languePreferee}
-                      onChange={(e) => setLanguePreferee(e.target.value as any)}
+                      onChange={(e) => {
+                        const val = e.target.value as 'fr' | 'ha' | 'en';
+                        setLanguePreferee(val);
+                        setLanguage(val);
+                      }}
                       className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold text-slate-800"
                     >
-                      <option value="fr">Français</option>
-                      <option value="ha">Hausa (Haoussa)</option>
-                      <option value="en">English (Anglais)</option>
+                      <option value="fr">{t('lang.fr')}</option>
+                      <option value="ha">{t('lang.ha')}</option>
+                      <option value="en">{t('lang.en')}</option>
                     </select>
                   </div>
                 </div>
@@ -728,15 +752,19 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">Langue de l'interface</label>
+                <label className="block text-xs font-bold text-slate-800 mb-1">{t('settings.content.interface_lang')}</label>
                 <select
-                  value={settings.langue_interface}
-                  onChange={(e) => updateSettingField('langue_interface', e.target.value as any)}
+                  value={settings.langue_interface || language}
+                  onChange={(e) => {
+                    const val = e.target.value as 'fr' | 'ha' | 'en';
+                    updateSettingField('langue_interface', val);
+                    setLanguage(val);
+                  }}
                   className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl font-bold text-slate-800"
                 >
-                  <option value="fr">🇫🇷 Français</option>
-                  <option value="ha">🇳🇬 🇳🇪 Hausa (Koyi Hausa)</option>
-                  <option value="en">🇬🇧 English</option>
+                  <option value="fr">🇫🇷 {t('lang.fr')}</option>
+                  <option value="ha">🇳🇬 🇳🇪 {t('lang.ha')}</option>
+                  <option value="en">🇬🇧 {t('lang.en')}</option>
                 </select>
               </div>
 
@@ -795,34 +823,51 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
 
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-2">Vos cercles rejoints ({joinedCircleIds.length})</label>
-                <div className="space-y-2">
-                  {allCircles.map(circle => {
-                    const isJoined = joinedCircleIds.includes(circle.id);
-                    return (
-                      <div key={circle.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-2xl">
-                        <div className="flex items-center gap-3">
-                          <img src={circle.image} alt={circle.nom} className="w-10 h-10 rounded-xl object-cover shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">{circle.nom}</p>
-                            <p className="text-[10px] text-slate-400">{circle.categorie}</p>
+                {allCircles.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    Aucun cercle de savoir disponible. Créez-en un depuis le fil principal.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {allCircles.map(circle => {
+                      const isJoined = joinedCircleIds.includes(circle.id);
+                      return (
+                        <div key={circle.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+                          <div className="flex items-center gap-3">
+                            <img src={circle.image} alt={circle.nom} className="w-10 h-10 rounded-xl object-cover shrink-0" />
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">{circle.nom}</p>
+                              <p className="text-[10px] text-slate-400">{circle.categorie}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleCircleToggle(circle.id)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                                isJoined
+                                  ? 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-700'
+                                  : 'bg-slate-900 text-white hover:bg-slate-800'
+                              }`}
+                            >
+                              {isJoined ? 'Rejoint (Quitter)' : 'Rejoindre'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCircle(circle.id)}
+                              title="Supprimer ce cercle"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCircleToggle(circle.id)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                            isJoined
-                              ? 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-700'
-                              : 'bg-slate-900 text-white hover:bg-slate-800'
-                          }`}
-                        >
-                          {isJoined ? 'Rejoint (Quitter)' : 'Rejoindre'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <hr className="border-slate-100" />

@@ -16,7 +16,10 @@ import {
   ArrowRight,
   ChevronDown,
   Volume2,
-  Settings
+  Settings,
+  Languages,
+  ArrowLeft,
+  LogIn
 } from 'lucide-react';
 import { zaureService } from './firebaseClient';
 import { Circle, Capsule, UserProfile } from './types';
@@ -25,17 +28,18 @@ import CapsuleCard from './components/CapsuleCard';
 import AudioRecorder from './components/AudioRecorder';
 import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
+import CircleGroupPage from './components/CircleGroupPage';
+import { useTranslation } from './context/LanguageContext';
 
 export default function App() {
+  const { t, language, setLanguage } = useTranslation();
   const [activeTab, setActiveTab] = useState<'feed' | 'chat' | 'settings'>('feed');
-  const [mode, setMode] = useState<'cloud' | 'local'>('local');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [capsules, setCapsules] = useState<Capsule[]>([]);
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
   const [selectedCircleId, setSelectedCircleId] = useState<string>('all');
-  const [feedFilter, setFeedFilter] = useState<'joined' | 'all'>('joined');
-  const [dbErrorState, setDbErrorState] = useState(false);
+  const [feedFilter, setFeedFilter] = useState<'joined' | 'all'>('all');
 
   // Load state and dropdown toggles
   const [showCreateCircle, setShowCreateCircle] = useState(false);
@@ -65,7 +69,6 @@ export default function App() {
   const [newCapsuleLangue, setNewCapsuleLangue] = useState<'fr' | 'ha' | 'en'>('fr');
 
   useEffect(() => {
-    setMode('cloud');
     const unsubscribe = zaureService.onAuthStateChangedListener((user) => {
       setCurrentUser(user);
       if (user) {
@@ -73,7 +76,21 @@ export default function App() {
       }
     });
     loadInitialData();
-    return () => unsubscribe();
+
+    // Auto-sync circles across all user sessions every 4s
+    const syncInterval = setInterval(async () => {
+      try {
+        const freshCircles = await zaureService.getCircles();
+        setCircles(freshCircles);
+      } catch (e) {
+        // silent sync
+      }
+    }, 4000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(syncInterval);
+    };
   }, []);
 
   // Reload feed whenever filters or joined circles change
@@ -231,12 +248,16 @@ export default function App() {
 
     try {
       const added = await zaureService.createCircle(newCircleNom, newCircleDesc, newCircleCat, imageUrl);
-      setCircles((prev) => [...prev, added]);
+      const allCircles = await zaureService.getCircles();
+      setCircles(allCircles);
       setJoinedCircleIds((prev) => [...prev, added.id]); // Automatically join created circle
+      setSelectedCircleId('all'); // Show on main feed
+      setFeedFilter('all');
       setNewCircleNom('');
       setNewCircleDesc('');
       setNewCircleImg('');
       setShowCreateCircle(false);
+      loadCapsules();
     } catch (err) {
       console.error(err);
     }
@@ -280,15 +301,30 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-1.5">
-                <span>Zaure</span>
+                <span>{t('app.title')}</span>
                 <span className="text-emerald-400 text-xs font-semibold px-2 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">West Africa</span>
               </h1>
-              <p className="text-[10px] text-slate-400">Le réseau social des cercles de savoir et d'entraide communautaire</p>
+              <p className="text-[10px] text-slate-400">{t('app.subtitle')}</p>
             </div>
           </div>
 
           {/* User profile controls & switchers */}
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {/* Quick Language Switcher Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 transition shadow-inner">
+              <Languages className="w-3.5 h-3.5 text-emerald-400" />
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'fr' | 'ha' | 'en')}
+                className="bg-transparent text-white font-extrabold text-xs focus:outline-none cursor-pointer pr-1"
+                aria-label="Select Language"
+              >
+                <option value="fr" className="bg-slate-900 text-white font-medium">🇫🇷 FR</option>
+                <option value="ha" className="bg-slate-900 text-white font-medium">🇳🇬 HA</option>
+                <option value="en" className="bg-slate-900 text-white font-medium">🇬🇧 EN</option>
+              </select>
+            </div>
+
             {currentUser ? (
               <div className="flex items-center gap-2.5">
                 {/* Identity information */}
@@ -296,7 +332,7 @@ export default function App() {
                   type="button"
                   onClick={() => setActiveTab('settings')}
                   className="flex items-center gap-2.5 text-left hover:opacity-85 transition"
-                  title="Accéder aux réglages"
+                  title={t('nav.settings')}
                 >
                   <div className="text-right">
                     <p className="text-xs font-bold text-white flex items-center gap-1 justify-end">
@@ -305,7 +341,7 @@ export default function App() {
                       {currentUser.role === 'mentor' && <span className="w-2 h-2 rounded-full bg-amber-400" title="Mentor" />}
                     </p>
                     <p className="text-[9px] text-slate-400 capitalize">
-                      {currentUser.role === 'verifie' ? 'Professionnel Vérifié' : currentUser.role === 'mentor' ? 'Mentor' : 'Apprenant'} • {currentUser.langue_preferee.toUpperCase()}
+                      {currentUser.role === 'verifie' ? 'Professionnel' : currentUser.role === 'mentor' ? 'Mentor' : 'Apprenant'} • {currentUser.langue_preferee.toUpperCase()}
                     </p>
                   </div>
 
@@ -320,7 +356,7 @@ export default function App() {
 
                 <button
                   onClick={handleSignOut}
-                  title="Déconnexion"
+                  title={t('nav.logout')}
                   className="p-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 text-slate-300 hover:text-white rounded-xl transition"
                 >
                   <LogOut className="w-4 h-4" />
@@ -334,7 +370,7 @@ export default function App() {
                 }}
                 className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition shadow-sm"
               >
-                S'identifier ou S'inscrire
+                {t('nav.login')}
               </button>
             )}
 
@@ -357,7 +393,7 @@ export default function App() {
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            <span>Cercles & Capsules</span>
+            <span>{t('nav.feed')}</span>
           </button>
 
           <button
@@ -371,7 +407,7 @@ export default function App() {
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            <span>Messagerie Directe</span>
+            <span>{t('nav.chat')}</span>
           </button>
 
           <button
@@ -385,7 +421,7 @@ export default function App() {
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>Paramètres</span>
+            <span>{t('nav.settings')}</span>
           </button>
         </div>
       </nav>
@@ -451,78 +487,105 @@ export default function App() {
 
         {/* CERCLLES & CAPSULES MAIN FEED SCREEN */}
         {activeTab === 'feed' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 py-4">
-            
-            {/* Left Sidebar: Circles & Categories Navigation */}
-            <section className="lg:col-span-4 space-y-4">
-              <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-emerald-500" />
-                    <span>Cercles de Savoir</span>
-                  </h2>
-                  
-                  {currentUser && (
+          selectedCircleId !== 'all' && circles.some(c => c.id === selectedCircleId) ? (
+            <div className="py-4">
+              <CircleGroupPage
+                circle={circles.find(c => c.id === selectedCircleId)!}
+                capsules={capsules}
+                isJoined={joinedCircleIds.includes(selectedCircleId)}
+                currentUser={currentUser}
+                onBack={() => setSelectedCircleId('all')}
+                onToggleJoin={() => handleToggleJoinCircle(selectedCircleId)}
+                onCreateCapsule={async (circleId, type, contenu, langue) => {
+                  const added = await zaureService.createCapsule(circleId, type, contenu, langue);
+                  setCapsules(prev => [added, ...prev]);
+                }}
+                t={t}
+                language={language}
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 py-4">
+              
+              {/* Left Sidebar: Circles & Categories Navigation */}
+              <section className="lg:col-span-4 space-y-4">
+                <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-emerald-500" />
+                      <span>{t('circles.title')}</span>
+                    </h2>
+                    
+                    {currentUser && (
+                      <button
+                        onClick={() => setShowCreateCircle(true)}
+                        className="p-1.5 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg text-slate-600 transition flex items-center gap-1 border border-slate-100"
+                        title={t('feed.create_circle_btn')}
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="text-[10px] font-bold">{t('feed.create_circle_btn')}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                    {t('circles.subtitle')}
+                  </p>
+
+                  {/* Circle Filter Quick Selectors */}
+                  <div className="space-y-1">
                     <button
-                      onClick={() => setShowCreateCircle(true)}
-                      className="p-1.5 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg text-slate-600 transition flex items-center gap-1 border border-slate-100"
-                      title="Créer un cercle thématique"
+                      onClick={() => setSelectedCircleId('all')}
+                      className={`w-full text-left px-3 py-2 text-xs font-bold rounded-xl flex items-center justify-between transition-all ${
+                        selectedCircleId === 'all'
+                          ? 'bg-slate-900 text-white'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
                     >
-                      <Plus className="w-4 h-4" />
-                      <span className="text-[10px] font-bold">Nouveau</span>
+                      <span>🎯 {t('common.all')}</span>
+                      <span className="bg-white/10 px-1.5 py-0.2 text-[9px] rounded-full border border-slate-700">{circles.length}</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Circle Cards List Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                  {circles.length === 0 ? (
+                    <div className="bg-white border border-slate-100 rounded-2xl p-5 text-center text-slate-500 shadow-xs">
+                      <p className="text-xs font-bold text-slate-800">{t('circles.empty')}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                        {t('circles.empty_desc')}
+                      </p>
+                    </div>
+                  ) : (
+                    circles.map((circle) => {
+                      const isJoined = joinedCircleIds.includes(circle.id);
+                      return (
+                        <CircleCard
+                          key={circle.id}
+                          circle={circle}
+                          isJoined={isJoined}
+                          currentUser={currentUser}
+                          onToggleJoin={() => handleToggleJoinCircle(circle.id)}
+                          onSelect={() => setSelectedCircleId(circle.id)}
+                          isActive={selectedCircleId === circle.id}
+                        />
+                      );
+                    })
                   )}
                 </div>
+              </section>
 
-                <p className="text-xs text-slate-500 leading-relaxed mb-4">
-                  Rejoignez des cercles thématiques pour recevoir leurs capsules dans votre fil d'actualité personnalisé.
-                </p>
-
-                {/* Circle Filter Quick Selectors */}
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setSelectedCircleId('all')}
-                    className={`w-full text-left px-3 py-2 text-xs font-bold rounded-xl flex items-center justify-between transition-all ${
-                      selectedCircleId === 'all'
-                        ? 'bg-slate-900 text-white'
-                        : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <span>🎯 Tous les cercles confondus</span>
-                    <span className="bg-white/10 px-1.5 py-0.2 text-[9px] rounded-full border border-slate-700">{circles.length}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Circle Cards List Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-                {circles.map((circle) => {
-                  const isJoined = joinedCircleIds.includes(circle.id);
-                  return (
-                    <CircleCard
-                      key={circle.id}
-                      circle={circle}
-                      isJoined={isJoined}
-                      currentUser={currentUser}
-                      onToggleJoin={() => handleToggleJoinCircle(circle.id)}
-                      onSelect={() => setSelectedCircleId(circle.id)}
-                      isActive={selectedCircleId === circle.id}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Middle/Right: Knowledge Capsules Stream */}
-            <section className="lg:col-span-8 space-y-4">
-              
-              {/* Creator of Capsule Box */}
+              {/* Middle/Right: Knowledge Capsules Stream */}
+              <section className="lg:col-span-8 space-y-4">
+                
+                {/* Creator of Capsule Box */}
               {currentUser ? (
                 <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-xs">
                   <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-50">
                     <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-emerald-500" />
-                      <span>Publier un savoir sur Zaure</span>
+                      <span>{t('capsule.create_modal_title')}</span>
                     </h3>
                     
                     {!showCreateCapsule && (
@@ -531,7 +594,7 @@ export default function App() {
                         className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-1 shadow-sm"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Créer une capsule</span>
+                        <span>{t('feed.create_capsule_btn')}</span>
                       </button>
                     )}
                   </div>
@@ -542,7 +605,7 @@ export default function App() {
                         
                         {/* 1. Circle Selector */}
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Cercle cible</label>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">{t('capsule.select_circle')}</label>
                           <select
                             value={newCapsuleCircleId}
                             onChange={(e) => setNewCapsuleCircleId(e.target.value)}
@@ -567,7 +630,7 @@ export default function App() {
                                   : 'text-slate-500 hover:text-slate-800'
                               }`}
                             >
-                              Texte
+                              {t('capsule.type_text')}
                             </button>
                             <button
                               type="button"
@@ -579,22 +642,22 @@ export default function App() {
                               }`}
                             >
                               <Volume2 className="w-3.5 h-3.5" />
-                              <span>Audio Vocale</span>
+                              <span>{t('capsule.type_audio')}</span>
                             </button>
                           </div>
                         </div>
 
                         {/* 3. Language Selector */}
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Langue d'origine</label>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">{t('capsule.original_lang')}</label>
                           <select
                             value={newCapsuleLangue}
                             onChange={(e) => setNewCapsuleLangue(e.target.value as any)}
                             className="w-full text-xs bg-slate-50 border border-slate-200 p-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 font-medium"
                           >
-                            <option value="fr">Français</option>
-                            <option value="ha">Hausa (Haoussa)</option>
-                            <option value="en">English (Anglais)</option>
+                            <option value="fr">{t('lang.fr')}</option>
+                            <option value="ha">{t('lang.ha')}</option>
+                            <option value="en">{t('lang.en')}</option>
                           </select>
                         </div>
                       </div>
@@ -602,9 +665,9 @@ export default function App() {
                       {/* Content editor based on format selection */}
                       {newCapsuleType === 'texte' ? (
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Contenu éducatif</label>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">{t('capsule.content_placeholder')}</label>
                           <textarea
-                            placeholder="Rédigez votre leçon ou information précieuse. Qu'allez-vous enseigner aujourd'hui aux membres du cercle ? (Pas de message superflu, valorisons le savoir !)"
+                            placeholder={t('capsule.content_placeholder')}
                             value={newCapsuleContenu}
                             onChange={(e) => setNewCapsuleContenu(e.target.value)}
                             rows={4}
@@ -616,7 +679,6 @@ export default function App() {
                           <AudioRecorder
                             onAudioReady={(base64) => {
                               setNewCapsuleContenu(base64);
-                              // Auto trigger publish
                             }}
                             onCancel={() => {
                               setNewCapsuleType('texte');
@@ -626,7 +688,7 @@ export default function App() {
                             <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 flex items-center justify-between">
                               <span className="font-semibold flex items-center gap-1.5">
                                 <Check className="w-4 h-4 text-emerald-600" />
-                                Note vocale prête à être partagée !
+                                {t('audio.ready')}
                               </span>
                               <span className="font-mono text-[10px] text-emerald-600">Audio Base64</span>
                             </div>
@@ -644,7 +706,7 @@ export default function App() {
                           }}
                           className="px-4 py-2 border border-slate-200 text-slate-500 text-xs rounded-xl hover:bg-slate-50 font-semibold transition"
                         >
-                          Annuler
+                          {t('common.cancel')}
                         </button>
                         <button
                           type="button"
@@ -652,7 +714,7 @@ export default function App() {
                           disabled={!newCapsuleContenu}
                           className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition shadow-sm disabled:opacity-50 disabled:hover:bg-emerald-500"
                         >
-                          Diffuser la capsule
+                          {t('capsule.submit')}
                         </button>
                       </div>
                     </div>
@@ -665,7 +727,7 @@ export default function App() {
                         onClick={() => setShowCreateCapsule(true)}
                         className="flex-1 text-left px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500 hover:bg-slate-100/70 transition"
                       >
-                        Partagez un savoir médical, une leçon de langue ou un conseil sahélien...
+                        {t('feed.create_capsule_btn')}...
                       </button>
                     </div>
                   )}
@@ -675,8 +737,8 @@ export default function App() {
                   <div className="flex gap-3 items-center">
                     <span className="text-xl">💡</span>
                     <div>
-                      <p className="text-xs font-bold text-slate-800">Partagez votre propre savoir</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Inscrivez-vous pour publier des capsules de cours, de santé ou de langue.</p>
+                      <p className="text-xs font-bold text-slate-800">{t('feed.create_capsule_btn')}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{t('feed.empty_desc')}</p>
                     </div>
                   </div>
                   <button
@@ -686,7 +748,7 @@ export default function App() {
                     }}
                     className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition"
                   >
-                    Créer un compte
+                    {t('nav.signup')}
                   </button>
                 </div>
               )}
@@ -697,10 +759,10 @@ export default function App() {
                   <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
                   <span className="text-xs font-bold text-slate-800">
                     {selectedCircleId !== 'all' 
-                      ? `Cercle : ${circles.find(c => c.id === selectedCircleId)?.nom}` 
+                      ? `${t('circles.title')} : ${circles.find(c => c.id === selectedCircleId)?.nom}` 
                       : feedFilter === 'joined' 
-                        ? 'Mon flux (Cercles rejoints)' 
-                        : 'Flux global (Toutes les capsules)'}
+                        ? t('feed.filter_joined') 
+                        : t('feed.filter_all')}
                   </span>
                 </div>
 
@@ -715,7 +777,7 @@ export default function App() {
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
-                      Mes cercles rejoints
+                      {t('feed.filter_joined')}
                     </button>
                     <button
                       onClick={() => setFeedFilter('all')}
@@ -725,7 +787,7 @@ export default function App() {
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
-                      Tous les cercles
+                      {t('feed.filter_all')}
                     </button>
                   </div>
                 )}
@@ -768,7 +830,8 @@ export default function App() {
               </div>
             </section>
           </div>
-        )}
+        )
+      )}
       </main>
 
       {/* FOOTER */}
@@ -965,19 +1028,13 @@ export default function App() {
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Mot de passe</label>
                 <input
                   type="password"
-                  placeholder={mode === 'cloud' ? "Au moins 6 caractères" : "Optionnel en mode démo"}
-                  required={mode === 'cloud'}
+                  placeholder="Au moins 6 caractères"
+                  required
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
                   className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800"
                 />
               </div>
-
-              {!isSignUp && mode === 'local' && (
-                <p className="text-[10px] text-slate-400 italic">
-                  Note : Vous pouvez vous connecter avec votre adresse email enregistrée.
-                </p>
-              )}
 
               <button
                 type="submit"
@@ -986,19 +1043,18 @@ export default function App() {
                 {isSignUp ? "S'inscrire et démarrer" : "Se connecter"}
               </button>
 
-              {mode === 'cloud' && (
-                <div className="space-y-2 mt-2">
-                  <div className="relative flex py-2 items-center">
-                    <div className="flex-grow border-t border-slate-200"></div>
-                    <span className="flex-shrink mx-4 text-[10px] text-slate-400 uppercase font-bold tracking-wider">OU</span>
-                    <div className="flex-grow border-t border-slate-200"></div>
-                  </div>
+              <div className="space-y-2 mt-2">
+                <div className="relative flex py-2 items-center">
+                  <div className="flex-grow border-t border-slate-200"></div>
+                  <span className="flex-shrink mx-4 text-[10px] text-slate-400 uppercase font-bold tracking-wider">OU</span>
+                  <div className="flex-grow border-t border-slate-200"></div>
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 rounded-xl transition shadow-xs flex items-center justify-center gap-2"
-                  >
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 rounded-xl transition shadow-xs flex items-center justify-center gap-2"
+                >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#EA4335" d="M12 5.04c1.5 0 2.85.51 3.9 1.5l2.9-2.9C17.05 1.9 14.7 1 12 1 7.35 1 3.4 3.65 1.5 7.5l3.5 2.7C5.85 6.95 8.7 5.04 12 5.04z" />
                       <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.46-1.1 2.69-2.34 3.52l3.63 2.82c2.13-1.97 3.36-4.87 3.36-8.47z" />
@@ -1008,7 +1064,6 @@ export default function App() {
                     <span>Continuer avec Google</span>
                   </button>
                 </div>
-              )}
 
               <div className="text-center pt-2">
                 <button

@@ -54,14 +54,14 @@ if (isFirebaseConfigured) {
     auth = getAuth(app);
     try {
       dbFirestore = initializeFirestore(app, {
-        experimentalForceLongPolling: true
+        experimentalAutoDetectLongPolling: true
       });
     } catch {
       dbFirestore = getFirestore(app);
     }
-    setLogLevel('error');
+    setLogLevel('silent');
   } catch (error) {
-    console.error('Erreur lors de la création du client Firebase:', error);
+    console.warn('Info - initialisation Firebase:', error);
   }
 }
 
@@ -245,12 +245,85 @@ export const zaureService = {
       const querySnapshot = await getDocs(collection(dbFirestore, 'circles'));
       const cloudCircles: Circle[] = [];
       querySnapshot.forEach((docSnap) => {
-        cloudCircles.push(docSnap.data() as Circle);
+        const c = docSnap.data() as Circle;
+        // Filter out explicit demo/test circles
+        const isDemo = c.id.startsWith('demo-') || 
+                       c.id.startsWith('mock-') || 
+                       c.id.includes('demo') ||
+                       (c.nom && (
+                         c.nom.toLowerCase().includes('démo') || 
+                         c.nom.toLowerCase().includes('demo') ||
+                         c.nom.toLowerCase().includes('exemple')
+                       ));
+        if (!isDemo) {
+          cloudCircles.push(c);
+        } else {
+          deleteDoc(doc(dbFirestore, 'circles', docSnap.id)).catch(() => {});
+        }
       });
+
+      if (cloudCircles.length === 0) {
+        const initialCircles: Circle[] = [
+          {
+            id: 'circle-sante-premiers-secours',
+            nom: 'Santé & Premiers secours',
+            description: 'Gestes de premiers secours, prise en charge des urgences communautaires, brûlures et soins de santé primaire en Afrique de l\'Ouest.',
+            categorie: 'Médecine',
+            image: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&q=80&w=600',
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'circle-langues-locales',
+            nom: 'Langues & Proverbes Africains',
+            description: 'Apprentissage, vocabulaire et sagesse des langues régionales (Haoussa, Zarma, Bambara, Fulfulde).',
+            categorie: 'Langues',
+            image: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=600',
+            created_at: new Date().toISOString()
+          },
+          {
+            id: 'circle-agri-sahel',
+            nom: 'Agriculture & Sols du Sahel',
+            description: 'Pratiques d\'irrigation durable, conservation de l\'eau et fertilisation biologique.',
+            categorie: 'Sciences',
+            image: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=600',
+            created_at: new Date().toISOString()
+          }
+        ];
+
+        for (const circleItem of initialCircles) {
+          try {
+            await setDoc(doc(dbFirestore, 'circles', circleItem.id), circleItem);
+            cloudCircles.push(circleItem);
+          } catch (err) {
+            console.warn('Error seeding initial circle:', err);
+          }
+        }
+      }
+
       return cloudCircles.sort((a, b) => a.nom.localeCompare(b.nom));
     } catch (error) {
       console.warn('Info - Chargement cercles:', error);
       return [];
+    }
+  },
+
+  deleteCircle: async (circleId: string): Promise<boolean> => {
+    if (!dbFirestore) return false;
+    try {
+      await deleteDoc(doc(dbFirestore, 'circles', circleId));
+      try {
+        const q = query(collection(dbFirestore, 'circle_members'), where('circle_id', '==', circleId));
+        const snap = await getDocs(q);
+        snap.forEach(async (d) => {
+          await deleteDoc(d.ref);
+        });
+      } catch {
+        // ignore
+      }
+      return true;
+    } catch (error) {
+      console.warn('Info - Supprimer cercle:', error);
+      return false;
     }
   },
 
@@ -330,23 +403,121 @@ export const zaureService = {
   getCapsules: async (circleIds?: string[]): Promise<Capsule[]> => {
     if (!dbFirestore) return [];
     try {
-      const querySnapshot = await getDocs(collection(dbFirestore, 'capsules'));
       let capsulesData: Capsule[] = [];
-      querySnapshot.forEach((docSnap) => {
-        capsulesData.push(docSnap.data() as Capsule);
+
+      if (circleIds && circleIds.length === 1) {
+        const targetCircleId = circleIds[0];
+        
+        // Filtered Firestore query by circleId / circle_id
+        try {
+          const q1 = query(collection(dbFirestore, 'capsules'), where('circleId', '==', targetCircleId));
+          const snap1 = await getDocs(q1);
+          snap1.forEach((docSnap) => {
+            capsulesData.push({ id: docSnap.id, ...docSnap.data() } as Capsule);
+          });
+        } catch (e) {
+          console.warn('Query circleId:', e);
+        }
+
+        try {
+          const q2 = query(collection(dbFirestore, 'capsules'), where('circle_id', '==', targetCircleId));
+          const snap2 = await getDocs(q2);
+          snap2.forEach((docSnap) => {
+            if (!capsulesData.some(c => c.id === docSnap.id)) {
+              capsulesData.push({ id: docSnap.id, ...docSnap.data() } as Capsule);
+            }
+          });
+        } catch (e) {
+          console.warn('Query circle_id:', e);
+        }
+
+        // Fallback filter if no direct query match
+        if (capsulesData.length === 0) {
+          const allSnap = await getDocs(collection(dbFirestore, 'capsules'));
+          allSnap.forEach((docSnap) => {
+            const data = docSnap.data() as any;
+            if (data.circle_id === targetCircleId || data.circleId === targetCircleId) {
+              capsulesData.push({ id: docSnap.id, ...data } as Capsule);
+            }
+          });
+        }
+      } else {
+        const querySnapshot = await getDocs(collection(dbFirestore, 'capsules'));
+        querySnapshot.forEach((docSnap) => {
+          capsulesData.push({ id: docSnap.id, ...docSnap.data() } as Capsule);
+        });
+
+        if (circleIds && circleIds.length > 0) {
+          capsulesData = capsulesData.filter(c => 
+            circleIds.includes(c.circle_id) || circleIds.includes((c as any).circleId)
+          );
+        }
+      }
+
+      // Filter out demo capsules
+      capsulesData = capsulesData.filter(c => {
+        const isDemo = c.id.startsWith('demo-') || 
+                       c.id.startsWith('mock-') || 
+                       c.id.includes('demo') ||
+                       (c.contenu && (
+                         c.contenu.toLowerCase().includes('démo') || 
+                         c.contenu.toLowerCase().includes('demo') ||
+                         c.contenu.toLowerCase().includes('bienvenue sur zaure')
+                       ));
+        if (isDemo) {
+          deleteDoc(doc(dbFirestore, 'capsules', c.id)).catch(() => {});
+          return false;
+        }
+        return true;
       });
 
-      if (circleIds && circleIds.length > 0) {
-        capsulesData = capsulesData.filter(c => circleIds.includes(c.circle_id));
+      // Seed burns capsule for Santé & Premiers secours if empty
+      if (
+        capsulesData.length === 0 && 
+        circleIds && 
+        circleIds.length === 1 && 
+        (circleIds[0] === 'circle-sante-premiers-secours' || circleIds[0].includes('sante'))
+      ) {
+        const seedCapsule: Capsule = {
+          id: `capsule-brulures-${Date.now()}`,
+          auteur_id: 'dr-mahamadou-medecin',
+          circle_id: circleIds[0],
+          type: 'texte',
+          contenu: 'Prise en charge immédiate des brûlures thermiques : Refroidir immédiatement la zone brûlée avec de l\'eau propre à température ambiante (15-20°C) pendant au moins 15 minutes. Ne jamais appliquer d\'huile, dentifrice ou glace. Couvrir avec un linge propre et consulter un centre de santé.',
+          langue_dorigine: 'fr',
+          created_at: new Date().toISOString(),
+          auteur_nom: 'Dr. Mahamadou',
+          auteur_role: 'verifie',
+          circle_nom: 'Santé & Premiers secours'
+        };
+
+        try {
+          await setDoc(doc(dbFirestore, 'capsules', seedCapsule.id), {
+            id: seedCapsule.id,
+            auteur_id: seedCapsule.auteur_id,
+            circle_id: seedCapsule.circle_id,
+            circleId: seedCapsule.circle_id,
+            type: seedCapsule.type,
+            contenu: seedCapsule.contenu,
+            langue_dorigine: seedCapsule.langue_dorigine,
+            created_at: seedCapsule.created_at
+          });
+          capsulesData.push(seedCapsule);
+        } catch (err) {
+          console.warn('Error seeding burn capsule:', err);
+        }
       }
+
+      // Sort descending by date
+      capsulesData.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
       const circlesData = await zaureService.getCircles();
       const finalCapsules: Capsule[] = [];
 
       for (const c of capsulesData) {
-        let auteurNom = 'Auteur inconnu';
-        let auteurRole = 'utilisateur';
-        let auteurAvatar = '';
+        let auteurNom = c.auteur_nom || 'Auteur inconnu';
+        let auteurRole = c.auteur_role || 'utilisateur';
+        let auteurAvatar = c.auteur_avatar || '';
 
         try {
           const uDoc = await getDoc(doc(dbFirestore, 'users', c.auteur_id));
@@ -360,16 +531,18 @@ export const zaureService = {
           // ignore profile fetch error
         }
 
+        const cid = c.circle_id || (c as any).circleId;
         finalCapsules.push({
           ...c,
+          circle_id: cid,
           auteur_nom: auteurNom,
           auteur_role: auteurRole,
           auteur_avatar: auteurAvatar,
-          circle_nom: circlesData.find(circ => circ.id === c.circle_id)?.nom || 'Cercle'
+          circle_nom: circlesData.find(circ => circ.id === cid)?.nom || c.circle_nom || 'Cercle'
         });
       }
 
-      return finalCapsules.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return finalCapsules.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     } catch (e) {
       console.warn('Info - Chargement capsules:', e);
       return [];
@@ -406,6 +579,7 @@ export const zaureService = {
       id: newCapsule.id,
       auteur_id: newCapsule.auteur_id,
       circle_id: newCapsule.circle_id,
+      circleId: newCapsule.circle_id,
       type: newCapsule.type,
       contenu: newCapsule.contenu,
       langue_dorigine: newCapsule.langue_dorigine,
@@ -413,6 +587,17 @@ export const zaureService = {
     });
 
     return newCapsule;
+  },
+
+  deleteCapsule: async (capsuleId: string): Promise<boolean> => {
+    if (!dbFirestore) return false;
+    try {
+      await deleteDoc(doc(dbFirestore, 'capsules', capsuleId));
+      return true;
+    } catch (e) {
+      console.warn('Info - Supprimer capsule:', e);
+      return false;
+    }
   },
 
   // --- REACTIONS ---

@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, User, MessageSquare, ShieldCheck, Award, ChevronLeft } from 'lucide-react';
 import { Message, UserProfile } from '../types';
 import { zaureService } from '../firebaseClient';
+import { useTranslation } from '../context/LanguageContext';
 
 interface ChatViewProps {
   currentUser: UserProfile | null;
 }
 
 export default function ChatView({ currentUser }: ChatViewProps) {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -96,7 +98,7 @@ export default function ChatView({ currentUser }: ChatViewProps) {
         <div className="p-4 border-b border-slate-100 bg-white">
           <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-emerald-500" />
-            <span>Discussions Privées</span>
+            <span>{t('chat.title')}</span>
           </h3>
           <p className="text-[10px] text-slate-400 mt-1">Échangez avec les mentors et apprenants de Zaure</p>
         </div>
