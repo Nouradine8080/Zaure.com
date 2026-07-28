@@ -65,9 +65,15 @@ export default function App() {
   const [newCapsuleLangue, setNewCapsuleLangue] = useState<'fr' | 'ha' | 'en'>('fr');
 
   useEffect(() => {
-    setMode(zaureService.getMode());
-    setCurrentUser(zaureService.getCurrentUser());
+    setMode('cloud');
+    const unsubscribe = zaureService.onAuthStateChangedListener((user) => {
+      setCurrentUser(user);
+      if (user) {
+        zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds);
+      }
+    });
     loadInitialData();
+    return () => unsubscribe();
   }, []);
 
   // Reload feed whenever filters or joined circles change
@@ -89,10 +95,8 @@ export default function App() {
         const joined = await zaureService.getJoinedCircleIds(user.id);
         setJoinedCircleIds(joined);
       }
-      setDbErrorState(zaureService.hasDbError());
     } catch (e) {
       console.error(e);
-      setDbErrorState(true);
     }
   };
 
@@ -106,13 +110,10 @@ export default function App() {
         filteredIds = joinedCircleIds;
       }
 
-      // If they filter by joined circles but haven't joined any, getCapsules will return empty
       const list = await zaureService.getCapsules(filteredIds);
       setCapsules(list);
-      setDbErrorState(zaureService.hasDbError());
     } catch (e) {
       console.error(e);
-      setDbErrorState(true);
     }
   };
 
@@ -146,7 +147,7 @@ export default function App() {
         setAuthError('Veuillez remplir le nom et l\'adresse email.');
         return;
       }
-      if (mode === 'cloud' && authPassword && authPassword.length < 6) {
+      if (authPassword && authPassword.length < 6) {
         setAuthError('Le mot de passe doit contenir au moins 6 caractères.');
         return;
       }
@@ -156,7 +157,7 @@ export default function App() {
         authBio, 
         authRole, 
         authLangue, 
-        mode === 'cloud' ? authPassword : undefined
+        authPassword
       );
       if (error) {
         setAuthError(error);
@@ -176,7 +177,7 @@ export default function App() {
       }
       const { user, error } = await zaureService.signIn(
         authEmail, 
-        mode === 'cloud' ? authPassword : undefined
+        authPassword
       );
       if (error) {
         setAuthError(error);

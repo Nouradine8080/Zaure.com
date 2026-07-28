@@ -18,13 +18,18 @@ export default function ChatView({ currentUser }: ChatViewProps) {
 
   // Load user contacts list
   useEffect(() => {
-    const list = zaureService.getAvailableUsers();
-    // Filter out current user from contacts list
-    if (currentUser) {
-      setUsers(list.filter((u) => u.id !== currentUser.id));
-    } else {
-      setUsers(list);
-    }
+    let isMounted = true;
+    zaureService.getAvailableUsers().then((list) => {
+      if (!isMounted) return;
+      if (currentUser) {
+        setUsers(list.filter((u) => u.id !== currentUser.id));
+      } else {
+        setUsers(list);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
   }, [currentUser]);
 
   // Real-time Firestore subscription (onSnapshot) for the deterministic conversation
