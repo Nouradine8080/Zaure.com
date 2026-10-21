@@ -28,9 +28,32 @@ import {
   orderBy, 
   deleteDoc,
   updateDoc,
-  onSnapshot
+  onSnapshot,
+  arrayUnion,
+  arrayRemove,
+  increment
 } from 'firebase/firestore';
-import { UserProfile, Circle, CircleMember, Capsule, Comment, Reaction, Message, UserSettings, DEFAULT_USER_SETTINGS } from './types';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytesResumable,
+  getDownloadURL
+} from 'firebase/storage';
+import { 
+  UserProfile, 
+  Circle, 
+  CircleMember, 
+  Capsule, 
+  Comment, 
+  Reaction, 
+  Message, 
+  UserSettings, 
+  DEFAULT_USER_SETTINGS,
+  Conversation,
+  ConversationParticipant,
+  MessageAttachment,
+  MessageReplyInfo
+} from './types';
 
 // Firebase Project Config
 const firebaseConfig = {
@@ -50,6 +73,7 @@ export const isFirebaseConfigured = !!(
 
 export let auth: any = null;
 export let dbFirestore: any = null;
+export let storage: any = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -61,6 +85,11 @@ if (isFirebaseConfigured) {
       });
     } catch {
       dbFirestore = getFirestore(app);
+    }
+    try {
+      storage = getStorage(app);
+    } catch (sErr) {
+      console.warn('Info - initialisation Storage:', sErr);
     }
     setLogLevel('silent');
   } catch (error) {
@@ -790,39 +819,181 @@ export const zaureService = {
     return [uid1, uid2].sort().join('_');
   },
 
-  // --- PRIVATE MESSAGES ---
-  subscribePrivateMessages: (otherUserId: string, callback: (messages: Message[]) => void): (() => void) => {
-    if (!currentUser || !dbFirestore) {
+  // --- STORAGE MEDIA UPLOAD ---
+  uploadMessageAttachment: async (
+    file: File | Blob, 
+    folder: 'images' | 'audio' | 'videos' | 'documents' = 'documents',
+    filename?: string,
+    onProgress?: (progress: number) => void
+  ): Promise<MessageAttachment> => {
+    const ext = filename?.split('.').pop() || (file.type ? file.type.split('/')[1] : 'bin');
+    const safeName = filename || `upload_${Date.now()}.${ext}`;
+    const storagePath = `chat_${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${safeName}`;
+
+    let attType: 'image' | 'video' | 'audio' | 'file' = 'file';
+    if (file.type.startsWith('image/')) attType = 'image';
+    else if (file.type.startsWith('video/')) attType = 'video';
+    else if (file.type.startsWith('audio/')) attType = 'audio';
+
+    if (storage) {
+      try {
+        const fileRef = storageRef(storage, storagePath);
+        const uploadTask = uploadBytesResumable(fileRef, file, { contentType: file.type || undefined });
+
+        return new Promise<MessageAttachment>((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              if (onProgress) onProgress(Math.round(progress));
+            },
+            (error) => {
+              console.warn('Info - Storage upload error, using local data URL fallback:', error);
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                resolve({
+                  type: attType,
+                  url: reader.result as string,
+                  name: safeName,
+                  size: file.size,
+                  mime_type: file.type
+                });
+              };
+              reader.onerror = () => reject(error);
+              reader.readAsDataURL(file);
+            },
+            async () => {
+              try {
+                const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                if (onProgress) onProgress(100);
+                resolve({
+                  type: attType,
+                  url: downloadUrl,
+                  name: safeName,
+                  size: file.size,
+                  mime_type: file.type
+                });
+              } catch (err) {
+                console.warn('Info - getDownloadURL failed, using fallback:', err);
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  resolve({
+                    type: attType,
+                    url: reader.result as string,
+                    name: safeName,
+                    size: file.size,
+                    mime_type: file.type
+                  });
+                };
+                reader.readAsDataURL(file);
+              }
+            }
+          );
+        });
+      } catch (e) {
+        console.warn('Info - Storage init error, fallback data URL:', e);
+      }
+    }
+
+    return new Promise<MessageAttachment>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (onProgress) onProgress(100);
+        resolve({
+          type: attType,
+          url: reader.result as string,
+          name: safeName,
+          size: file.size,
+          mime_type: file.type
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  },
+
+  // --- CONVERSATIONS TEMPS RÉEL (STYLE MESSENGER) ---
+  subscribeUserConversations: (userId: string, callback: (conversations: Conversation[]) => void): (() => void) => {
+    if (!dbFirestore || !userId) {
       callback([]);
       return () => {};
     }
+    try {
+      const convsRef = collection(dbFirestore, 'conversations');
+      const q = query(convsRef, where('participant_ids', 'array-contains', userId));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list: Conversation[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          list.push({
+            id: docSnap.id,
+            type: data.type || 'direct',
+            participant_ids: data.participant_ids || [userId],
+            participants: data.participants || {},
+            group_name: data.group_name || '',
+            group_photo: data.group_photo || '',
+            group_description: data.group_description || '',
+            admin_ids: data.admin_ids || [],
+            last_message: data.last_message || null,
+            unread_counts: data.unread_counts || {},
+            typing: data.typing || {},
+            created_at: data.created_at || new Date().toISOString(),
+            updated_at: data.updated_at || data.created_at || new Date().toISOString(),
+            is_archived_by: data.is_archived_by || [],
+            is_muted_by: data.is_muted_by || []
+          });
+        });
 
-    const convId = [currentUser.id, otherUserId].sort().join('_');
+        list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+        callback(list);
+      }, (error) => {
+        console.warn('Info - Listener conversations:', error);
+        callback([]);
+      });
+      return unsubscribe;
+    } catch (e) {
+      console.warn('Info - Config listener conversations:', e);
+      callback([]);
+      return () => {};
+    }
+  },
 
+  subscribeConversationMessages: (convId: string, callback: (messages: Message[]) => void): (() => void) => {
+    if (!dbFirestore || !convId) {
+      callback([]);
+      return () => {};
+    }
     try {
       const messagesRef = collection(dbFirestore, 'conversations', convId, 'messages');
       const q = query(messagesRef, orderBy('created_at', 'asc'));
-
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const list: Message[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           list.push({
             id: docSnap.id || data.id,
+            conversation_id: convId,
             sender_id: data.sender_id || data.senderId || '',
             receiver_id: data.receiver_id || data.receiverId || '',
             content: data.content || '',
             created_at: data.created_at || data.createdAt || new Date().toISOString(),
-            sender_nom: data.sender_nom || data.senderNom || 'Membre'
+            updated_at: data.updated_at || undefined,
+            sender_nom: data.sender_nom || data.senderNom || 'Membre',
+            sender_avatar: data.sender_avatar || data.senderAvatar || null,
+            type: data.type || 'texte',
+            attachments: data.attachments || [],
+            reply_to: data.reply_to || null,
+            reactions: data.reactions || {},
+            read_by: data.read_by || [],
+            status: data.status || 'sent',
+            is_edited: data.is_edited || false,
+            is_deleted: data.is_deleted || false
           });
         });
-
         callback(list);
       }, (error) => {
         console.warn('Info - Listener messages:', error);
         callback([]);
       });
-
       return unsubscribe;
     } catch (e) {
       console.warn('Info - Config listener messages:', e);
@@ -831,16 +1002,333 @@ export const zaureService = {
     }
   },
 
+  sendChatMessage: async (params: {
+    conversationId: string;
+    receiverId?: string;
+    content: string;
+    type?: 'texte' | 'image' | 'video' | 'audio' | 'file' | 'system';
+    attachments?: MessageAttachment[];
+    replyTo?: MessageReplyInfo | null;
+    otherUser?: UserProfile | null;
+  }): Promise<Message> => {
+    if (!currentUser) throw new Error('Utilisateur non connecté.');
+    if (!dbFirestore) throw new Error('Firestore non connecté.');
+
+    const { conversationId, receiverId, content, type = 'texte', attachments = [], replyTo = null, otherUser } = params;
+    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
+
+    const newMessage: Message = {
+      id: messageId,
+      conversation_id: conversationId,
+      sender_id: currentUser.id,
+      receiver_id: receiverId,
+      content,
+      created_at: nowIso,
+      sender_nom: currentUser.nom,
+      sender_avatar: currentUser.avatar_url || undefined,
+      type,
+      attachments,
+      reply_to: replyTo,
+      reactions: {},
+      read_by: [currentUser.id],
+      status: 'sent',
+      is_edited: false,
+      is_deleted: false
+    };
+
+    const msgDocRef = doc(dbFirestore, 'conversations', conversationId, 'messages', messageId);
+    await setDoc(msgDocRef, newMessage);
+
+    let displayPreview = content;
+    if (type === 'image') displayPreview = '📷 Photo';
+    else if (type === 'video') displayPreview = '🎥 Vidéo';
+    else if (type === 'audio') displayPreview = '🎤 Note vocale';
+    else if (type === 'file') displayPreview = `📎 ${attachments[0]?.name || 'Fichier'}`;
+
+    const convDocRef = doc(dbFirestore, 'conversations', conversationId);
+    const convSnap = await getDoc(convDocRef);
+    const typingResetKey = `typing.${currentUser.id}`;
+
+    if (convSnap.exists()) {
+      const updateData: any = {
+        updated_at: nowIso,
+        last_message: {
+          content: displayPreview,
+          sender_id: currentUser.id,
+          sender_nom: currentUser.nom,
+          type,
+          created_at: nowIso
+        },
+        [typingResetKey]: false
+      };
+
+      if (receiverId) {
+        updateData[`unread_counts.${receiverId}`] = increment(1);
+      } else {
+        const convData = convSnap.data();
+        const pIds: string[] = convData.participant_ids || [];
+        pIds.forEach((pid) => {
+          if (pid !== currentUser.id) {
+            updateData[`unread_counts.${pid}`] = increment(1);
+          }
+        });
+      }
+
+      await updateDoc(convDocRef, updateData);
+    } else {
+      const participantsMap: Record<string, ConversationParticipant> = {
+        [currentUser.id]: {
+          id: currentUser.id,
+          nom: currentUser.nom,
+          avatar_url: currentUser.avatar_url,
+          role: currentUser.role,
+          is_online: true
+        }
+      };
+
+      const participantIds = [currentUser.id];
+      if (receiverId) {
+        participantIds.push(receiverId);
+        participantsMap[receiverId] = {
+          id: receiverId,
+          nom: otherUser?.nom || 'Membre Zaure',
+          avatar_url: otherUser?.avatar_url || null,
+          role: otherUser?.role || 'utilisateur'
+        };
+      }
+
+      await setDoc(convDocRef, {
+        id: conversationId,
+        type: 'direct',
+        participant_ids: participantIds,
+        participants: participantsMap,
+        created_at: nowIso,
+        updated_at: nowIso,
+        last_message: {
+          content: displayPreview,
+          sender_id: currentUser.id,
+          sender_nom: currentUser.nom,
+          type,
+          created_at: nowIso
+        },
+        unread_counts: receiverId ? { [receiverId]: 1, [currentUser.id]: 0 } : {},
+        typing: { [currentUser.id]: false },
+        is_archived_by: [],
+        is_muted_by: []
+      });
+    }
+
+    return newMessage;
+  },
+
+  createGroupConversation: async (params: {
+    groupName: string;
+    groupDescription?: string;
+    groupPhoto?: string;
+    memberIds: string[];
+    allUsers?: UserProfile[];
+  }): Promise<Conversation> => {
+    if (!currentUser) throw new Error('Utilisateur non connecté.');
+    if (!dbFirestore) throw new Error('Firestore non connecté.');
+
+    const groupId = `grp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
+    const uniqueMemberIds = Array.from(new Set([currentUser.id, ...params.memberIds]));
+
+    const participantsMap: Record<string, ConversationParticipant> = {
+      [currentUser.id]: {
+        id: currentUser.id,
+        nom: currentUser.nom,
+        avatar_url: currentUser.avatar_url,
+        role: currentUser.role,
+        is_online: true
+      }
+    };
+
+    if (params.allUsers) {
+      params.allUsers.forEach((u) => {
+        if (uniqueMemberIds.includes(u.id)) {
+          participantsMap[u.id] = {
+            id: u.id,
+            nom: u.nom,
+            avatar_url: u.avatar_url,
+            role: u.role
+          };
+        }
+      });
+    }
+
+    const unreadCounts: Record<string, number> = {};
+    uniqueMemberIds.forEach((uid) => {
+      unreadCounts[uid] = 0;
+    });
+
+    const newGroup: Conversation = {
+      id: groupId,
+      type: 'group',
+      participant_ids: uniqueMemberIds,
+      participants: participantsMap,
+      group_name: params.groupName,
+      group_description: params.groupDescription || '',
+      group_photo: params.groupPhoto || '',
+      admin_ids: [currentUser.id],
+      last_message: {
+        content: `${currentUser.nom} a créé le groupe « ${params.groupName} »`,
+        sender_id: currentUser.id,
+        sender_nom: currentUser.nom,
+        type: 'system',
+        created_at: nowIso
+      },
+      unread_counts: unreadCounts,
+      typing: {},
+      created_at: nowIso,
+      updated_at: nowIso,
+      is_archived_by: [],
+      is_muted_by: []
+    };
+
+    const groupRef = doc(dbFirestore, 'conversations', groupId);
+    await setDoc(groupRef, newGroup);
+
+    const msgId = `msg-sys-${Date.now()}`;
+    await setDoc(doc(dbFirestore, 'conversations', groupId, 'messages', msgId), {
+      id: msgId,
+      conversation_id: groupId,
+      sender_id: currentUser.id,
+      sender_nom: currentUser.nom,
+      content: `${currentUser.nom} a créé le groupe « ${params.groupName} »`,
+      type: 'system',
+      created_at: nowIso,
+      read_by: [currentUser.id]
+    });
+
+    return newGroup;
+  },
+
+  updateGroupDetails: async (convId: string, updates: Partial<Conversation>): Promise<void> => {
+    if (!dbFirestore) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    await updateDoc(ref, {
+      ...updates,
+      updated_at: new Date().toISOString()
+    });
+  },
+
+  setTypingStatus: async (convId: string, isTyping: boolean): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    try {
+      const ref = doc(dbFirestore, 'conversations', convId);
+      await updateDoc(ref, {
+        [`typing.${currentUser.id}`]: isTyping
+      });
+    } catch (e) {
+      // Silent
+    }
+  },
+
+  markConversationAsRead: async (convId: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    try {
+      const ref = doc(dbFirestore, 'conversations', convId);
+      await updateDoc(ref, {
+        [`unread_counts.${currentUser.id}`]: 0
+      });
+    } catch (e) {
+      // Silent
+    }
+  },
+
+  addReactionToMessage: async (convId: string, messageId: string, emoji: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+    const snap = await getDoc(msgRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const reactions: Record<string, string[]> = data.reactions || {};
+    const currentList = reactions[emoji] || [];
+
+    if (currentList.includes(currentUser.id)) {
+      reactions[emoji] = currentList.filter((id) => id !== currentUser.id);
+      if (reactions[emoji].length === 0) {
+        delete reactions[emoji];
+      }
+    } else {
+      Object.keys(reactions).forEach((em) => {
+        reactions[em] = (reactions[em] || []).filter((id) => id !== currentUser.id);
+        if (reactions[em].length === 0) delete reactions[em];
+      });
+      reactions[emoji] = [...(reactions[emoji] || []), currentUser.id];
+    }
+
+    await updateDoc(msgRef, { reactions });
+  },
+
+  editChatMessage: async (convId: string, messageId: string, newContent: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+    await updateDoc(msgRef, {
+      content: newContent,
+      is_edited: true,
+      updated_at: new Date().toISOString()
+    });
+  },
+
+  deleteChatMessage: async (convId: string, messageId: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+    await updateDoc(msgRef, {
+      content: 'Ce message a été supprimé',
+      attachments: [],
+      is_deleted: true,
+      updated_at: new Date().toISOString()
+    });
+  },
+
+  toggleArchiveConversation: async (convId: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data();
+    const archives: string[] = data.is_archived_by || [];
+    const isArchived = archives.includes(currentUser.id);
+    await updateDoc(ref, {
+      is_archived_by: isArchived ? arrayRemove(currentUser.id) : arrayUnion(currentUser.id)
+    });
+  },
+
+  toggleMuteConversation: async (convId: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data();
+    const mutes: string[] = data.is_muted_by || [];
+    const isMuted = mutes.includes(currentUser.id);
+    await updateDoc(ref, {
+      is_muted_by: isMuted ? arrayRemove(currentUser.id) : arrayUnion(currentUser.id)
+    });
+  },
+
+  // Rétrocompatibilité pour les anciens appels
+  subscribePrivateMessages: (otherUserId: string, callback: (messages: Message[]) => void): (() => void) => {
+    if (!currentUser || !dbFirestore) {
+      callback([]);
+      return () => {};
+    }
+    const convId = [currentUser.id, otherUserId].sort().join('_');
+    return zaureService.subscribeConversationMessages(convId, callback);
+  },
+
   getPrivateMessages: async (otherUserId: string): Promise<Message[]> => {
     if (!currentUser || !dbFirestore) return [];
-
     const convId = [currentUser.id, otherUserId].sort().join('_');
-
     try {
       const messagesRef = collection(dbFirestore, 'conversations', convId, 'messages');
       const q = query(messagesRef, orderBy('created_at', 'asc'));
       const snapshot = await getDocs(q);
-
       const list: Message[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -853,7 +1341,6 @@ export const zaureService = {
           sender_nom: data.sender_nom || data.senderNom || 'Membre'
         });
       });
-
       return list;
     } catch (error) {
       console.warn('Info - Chargement messages:', error);
@@ -863,37 +1350,13 @@ export const zaureService = {
 
   sendPrivateMessage: async (receiverId: string, content: string): Promise<Message> => {
     if (!currentUser) throw new Error('Utilisateur non connecté.');
-    if (!dbFirestore) throw new Error('Firestore non connecté.');
-
     const convId = [currentUser.id, receiverId].sort().join('_');
-    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const nowIso = new Date().toISOString();
-
-    const newMessage: Message = {
-      id: messageId,
-      sender_id: currentUser.id,
-      receiver_id: receiverId,
+    return zaureService.sendChatMessage({
+      conversationId: convId,
+      receiverId,
       content,
-      created_at: nowIso,
-      sender_nom: currentUser.nom
-    };
-
-    const docRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
-    await setDoc(docRef, {
-      id: messageId,
-      conversation_id: convId,
-      sender_id: currentUser.id,
-      senderId: currentUser.id,
-      receiver_id: receiverId,
-      receiverId: receiverId,
-      content: content,
-      created_at: nowIso,
-      createdAt: nowIso,
-      sender_nom: currentUser.nom,
-      senderNom: currentUser.nom
+      type: 'texte'
     });
-
-    return newMessage;
   },
 
   // ----------------------------------------------------

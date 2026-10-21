@@ -63,14 +63,74 @@ export interface Comment {
   auteur_avatar?: string;
 }
 
+export interface MessageAttachment {
+  type: 'image' | 'video' | 'audio' | 'file';
+  url: string;
+  name: string;
+  size?: number;
+  mime_type?: string;
+  duration?: number;
+}
+
+export interface MessageReplyInfo {
+  id: string;
+  content: string;
+  sender_nom: string;
+  type?: string;
+}
+
 export interface Message {
   id: string;
+  conversation_id?: string;
   sender_id: string;
-  receiver_id: string;
+  receiver_id?: string;
   content: string;
   created_at: string;
-  // Joins
+  updated_at?: string;
+  // Joins & metadata
   sender_nom?: string;
+  sender_avatar?: string;
+  type?: 'texte' | 'image' | 'video' | 'audio' | 'file' | 'system';
+  attachments?: MessageAttachment[];
+  reply_to?: MessageReplyInfo | null;
+  reactions?: Record<string, string[]>; // e.g. { '❤️': ['uid1'], '👍': ['uid2'] }
+  read_by?: string[]; // uids
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  is_edited?: boolean;
+  is_deleted?: boolean;
+}
+
+export interface ConversationParticipant {
+  id: string;
+  nom: string;
+  avatar_url?: string | null;
+  role?: string;
+  is_online?: boolean;
+  last_seen?: string;
+}
+
+export interface Conversation {
+  id: string;
+  type: 'direct' | 'group';
+  participant_ids: string[];
+  participants?: Record<string, ConversationParticipant>;
+  group_name?: string;
+  group_photo?: string;
+  group_description?: string;
+  admin_ids?: string[];
+  last_message?: {
+    content: string;
+    sender_id: string;
+    sender_nom: string;
+    type?: string;
+    created_at: string;
+  } | null;
+  unread_counts?: Record<string, number>; // uid -> count
+  typing?: Record<string, boolean>; // uid -> boolean
+  created_at: string;
+  updated_at: string;
+  is_archived_by?: string[];
+  is_muted_by?: string[];
 }
 
 export interface Mentorship {
