@@ -9,7 +9,10 @@ import {
   updateEmail,
   updatePassword,
   deleteUser,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  updateProfile
 } from 'firebase/auth';
 import { 
   initializeFirestore,
@@ -67,6 +70,38 @@ if (isFirebaseConfigured) {
 
 let currentUser: UserProfile | null = null;
 
+// Helper pour traduire les erreurs Firebase Auth en français clair
+export const formatFirebaseAuthError = (err: any): string => {
+  if (!err) return "Une erreur d'authentification est survenue.";
+  const code = err.code || '';
+  switch (code) {
+    case 'auth/user-not-found':
+      return "Aucun compte n'est associé à cette adresse e-mail.";
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+      return "Adresse e-mail ou mot de passe incorrect.";
+    case 'auth/email-already-in-use':
+      return "Cette adresse e-mail est déjà utilisée par un autre compte. Veuillez vous connecter.";
+    case 'auth/weak-password':
+      return "Le mot de passe doit comporter au moins 6 caractères.";
+    case 'auth/invalid-email':
+      return "Le format de l'adresse e-mail est invalide.";
+    case 'auth/popup-closed-by-user':
+      return "La fenêtre de connexion Google a été fermée avant la validation.";
+    case 'auth/popup-blocked':
+      return "La fenêtre popup a été bloquée par le navigateur. Autorisez les popups pour continuer.";
+    case 'auth/too-many-requests':
+      return "Trop de tentatives infructueuses. Veuillez patienter quelques instants avant de réessayer.";
+    case 'auth/network-request-failed':
+      return "Problème de connexion réseau. Vérifiez votre accès internet.";
+    case 'auth/operation-not-allowed':
+      return "Cette méthode de connexion n'est pas encore activée dans votre console Firebase.";
+    default:
+      return err.message || "Une erreur d'authentification est survenue.";
+  }
+};
+
 // ----------------------------------------------------
 // DIRECT FIREBASE ZAURE SERVICE (NO LOCAL FALLBACK OR LOCALSTORAGE MOCK DATA)
 // ----------------------------------------------------
@@ -115,7 +150,8 @@ export const zaureService = {
     bio: string, 
     role: 'utilisateur' | 'mentor' | 'verifie' = 'utilisateur', 
     langue: 'fr' | 'ha' | 'en' = 'fr',
-    password?: string
+    password?: string,
+    avatarUrl?: string
   ): Promise<{ user: UserProfile | null, error: string | null }> => {
     if (!auth || !dbFirestore) {
       return { user: null, error: 'Firebase n\'est pas connecté.' };
@@ -124,12 +160,31 @@ export const zaureService = {
       const securePassword = password || 'Password123!';
       const { user: firebaseUser } = await createUserWithEmailAndPassword(auth, email, securePassword);
       if (firebaseUser) {
+        const finalAvatar = avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`;
+        
+        // Mettre à jour le profil standard Firebase Auth (displayName et photoURL)
+        try {
+          await updateProfile(firebaseUser, {
+            displayName: nom,
+            photoURL: finalAvatar
+          });
+        } catch (profileErr) {
+          console.warn('Note: mise à jour du displayName Firebase:', profileErr);
+        }
+
+        // Envoyer la vérification d'email de manière asynchrone sans bloquer l'inscription
+        try {
+          await sendEmailVerification(firebaseUser);
+        } catch (verificationErr) {
+          console.warn('Note: envoi de l\'email de vérification:', verificationErr);
+        }
+
         const profile: UserProfile = {
           id: firebaseUser.uid,
           nom,
           email,
           bio: bio || null,
-          avatar_url: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
+          avatar_url: finalAvatar,
           role,
           langue_preferee: langue,
           created_at: new Date().toISOString()
@@ -141,7 +196,7 @@ export const zaureService = {
       }
       return { user: null, error: 'L\'inscription a échoué.' };
     } catch (err: any) {
-      return { user: null, error: err.message || 'Erreur lors de l\'inscription.' };
+      return { user: null, error: formatFirebaseAuthError(err) };
     }
   },
 
@@ -175,7 +230,7 @@ export const zaureService = {
       }
       return { user: null, error: 'La connexion a échoué.' };
     } catch (err: any) {
-      return { user: null, error: err.message || 'Identifiants invalides.' };
+      return { user: null, error: formatFirebaseAuthError(err) };
     }
   },
 
@@ -185,6 +240,7 @@ export const zaureService = {
     }
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
       const firebaseUser = result.user;
       if (firebaseUser) {
@@ -210,7 +266,31 @@ export const zaureService = {
       }
       return { user: null, error: 'La connexion Google a échoué.' };
     } catch (err: any) {
-      return { user: null, error: err.message || 'Erreur d\'authentification Google.' };
+      return { user: null, error: formatFirebaseAuthError(err) };
+    }
+  },
+
+  sendPasswordReset: async (email: string): Promise<{ success: boolean; error: string | null }> => {
+    if (!auth) {
+      return { success: false, error: 'Firebase n\'est pas connecté.' };
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: formatFirebaseAuthError(err) };
+    }
+  },
+
+  sendEmailVerificationLink: async (): Promise<{ success: boolean; error: string | null }> => {
+    if (!auth || !auth.currentUser) {
+      return { success: false, error: 'Aucun utilisateur connecté pour la vérification.' };
+    }
+    try {
+      await sendEmailVerification(auth.currentUser);
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: formatFirebaseAuthError(err) };
     }
   },
 

@@ -267,8 +267,8 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
     <div className="max-w-6xl mx-auto py-4 px-2 sm:px-4" id="settings-view-root">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-emerald-500/30 flex items-center gap-3 animate-slideUp">
-          <div className="w-7 h-7 bg-emerald-500 text-slate-950 rounded-full flex items-center justify-center shrink-0 font-bold">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-blue-500/30 flex items-center gap-3 animate-slideUp">
+          <div className="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center shrink-0 font-bold">
             <Check className="w-4 h-4" />
           </div>
           <p className="text-xs font-semibold">{toastMessage}</p>
@@ -280,7 +280,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
         <div>
           <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             <span>Paramètres & Préférences</span>
-            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase">
+            <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2.5 py-0.5 rounded-full border border-blue-200 uppercase">
               Firestore Sync
             </span>
           </h2>
@@ -293,7 +293,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
           <img
             src={avatarUrl || currentUser.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
             alt={nom}
-            className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-500"
+            className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500"
             referrerPolicy="no-referrer"
           />
           <div>
@@ -307,35 +307,36 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         
         {/* Mobile & Desktop Section Selector Navigation */}
-        <nav className="md:col-span-4 lg:col-span-3 space-y-1">
-          <div className="bg-white border border-slate-100 p-2 rounded-2xl shadow-xs overflow-x-auto md:overflow-visible flex md:flex-col gap-1">
+        <nav className="md:col-span-4 lg:col-span-3">
+          <div className="bg-white border border-slate-200/80 p-2 rounded-2xl shadow-xs overflow-x-auto md:overflow-visible flex md:flex-col gap-1.5 scrollbar-none">
             {sectionTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeSection === tab.id;
               return (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => setActiveSection(tab.id)}
-                  className={`w-full text-left px-3.5 py-3 rounded-xl transition flex items-center justify-between shrink-0 ${
+                  className={`min-h-[44px] min-w-[130px] sm:min-w-[160px] md:min-w-0 md:w-full text-left px-3.5 py-2.5 rounded-xl transition-all flex items-center justify-between shrink-0 active:scale-[0.98] ${
                     isActive
                       ? 'bg-slate-900 text-white shadow-sm'
-                      : 'hover:bg-slate-50 text-slate-700'
+                      : 'hover:bg-slate-50 text-slate-700 bg-slate-50/50 md:bg-transparent'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-xl ${
-                      isActive ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-100 text-slate-600'
+                  <div className="flex items-center gap-2.5 sm:gap-3">
+                    <div className={`p-2 rounded-xl shrink-0 ${
+                      isActive ? 'bg-blue-600 text-white font-bold' : 'bg-slate-100 text-slate-600'
                     }`}>
                       <Icon className="w-4 h-4" />
                     </div>
-                    <div>
-                      <p className="text-xs font-bold leading-tight">{tab.label}</p>
-                      <p className={`text-[9px] mt-0.5 hidden md:block ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold leading-tight truncate">{tab.label}</p>
+                      <p className={`text-[10px] mt-0.5 hidden md:block truncate ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                         {tab.desc}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className={`w-4 h-4 hidden md:block ${isActive ? 'text-emerald-400' : 'text-slate-300'}`} />
+                  <ChevronRight className={`w-4 h-4 hidden md:block shrink-0 ${isActive ? 'text-red-400' : 'text-slate-300'}`} />
                 </button>
               );
             })}
@@ -350,7 +351,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-8 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <User className="w-4 h-4 text-emerald-500" />
+                  <User className="w-4 h-4 text-blue-600" />
                   <span>Informations de Profil</span>
                 </h3>
                 <p className="text-xs text-slate-500">Mettez à jour vos informations publiques visibles sur vos capsules.</p>
@@ -364,7 +365,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                     <img
                       src={avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
                       alt="Avatar"
-                      className="w-14 h-14 rounded-full object-cover ring-2 ring-emerald-500"
+                      className="w-14 h-14 rounded-full object-cover ring-2 ring-blue-500"
                       referrerPolicy="no-referrer"
                     />
                     <div className="flex-1">
@@ -373,7 +374,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                         placeholder="Lien URL de votre image (ex: Unsplash)"
                         value={avatarUrl}
                         onChange={(e) => setAvatarUrl(e.target.value)}
-                        className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -388,7 +389,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                           type="button"
                           onClick={() => setAvatarUrl(url)}
                           className={`w-7 h-7 rounded-full overflow-hidden border-2 transition ${
-                            avatarUrl === url ? 'border-emerald-500 scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+                            avatarUrl === url ? 'border-blue-500 scale-110' : 'border-transparent opacity-70 hover:opacity-100'
                           }`}
                         >
                           <img src={url} alt="preset" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -406,7 +407,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       required
                       value={nom}
                       onChange={(e) => setNom(e.target.value)}
-                      className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold text-slate-800"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-800"
                     />
                   </div>
 
@@ -419,7 +420,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                         setLanguePreferee(val);
                         setLanguage(val);
                       }}
-                      className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold text-slate-800"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold text-slate-800"
                     >
                       <option value="fr">{t('lang.fr')}</option>
                       <option value="ha">{t('lang.ha')}</option>
@@ -435,13 +436,13 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     placeholder="Présentez-vous aux membres de vos cercles d'entraide..."
-                    className="w-full text-xs bg-slate-50 border border-slate-200 p-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 leading-relaxed"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 p-3 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 leading-relaxed"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-2"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-2"
                 >
                   <Check className="w-4 h-4" />
                   <span>Enregistrer le profil</span>
@@ -463,7 +464,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="flex-1 text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+                      className="flex-1 text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                     />
                     <button
                       type="submit"
@@ -473,7 +474,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                     </button>
                   </form>
                   {emailError && <p className="text-[11px] text-rose-500 mt-1 font-semibold">{emailError}</p>}
-                  {emailSuccess && <p className="text-[11px] text-emerald-600 mt-1 font-semibold">{emailSuccess}</p>}
+                  {emailSuccess && <p className="text-[11px] text-blue-700 mt-1 font-semibold">{emailSuccess}</p>}
                 </div>
 
                 <div>
@@ -488,7 +489,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       required
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       type="submit"
@@ -498,7 +499,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                     </button>
                   </form>
                   {passwordError && <p className="text-[11px] text-rose-500 mt-1 font-semibold">{passwordError}</p>}
-                  {passwordSuccess && <p className="text-[11px] text-emerald-600 mt-1 font-semibold">{passwordSuccess}</p>}
+                  {passwordSuccess && <p className="text-[11px] text-blue-700 mt-1 font-semibold">{passwordSuccess}</p>}
                 </div>
               </div>
 
@@ -530,7 +531,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-6 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <Shield className="w-4 h-4 text-emerald-500" />
+                  <Shield className="w-4 h-4 text-blue-600" />
                   <span>Confidentialité & Visibilité</span>
                 </h3>
                 <p className="text-xs text-slate-500">Contrôlez qui peut consulter vos publications et interagir avec vous.</p>
@@ -551,7 +552,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       onClick={() => updateSettingField('profil_visibilite', opt.id as any)}
                       className={`p-3 text-left border rounded-2xl transition ${
                         settings.profil_visibilite === opt.id
-                          ? 'border-emerald-500 bg-emerald-50/50 text-slate-900 ring-1 ring-emerald-500'
+                          ? 'border-blue-500 bg-blue-50/50 text-slate-900 ring-1 ring-blue-500'
                           : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/50 text-slate-600'
                       }`}
                     >
@@ -577,7 +578,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       onClick={() => updateSettingField('capsules_visibilite', opt.id as any)}
                       className={`p-3 text-left border rounded-2xl transition ${
                         settings.capsules_visibilite === opt.id
-                          ? 'border-emerald-500 bg-emerald-50/50 text-slate-900 ring-1 ring-emerald-500'
+                          ? 'border-blue-500 bg-blue-50/50 text-slate-900 ring-1 ring-blue-500'
                           : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/50 text-slate-600'
                       }`}
                     >
@@ -674,7 +675,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-6 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <Bell className="w-4 h-4 text-emerald-500" />
+                  <Bell className="w-4 h-4 text-blue-600" />
                   <span>Notifications & Alertes</span>
                 </h3>
                 <p className="text-xs text-slate-500">Choisissez quand et comment Zaure vous informe des activités importantes.</p>
@@ -701,7 +702,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                         type="button"
                         onClick={() => updateSettingField(item.key as any, !val)}
                         className={`w-12 h-6 rounded-full transition p-1 flex items-center ${
-                          val ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                          val ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
                         }`}
                       >
                         <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
@@ -727,7 +728,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       onClick={() => updateSettingField('canal_notif', canal.id as any)}
                       className={`p-3 text-left border rounded-2xl transition ${
                         settings.canal_notif === canal.id
-                          ? 'border-emerald-500 bg-emerald-50/50 text-slate-900 ring-1 ring-emerald-500'
+                          ? 'border-blue-500 bg-blue-50/50 text-slate-900 ring-1 ring-blue-500'
                           : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/50 text-slate-600'
                       }`}
                     >
@@ -745,7 +746,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-6 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <Globe className="w-4 h-4 text-emerald-500" />
+                  <Globe className="w-4 h-4 text-blue-600" />
                   <span>Contenu & Langue de l'Application</span>
                 </h3>
                 <p className="text-xs text-slate-500">Personnalisez la langue d'affichage et l'assistance linguistique de Zaure.</p>
@@ -781,7 +782,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                     type="button"
                     onClick={() => updateSettingField('traduction_auto', !settings.traduction_auto)}
                     className={`w-12 h-6 rounded-full transition p-1 flex items-center ${
-                      settings.traduction_auto ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                      settings.traduction_auto ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
                     }`}
                   >
                     <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
@@ -800,7 +801,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                     type="button"
                     onClick={() => updateSettingField('telechargement_hors_ligne', !settings.telechargement_hors_ligne)}
                     className={`w-12 h-6 rounded-full transition p-1 flex items-center ${
-                      settings.telechargement_hors_ligne ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                      settings.telechargement_hors_ligne ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
                     }`}
                   >
                     <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
@@ -815,7 +816,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-6 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <Users className="w-4 h-4 text-emerald-500" />
+                  <Users className="w-4 h-4 text-blue-600" />
                   <span>Gestion des Cercles de Savoir</span>
                 </h3>
                 <p className="text-xs text-slate-500">Gérez vos abonnements et l'affichage des suggestions dans votre fil d'actualité.</p>
@@ -847,7 +848,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                               onClick={() => handleCircleToggle(circle.id)}
                               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                                 isJoined
-                                  ? 'bg-emerald-100 text-emerald-800 hover:bg-rose-100 hover:text-rose-700'
+                                  ? 'bg-blue-100 text-blue-800 hover:bg-rose-100 hover:text-rose-700'
                                   : 'bg-slate-900 text-white hover:bg-slate-800'
                               }`}
                             >
@@ -884,7 +885,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                   type="button"
                   onClick={() => updateSettingField('masquer_suggestions', !settings.masquer_suggestions)}
                   className={`w-12 h-6 rounded-full transition p-1 flex items-center ${
-                    settings.masquer_suggestions ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                    settings.masquer_suggestions ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
                   }`}
                 >
                   <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
@@ -898,7 +899,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-6 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <Battery className="w-4 h-4 text-emerald-500" />
+                  <Battery className="w-4 h-4 text-blue-600" />
                   <span>Accessibilité & Consommation de Données</span>
                 </h3>
                 <p className="text-xs text-slate-500">Options optimisées pour la sobriété numérique et la lisibilité.</p>
@@ -907,7 +908,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
               <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl">
                 <div>
                   <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Battery className="w-4 h-4 text-emerald-600" />
+                    <Battery className="w-4 h-4 text-blue-700" />
                     <span>Mode faible consommation de données (Data Saver)</span>
                   </p>
                   <p className="text-[10px] text-slate-400 mt-0.5">
@@ -919,7 +920,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                   type="button"
                   onClick={() => updateSettingField('mode_faible_consommation', !settings.mode_faible_consommation)}
                   className={`w-12 h-6 rounded-full transition p-1 flex items-center shrink-0 ${
-                    settings.mode_faible_consommation ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'
+                    settings.mode_faible_consommation ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
                   }`}
                 >
                   <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
@@ -940,7 +941,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                       onClick={() => updateSettingField('taille_texte', t.id as any)}
                       className={`p-3 text-left border rounded-2xl transition ${
                         settings.taille_texte === t.id
-                          ? 'border-emerald-500 bg-emerald-50/50 text-slate-900 ring-1 ring-emerald-500'
+                          ? 'border-blue-500 bg-blue-50/50 text-slate-900 ring-1 ring-blue-500'
                           : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/50 text-slate-600'
                       }`}
                     >
@@ -958,7 +959,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
             <div className="space-y-6 animate-fadeIn">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 mb-1">
-                  <Info className="w-4 h-4 text-emerald-500" />
+                  <Info className="w-4 h-4 text-blue-600" />
                   <span>À Propos & Assistance</span>
                 </h3>
                 <p className="text-xs text-slate-500">Informations sur la plateforme Zaure et assistance communautaire.</p>
@@ -967,7 +968,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
               {/* FAQ Accordion */}
               <div>
                 <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 mb-2">
-                  <HelpCircle className="w-4 h-4 text-emerald-600" />
+                  <HelpCircle className="w-4 h-4 text-blue-700" />
                   <span>Foire Aux Questions (FAQ)</span>
                 </h4>
                 <div className="space-y-2">
@@ -999,15 +1000,15 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
               <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">Version de l'application</span>
-                  <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">v2.4.0 (Firestore Live)</span>
+                  <span className="text-[10px] font-mono bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">v2.4.0 (Firestore Live)</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
                   <span>Conditions Générales d'Utilisation</span>
-                  <span className="text-emerald-600 font-semibold cursor-pointer">Consulter</span>
+                  <span className="text-blue-700 font-semibold cursor-pointer">Consulter</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Politique de Confidentialité</span>
-                  <span className="text-emerald-600 font-semibold cursor-pointer">Consulter</span>
+                  <span className="text-blue-700 font-semibold cursor-pointer">Consulter</span>
                 </div>
               </div>
 

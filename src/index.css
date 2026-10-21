@@ -3,49 +3,79 @@
 @layer base {
   * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
   }
 
   html, body {
     width: 100%;
-    max-width: 100vw;
+    min-height: 100%;
     margin: 0;
     padding: 0;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
     overflow-x: hidden;
   }
 
   #root {
     width: 100%;
-    max-width: 100%;
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 }
 
-/* Ensure single column full width on screens below 768px */
-@media (max-width: 767px) {
-  #main-app-container,
-  #header-navbar,
-  #main-navigation-tabs,
-  #primary-app-layout,
-  #settings-view-root,
-  #chat-view-container {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
-  }
+/* Safe area padding for mobile devices (iPhone home indicator, notch) */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}
 
-  /* Force multi-column layout grid items to span full 100% width on mobile */
-  .grid-cols-12 {
-    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
-  }
+.pt-safe {
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0.75rem));
+}
 
-  .md\:col-span-8,
-  .lg\:col-span-8,
-  .lg\:col-span-4,
-  .lg\:col-span-9,
-  .md\:col-span-4,
-  .lg\:col-span-3 {
-    grid-column: span 1 / span 1 !important;
-    width: 100% !important;
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

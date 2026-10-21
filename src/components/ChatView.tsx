@@ -6,15 +6,22 @@ import { useTranslation } from '../context/LanguageContext';
 
 interface ChatViewProps {
   currentUser: UserProfile | null;
+  initialSelectedUser?: UserProfile | null;
 }
 
-export default function ChatView({ currentUser }: ChatViewProps) {
+export default function ChatView({ currentUser, initialSelectedUser = null }: ChatViewProps) {
   const { t } = useTranslation();
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(initialSelectedUser);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessageText, setNewMessageText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialSelectedUser) {
+      setSelectedUser(initialSelectedUser);
+    }
+  }, [initialSelectedUser]);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -97,7 +104,7 @@ export default function ChatView({ currentUser }: ChatViewProps) {
       >
         <div className="p-4 border-b border-slate-100 bg-white">
           <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-emerald-500" />
+            <MessageSquare className="w-4 h-4 text-blue-600" />
             <span>{t('chat.title')}</span>
           </h3>
           <p className="text-[10px] text-slate-400 mt-1">Échangez avec les mentors et apprenants de Zaure</p>
@@ -113,7 +120,7 @@ export default function ChatView({ currentUser }: ChatViewProps) {
                 onClick={() => setSelectedUser(u)}
                 className={`w-full text-left p-3 rounded-xl flex items-start gap-3 transition-all ${
                   selectedUser?.id === u.id
-                    ? 'bg-emerald-50 border border-emerald-100 text-slate-900 shadow-sm'
+                    ? 'bg-blue-50 border border-blue-200 text-blue-950 shadow-xs'
                     : 'hover:bg-white border border-transparent text-slate-700'
                 }`}
               >
@@ -127,8 +134,8 @@ export default function ChatView({ currentUser }: ChatViewProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
                     <span className="font-semibold text-xs truncate">{u.nom}</span>
-                    {u.role === 'verifie' && <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                    {u.role === 'mentor' && <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                    {u.role === 'verifie' && <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                    {u.role === 'mentor' && <Award className="w-3.5 h-3.5 text-red-600 shrink-0" />}
                   </div>
                   <p className="text-[10px] text-slate-500 truncate mt-0.5">{u.bio || 'Aucune description'}</p>
                 </div>
@@ -168,10 +175,10 @@ export default function ChatView({ currentUser }: ChatViewProps) {
                 <div className="flex items-center gap-1.5">
                   <h4 className="font-bold text-slate-900 text-xs truncate">{selectedUser.nom}</h4>
                   {selectedUser.role === 'verifie' && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-emerald-50 text-emerald-700 rounded-md shrink-0">Vérifié</span>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded-md shrink-0">Vérifié</span>
                   )}
                   {selectedUser.role === 'mentor' && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-amber-50 text-amber-700 rounded-md shrink-0">Mentor</span>
+                    <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-red-50 text-red-700 rounded-md shrink-0">Mentor</span>
                   )}
                 </div>
                 <p className="text-[10px] text-slate-400 truncate max-w-xs md:max-w-md">{selectedUser.bio || 'Aucune biographie disponible.'}</p>
@@ -196,16 +203,16 @@ export default function ChatView({ currentUser }: ChatViewProps) {
                   return (
                     <div key={m.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                       <div
-                        className={`max-w-xs md:max-w-md p-3 rounded-2xl text-xs shadow-sm ${
+                        className={`max-w-xs md:max-w-md p-3 rounded-2xl text-xs shadow-xs ${
                           isOwn
-                            ? 'bg-emerald-500 text-slate-950 rounded-br-none'
+                            ? 'bg-blue-600 text-white rounded-br-none'
                             : 'bg-white text-slate-800 rounded-bl-none border border-slate-100'
                         }`}
                       >
                         <p className="leading-relaxed break-words">{m.content}</p>
                         <p
                           className={`text-[9px] text-right mt-1.5 font-mono ${
-                            isOwn ? 'text-slate-900/60' : 'text-slate-400'
+                            isOwn ? 'text-blue-100' : 'text-slate-400'
                           }`}
                         >
                           {formatTime(m.created_at)}
@@ -234,12 +241,12 @@ export default function ChatView({ currentUser }: ChatViewProps) {
                     handleSendMessage(e);
                   }
                 }}
-                className="flex-1 min-w-0 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-slate-800 bg-slate-50/50"
+                className="flex-1 min-w-0 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-slate-800 bg-slate-50/50"
               />
               <button
                 type="submit"
                 disabled={!newMessageText.trim()}
-                className="p-2.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 rounded-xl transition shadow-sm disabled:opacity-50 disabled:hover:bg-emerald-500 shrink-0 flex items-center justify-center font-bold"
+                className="p-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl transition shadow-xs disabled:opacity-50 shrink-0 flex items-center justify-center font-bold"
                 title="Envoyer le message"
               >
                 <Send className="w-4.5 h-4.5" />
@@ -248,8 +255,8 @@ export default function ChatView({ currentUser }: ChatViewProps) {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center p-8 max-w-sm">
-            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
-              <MessageSquare className="w-8 h-8 text-emerald-500 stroke-1" />
+            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+              <MessageSquare className="w-8 h-8 text-blue-600 stroke-1" />
             </div>
             <h4 className="font-bold text-slate-900 text-sm">Discussions directes</h4>
             <p className="text-xs text-slate-400 text-center mt-2 leading-relaxed">
