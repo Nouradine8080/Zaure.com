@@ -111,6 +111,30 @@ function formatDateDivider(dateStr: string): string {
   }
 }
 
+// Helper to format timestamps in conversation list
+function formatLastMessageTimestamp(dateStr?: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((today.getTime() - msgDay.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    if (diffDays === 1) return 'Hier';
+    if (diffDays < 7) {
+      const weekday = d.toLocaleDateString('fr-FR', { weekday: 'short' });
+      return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    }
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  } catch {
+    return '';
+  }
+}
+
 // Helper to detect URLs in message content
 function extractUrls(text: string): string[] {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -937,10 +961,10 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
   };
 
   // --------------------------------------------------------------------------
-  // 11. Filtered Conversations & User Search Results
+  // 11. Filtered & Sorted Conversations (Date desc, Unread, Groups, Archived)
   // --------------------------------------------------------------------------
   const filteredConversations = useMemo(() => {
-    return conversations.filter((c) => {
+    const list = conversations.filter((c) => {
       if (activeFilter === 'unread') {
         const unread = currentUser ? c.unread_counts?.[currentUser.id] || 0 : 0;
         if (unread <= 0) return false;
@@ -966,7 +990,41 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
 
       return true;
     });
+
+    // Tri strict selon la date du dernier message (les plus récentes en tête de liste)
+    return list.sort((a, b) => {
+      const timeA = a.last_message?.created_at
+        ? new Date(a.last_message.created_at).getTime()
+        : new Date(a.updated_at || a.created_at).getTime();
+      const timeB = b.last_message?.created_at
+        ? new Date(b.last_message.created_at).getTime()
+        : new Date(b.updated_at || b.created_at).getTime();
+      return timeB - timeA;
+    });
   }, [conversations, activeFilter, searchQuery, currentUser]);
+
+  // Badges de comptage pour chaque onglet de filtre
+  const unreadCountBadge = useMemo(() => {
+    if (!currentUser) return 0;
+    return conversations.filter(
+      (c) =>
+        (c.unread_counts?.[currentUser.id] || 0) > 0 &&
+        !c.is_archived_by?.includes(currentUser.id)
+    ).length;
+  }, [conversations, currentUser]);
+
+  const groupsCountBadge = useMemo(() => {
+    return conversations.filter(
+      (c) =>
+        c.type === 'group' &&
+        (!currentUser || !c.is_archived_by?.includes(currentUser.id))
+    ).length;
+  }, [conversations, currentUser]);
+
+  const archivedCountBadge = useMemo(() => {
+    if (!currentUser) return 0;
+    return conversations.filter((c) => c.is_archived_by?.includes(currentUser.id)).length;
+  }, [conversations, currentUser]);
 
   // Users found via search query who might not have an existing conversation
   const matchedUsersFromSearch = useMemo(() => {
@@ -1251,43 +1309,76 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
               <button
                 onClick={() => setActiveFilter('all')}
-                className={`rounded-full px-3 py-1 font-medium transition ${
+                className={`rounded-full px-3 py-1 font-semibold transition flex items-center gap-1.5 shrink-0 ${
                   activeFilter === 'all'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                 }`}
               >
-                Tous
+                <span>Toutes</span>
               </button>
               <button
                 onClick={() => setActiveFilter('unread')}
-                className={`rounded-full px-3 py-1 font-medium transition ${
+                className={`rounded-full px-3 py-1 font-semibold transition flex items-center gap-1.5 shrink-0 ${
                   activeFilter === 'unread'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                 }`}
               >
-                Non lus
+                <span>Non lus</span>
+                {unreadCountBadge > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      activeFilter === 'unread'
+                        ? 'bg-white text-blue-600'
+                        : 'bg-blue-600 text-white'
+                    }`}
+                  >
+                    {unreadCountBadge}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActiveFilter('groups')}
-                className={`rounded-full px-3 py-1 font-medium transition ${
+                className={`rounded-full px-3 py-1 font-semibold transition flex items-center gap-1.5 shrink-0 ${
                   activeFilter === 'groups'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                 }`}
               >
-                Groupes
+                <span>Groupes</span>
+                {groupsCountBadge > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      activeFilter === 'groups'
+                        ? 'bg-white text-blue-600'
+                        : 'bg-slate-300 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {groupsCountBadge}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setActiveFilter('archived')}
-                className={`rounded-full px-3 py-1 font-medium transition ${
+                className={`rounded-full px-3 py-1 font-semibold transition flex items-center gap-1.5 shrink-0 ${
                   activeFilter === 'archived'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                 }`}
               >
-                Archivés
+                <span>Archivées</span>
+                {archivedCountBadge > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                      activeFilter === 'archived'
+                        ? 'bg-white text-blue-600'
+                        : 'bg-slate-300 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {archivedCountBadge}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1383,17 +1474,28 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                 const isSelected = activeConvId === conv.id;
                 const unreadCount = currentUser ? conv.unread_counts?.[currentUser.id] || 0 : 0;
                 const isMuted = currentUser ? conv.is_muted_by?.includes(currentUser.id) : false;
+                const isArchived = currentUser ? conv.is_archived_by?.includes(currentUser.id) : false;
 
                 let title = conv.group_name || 'Groupe';
                 let avatar = conv.group_photo;
                 let otherUid = '';
+                let otherUserObj: UserProfile | undefined = undefined;
 
                 if (!isGroup && currentUser) {
                   otherUid = conv.participant_ids.find((id) => id !== currentUser.id) || '';
+                  otherUserObj = availableUsers.find((u) => u.id === otherUid);
                   const participant = otherUid ? conv.participants?.[otherUid] : null;
-                  title = participant?.nom || 'Membre Zaure';
-                  avatar = participant?.avatar_url || '';
+                  title = otherUserObj?.nom || participant?.nom || 'Membre Zaure';
+                  avatar = otherUserObj?.avatar_url || participant?.avatar_url || '';
                 }
+
+                // Détermination du statut de présence du correspondant
+                const presence = otherUserObj?.availability || (conv.participants?.[otherUid]?.is_online ? 'online' : 'offline');
+
+                // Formatage du dernier message et indication de type média
+                const lastMsg = conv.last_message;
+                const isLastMsgMe = lastMsg?.sender_id === currentUser?.id;
+                const lastMsgPrefix = isLastMsgMe ? 'Vous : ' : '';
 
                 return (
                   <div
@@ -1406,14 +1508,15 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                       setActiveConvId(conv.id);
                       setMobileView('chat');
                     }}
-                    className={`group relative flex cursor-pointer items-center gap-3 p-3 transition hover:bg-slate-100/80 dark:hover:bg-slate-800/50 ${
+                    className={`group relative flex cursor-pointer items-center gap-3 p-3 transition hover:bg-slate-100/90 dark:hover:bg-slate-800/60 ${
                       isSelected
-                        ? 'bg-blue-50/80 dark:bg-blue-950/40 border-l-4 border-blue-600'
+                        ? 'bg-blue-50/90 dark:bg-blue-950/40 border-l-4 border-blue-600'
                         : ''
-                    }`}
+                    } ${unreadCount > 0 ? 'bg-white dark:bg-slate-900/90' : ''}`}
                   >
+                    {/* Photo de profil avec badge de présence ou badge groupe */}
                     <div className="relative flex-shrink-0">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-slate-200 to-slate-300 font-bold text-slate-700 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-slate-200 to-slate-300 font-bold text-slate-700 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200 ring-1 ring-slate-200/80 dark:ring-slate-700">
                         {avatar ? (
                           <img
                             src={avatar}
@@ -1426,53 +1529,127 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                           <span>{title.charAt(0).toUpperCase()}</span>
                         )}
                       </div>
-                      {!isGroup && (
-                        <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+
+                      {/* Indicateur de présence pour discussion individuelle */}
+                      {!isGroup ? (
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 shadow-2xs ${
+                            presence === 'online'
+                              ? 'bg-emerald-500'
+                              : presence === 'busy'
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
+                          }`}
+                          title={
+                            presence === 'online'
+                              ? 'En ligne'
+                              : presence === 'busy'
+                              ? 'Occupé'
+                              : 'Hors ligne'
+                          }
+                        />
+                      ) : (
+                        <span className="absolute -bottom-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-slate-900 px-1 text-[9px] font-bold text-white shadow-xs dark:bg-slate-700">
+                          {conv.participant_ids.length}
+                        </span>
                       )}
                     </div>
 
+                    {/* Informations textuelles */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-0.5">
                         <h3
-                          className={`truncate text-sm font-semibold ${
+                          className={`truncate text-sm ${
                             unreadCount > 0
-                              ? 'text-slate-900 dark:text-white font-bold'
-                              : 'text-slate-800 dark:text-slate-200'
+                              ? 'text-slate-950 dark:text-white font-extrabold'
+                              : 'text-slate-800 dark:text-slate-200 font-semibold'
                           }`}
                         >
                           {title}
                         </h3>
-                        {conv.last_message && (
-                          <span className="text-[11px] text-slate-400 flex-shrink-0 ml-1">
-                            {new Date(conv.last_message.created_at).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                        {(lastMsg?.created_at || conv.updated_at) && (
+                          <span
+                            className={`text-[11px] flex-shrink-0 ml-1.5 font-medium ${
+                              unreadCount > 0
+                                ? 'text-blue-600 dark:text-blue-400 font-bold'
+                                : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                          >
+                            {formatLastMessageTimestamp(lastMsg?.created_at || conv.updated_at)}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <p
+                      <div className="flex items-center justify-between gap-1">
+                        {/* Prévisualisation du dernier message avec indication multimédia */}
+                        <div
                           className={`truncate text-xs ${
                             unreadCount > 0
-                              ? 'font-semibold text-blue-600 dark:text-blue-400'
+                              ? 'font-bold text-slate-900 dark:text-slate-100'
                               : 'text-slate-500 dark:text-slate-400'
                           }`}
                         >
-                          {conv.last_message
-                            ? `${
-                                conv.last_message.sender_id === currentUser?.id ? 'Vous: ' : ''
-                              }${conv.last_message.content}`
-                            : 'Nouvelle conversation'}
-                        </p>
+                          {!lastMsg ? (
+                            <span className="italic opacity-80">Nouvelle conversation</span>
+                          ) : lastMsg.type === 'image' ? (
+                            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+                              <span>{lastMsgPrefix}</span>
+                              <ImageIcon className="h-3.5 w-3.5 shrink-0 inline" />
+                              <span>Photo</span>
+                            </span>
+                          ) : lastMsg.type === 'video' ? (
+                            <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                              <span>{lastMsgPrefix}</span>
+                              <Film className="h-3.5 w-3.5 shrink-0 inline" />
+                              <span>Vidéo</span>
+                            </span>
+                          ) : lastMsg.type === 'audio' ? (
+                            <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-medium">
+                              <span>{lastMsgPrefix}</span>
+                              <Mic className="h-3.5 w-3.5 shrink-0 inline" />
+                              <span>Note vocale</span>
+                            </span>
+                          ) : lastMsg.type === 'file' ? (
+                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                              <span>{lastMsgPrefix}</span>
+                              <FileText className="h-3.5 w-3.5 shrink-0 inline" />
+                              <span className="truncate">{lastMsg.content || 'Document'}</span>
+                            </span>
+                          ) : (
+                            <span className="truncate">
+                              {lastMsgPrefix}{lastMsg.content}
+                            </span>
+                          )}
+                        </div>
 
-                        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                          {isMuted && <BellOff className="h-3.5 w-3.5 text-slate-400" />}
-                          {unreadCount > 0 && (
-                            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold text-white shadow-xs">
+                        {/* Badges d'état et actions rapides */}
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                          {isMuted && (
+                            <BellOff className="h-3.5 w-3.5 text-slate-400 shrink-0" title="En sourdine" />
+                          )}
+                          {isArchived && (
+                            <Archive className="h-3.5 w-3.5 text-slate-400 shrink-0" title="Archivée" />
+                          )}
+
+                          {unreadCount > 0 ? (
+                            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-black text-white shadow-xs">
                               {unreadCount}
                             </span>
+                          ) : (
+                            /* Bouton d'action rapide au survol */
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  zaureService.toggleArchiveConversation(conv.id);
+                                }}
+                                className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-200/50 dark:hover:bg-slate-700 transition"
+                                title={isArchived ? 'Désarchiver' : 'Archiver'}
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>

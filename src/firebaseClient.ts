@@ -1674,5 +1674,119 @@ export const zaureService = {
 
   getAllUsersList: async (): Promise<UserProfile[]> => {
     return zaureService.getAvailableUsers();
+  },
+
+  addGroupMember: async (convId: string, userToAdd: UserProfile): Promise<void> => {
+    if (!dbFirestore || !currentUser) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as Conversation;
+    if (data.participant_ids?.includes(userToAdd.id)) return;
+
+    const newParticipantIds = [...(data.participant_ids || []), userToAdd.id];
+    const newParticipants = {
+      ...(data.participants || {}),
+      [userToAdd.id]: {
+        id: userToAdd.id,
+        nom: userToAdd.nom,
+        avatar_url: userToAdd.avatar_url || '',
+        role: userToAdd.role || 'utilisateur',
+        is_online: userToAdd.availability !== 'offline'
+      }
+    };
+    const newUnread = {
+      ...(data.unread_counts || {}),
+      [userToAdd.id]: 0
+    };
+
+    const nowIso = new Date().toISOString();
+    await updateDoc(ref, {
+      participant_ids: newParticipantIds,
+      participants: newParticipants,
+      unread_counts: newUnread,
+      updated_at: nowIso
+    });
+
+    const msgId = `msg-sys-${Date.now()}`;
+    await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+      id: msgId,
+      conversation_id: convId,
+      sender_id: currentUser.id,
+      sender_nom: currentUser.nom,
+      content: `${currentUser.nom} a ajouté ${userToAdd.nom} au groupe.`,
+      type: 'system',
+      created_at: nowIso,
+      read_by: [currentUser.id]
+    });
+  },
+
+  removeGroupMember: async (convId: string, userIdToRemove: string, targetName: string): Promise<void> => {
+    if (!dbFirestore || !currentUser) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as Conversation;
+
+    const newParticipantIds = (data.participant_ids || []).filter((id) => id !== userIdToRemove);
+    const newParticipants = { ...(data.participants || {}) };
+    delete newParticipants[userIdToRemove];
+
+    const newAdmins = (data.admin_ids || []).filter((id) => id !== userIdToRemove);
+
+    const nowIso = new Date().toISOString();
+    await updateDoc(ref, {
+      participant_ids: newParticipantIds,
+      participants: newParticipants,
+      admin_ids: newAdmins,
+      updated_at: nowIso
+    });
+
+    const msgId = `msg-sys-${Date.now()}`;
+    await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+      id: msgId,
+      conversation_id: convId,
+      sender_id: currentUser.id,
+      sender_nom: currentUser.nom,
+      content: `${currentUser.nom} a retiré ${targetName} du groupe.`,
+      type: 'system',
+      created_at: nowIso,
+      read_by: [currentUser.id]
+    });
+  },
+
+  toggleGroupAdmin: async (convId: string, userId: string, makeAdmin: boolean, targetName: string): Promise<void> => {
+    if (!dbFirestore || !currentUser) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as Conversation;
+
+    let admins = [...(data.admin_ids || [])];
+    if (makeAdmin && !admins.includes(userId)) {
+      admins.push(userId);
+    } else if (!makeAdmin) {
+      admins = admins.filter((id) => id !== userId);
+    }
+
+    const nowIso = new Date().toISOString();
+    await updateDoc(ref, {
+      admin_ids: admins,
+      updated_at: nowIso
+    });
+
+    const msgId = `msg-sys-${Date.now()}`;
+    await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+      id: msgId,
+      conversation_id: convId,
+      sender_id: currentUser.id,
+      sender_nom: currentUser.nom,
+      content: makeAdmin
+        ? `${currentUser.nom} a promu ${targetName} administrateur du groupe.`
+        : `${currentUser.nom} a retiré les droits d'administration à ${targetName}.`,
+      type: 'system',
+      created_at: nowIso,
+      read_by: [currentUser.id]
+    });
   }
 };
