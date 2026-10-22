@@ -81,6 +81,8 @@ import {
 interface ChatViewProps {
   currentUser: UserProfile | null;
   initialSelectedUser?: UserProfile | null;
+  mobileView?: 'list' | 'chat';
+  onMobileViewChange?: (view: 'list' | 'chat') => void;
 }
 
 // Popular reaction emojis
@@ -141,7 +143,12 @@ function extractUrls(text: string): string[] {
   return text.match(urlRegex) || [];
 }
 
-export default function ChatView({ currentUser, initialSelectedUser = null }: ChatViewProps) {
+export default function ChatView({ 
+  currentUser, 
+  initialSelectedUser = null,
+  mobileView: propMobileView = 'list',
+  onMobileViewChange
+}: ChatViewProps) {
   const { t } = useTranslation();
 
   // State: Data
@@ -153,7 +160,16 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
   const [selectedDirectUser, setSelectedDirectUser] = useState<UserProfile | null>(initialSelectedUser);
 
   // State: UI & Navigation
-  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+  const [internalMobileView, setInternalMobileView] = useState<'list' | 'chat'>(propMobileView);
+
+  const setMobileView = (view: 'list' | 'chat') => {
+    setInternalMobileView(view);
+    if (onMobileViewChange) {
+      onMobileViewChange(view);
+    }
+  };
+
+  const mobileView = internalMobileView;
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'groups' | 'archived'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showRightPanel, setShowRightPanel] = useState(true);

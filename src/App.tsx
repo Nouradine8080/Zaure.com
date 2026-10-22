@@ -115,6 +115,7 @@ export default function App() {
 
   // Direct chat contact selection
   const [directChatUser, setDirectChatUser] = useState<UserProfile | null>(null);
+  const [chatMobileView, setChatMobileView] = useState<'list' | 'chat'>('list');
 
   // Modals & form state
   const [showCreateCircle, setShowCreateCircle] = useState(false);
@@ -1240,6 +1241,8 @@ export default function App() {
                 <ChatView 
                   currentUser={currentUser} 
                   initialSelectedUser={directChatUser}
+                  mobileView={chatMobileView}
+                  onMobileViewChange={setChatMobileView}
                 />
               ) : (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs">
@@ -2044,7 +2047,8 @@ export default function App() {
       {/* ============================================================ */}
       {/* 3. FIXED MOBILE BOTTOM NAVIGATION BAR (< 768px) */}
       {/* ============================================================ */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-2 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
+      {!(activeTab === 'chat' && chatMobileView === 'chat') && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-2 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
         
         {/* Fil */}
         <button
@@ -2110,6 +2114,7 @@ export default function App() {
           <span className="text-[11px] font-semibold tracking-tight mt-0.5">Profil</span>
         </button>
       </nav>
+      )}
 
       {/* ============================================================ */}
       {/* 4. MODAL : CRÉER UN CERCLE DE SAVOIR */}
