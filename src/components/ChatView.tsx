@@ -53,7 +53,12 @@ import {
   ChevronDown,
   Globe,
   Loader2,
-  Eye
+  Eye,
+  UploadCloud,
+  FileCheck,
+  FileCode,
+  FolderArchive,
+  Film
 } from 'lucide-react';
 import {
   UserProfile,
@@ -65,6 +70,13 @@ import {
 } from '../types';
 import { zaureService } from '../firebaseClient';
 import { useTranslation } from '../context/LanguageContext';
+import VoiceNotePlayer from './VoiceNotePlayer';
+import {
+  validateFileForChat,
+  formatFileSize,
+  DEFAULT_FILE_LIMITS,
+  getDocumentBadgeInfo
+} from '../utils/fileValidation';
 
 interface ChatViewProps {
   currentUser: UserProfile | null;
@@ -163,10 +175,20 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
   // State: Media Upload & Audio Recording
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingFileName, setUploadingFileName] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+
+  // State: Staged Attachment Preview (Facebook Messenger Style staging before send)
+  const [stagedFile, setStagedFile] = useState<File | null>(null);
+  const [stagedPreviewUrl, setStagedPreviewUrl] = useState<string | null>(null);
+  const [stagedCategory, setStagedCategory] = useState<'image' | 'video' | 'audio' | 'document'>('document');
+  const [stagedFormattedSize, setStagedFormattedSize] = useState<string>('');
+  const [fileValidationError, setFileValidationError] = useState<string | null>(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // State: Modals (New Chat & Groups)
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -577,12 +599,90 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
   // --------------------------------------------------------------------------
   // 8. Send Message
   // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 8. Staged Attachment & Validation Helpers
+  // --------------------------------------------------------------------------
+  const stageIncomingFile = (file: File) => {
+    if (isOtherUserBlocked) return;
+    const validation = validateFileForChat(file);
+    if (!validation.valid) {
+      setFileValidationError(validation.error || 'Fichier non autorisé.');
+      setTimeout(() => setFileValidationError(null), 6000);
+      return;
+    }
+
+    if (stagedPreviewUrl) {
+      URL.revokeObjectURL(stagedPreviewUrl);
+    }
+
+    setFileValidationError(null);
+    setStagedFile(file);
+    setStagedCategory(validation.category);
+    setStagedFormattedSize(validation.formattedSize);
+    setStagedPreviewUrl(URL.createObjectURL(file));
+    setShowAttachmentMenu(false);
+  };
+
+  const discardStagedFile = () => {
+    if (stagedPreviewUrl) {
+      URL.revokeObjectURL(stagedPreviewUrl);
+    }
+    setStagedFile(null);
+    setStagedPreviewUrl(null);
+    setStagedFormattedSize('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const openFilePicker = (acceptTypes: string) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.accept = acceptTypes;
+      fileInputRef.current.click();
+    }
+    setShowAttachmentMenu(false);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      stageIncomingFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingOver && !isOtherUserBlocked) {
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    if (isOtherUserBlocked) return;
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      stageIncomingFile(files[0]);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // 9. Send Message (Texts, Voice Notes, Photos, Videos & Documents)
+  // --------------------------------------------------------------------------
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!currentUser || !activeConvId || isOtherUserBlocked) return;
 
     const trimmed = inputText.trim();
-    if (!trimmed && !recordedAudioBlob) return;
+    if (!trimmed && !recordedAudioBlob && !stagedFile) return;
 
     try {
       if (editingMessage) {
@@ -593,10 +693,13 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
       }
 
       let attachments: MessageAttachment[] = [];
-      let msgType: 'texte' | 'audio' = 'texte';
+      let msgType: 'texte' | 'audio' | 'image' | 'video' | 'file' = 'texte';
 
+      // A. Mémo vocal enregistré
       if (recordedAudioBlob) {
         setIsUploading(true);
+        setUploadingFileName('Note vocale');
+        setUploadProgress(15);
         const voiceAttachment = await zaureService.uploadMessageAttachment(
           recordedAudioBlob,
           'audio',
@@ -607,6 +710,38 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
         msgType = 'audio';
         discardRecordedAudio();
         setIsUploading(false);
+        setUploadingFileName('');
+        setUploadProgress(0);
+      }
+      // B. Fichier prévisualisé (Photo, Vidéo ou Document)
+      else if (stagedFile) {
+        setIsUploading(true);
+        setUploadingFileName(stagedFile.name);
+        setUploadProgress(10);
+
+        let folder: 'images' | 'videos' | 'documents' = 'documents';
+        if (stagedCategory === 'image') {
+          folder = 'images';
+          msgType = 'image';
+        } else if (stagedCategory === 'video') {
+          folder = 'videos';
+          msgType = 'video';
+        } else {
+          folder = 'documents';
+          msgType = 'file';
+        }
+
+        const uploadedAtt = await zaureService.uploadMessageAttachment(
+          stagedFile,
+          folder,
+          stagedFile.name,
+          (pct) => setUploadProgress(pct)
+        );
+        attachments = [uploadedAtt];
+        discardStagedFile();
+        setIsUploading(false);
+        setUploadingFileName('');
+        setUploadProgress(0);
       }
 
       const replyToPayload: MessageReplyInfo | null = replyingTo
@@ -621,7 +756,7 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
       await zaureService.sendChatMessage({
         conversationId: activeConvId,
         receiverId: activeOtherUser?.id,
-        content: trimmed || (msgType === 'audio' ? 'Note vocale' : ''),
+        content: trimmed || (msgType === 'audio' ? 'Note vocale' : attachments[0]?.name || ''),
         type: msgType,
         attachments,
         replyTo: replyToPayload,
@@ -635,63 +770,8 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
     } catch (error) {
       console.error('Erreur lors de l’envoi:', error);
       setIsUploading(false);
-    }
-  };
-
-  // --------------------------------------------------------------------------
-  // 9. Media & Audio Recording
-  // --------------------------------------------------------------------------
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser || !activeConvId || isOtherUserBlocked) return;
-
-    try {
-      setIsUploading(true);
-      setUploadProgress(10);
-
-      let folder: 'images' | 'videos' | 'documents' = 'documents';
-      let type: 'image' | 'video' | 'file' = 'file';
-
-      if (file.type.startsWith('image/')) {
-        folder = 'images';
-        type = 'image';
-      } else if (file.type.startsWith('video/')) {
-        folder = 'videos';
-        type = 'video';
-      }
-
-      const attachment = await zaureService.uploadMessageAttachment(
-        file,
-        folder,
-        file.name,
-        (progress) => setUploadProgress(progress)
-      );
-
-      await zaureService.sendChatMessage({
-        conversationId: activeConvId,
-        receiverId: activeOtherUser?.id,
-        content: file.name,
-        type,
-        attachments: [attachment],
-        replyTo: replyingTo
-          ? {
-              id: replyingTo.id,
-              content: replyingTo.content,
-              sender_nom: replyingTo.sender_nom || 'Membre',
-              type: replyingTo.type
-            }
-          : null,
-        otherUser: activeOtherUser
-      });
-
-      setReplyingTo(null);
-      scrollToBottom();
-    } catch (err) {
-      console.error('Erreur téléversement fichier:', err);
-    } finally {
-      setIsUploading(false);
+      setUploadingFileName('');
       setUploadProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -1617,8 +1697,43 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                 </div>
               )}
 
-              {/* Zone défilable des messages */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Alerte Erreur de Validation Fichier */}
+              {fileValidationError && (
+                <div className="flex items-center justify-between bg-amber-500 text-white px-4 py-2.5 text-xs font-semibold shadow-md animate-fadeIn z-20">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>{fileValidationError}</span>
+                  </div>
+                  <button
+                    onClick={() => setFileValidationError(null)}
+                    className="p-1 hover:bg-white/20 rounded-lg transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Zone défilable des messages avec support Drag & Drop */}
+              <div
+                ref={messagesContainerRef}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className="relative flex-1 overflow-y-auto p-4 space-y-4"
+              >
+                {/* Overlay Drag & Drop immersif */}
+                {isDraggingOver && (
+                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-blue-600/90 backdrop-blur-xs text-white p-6 m-2 rounded-3xl border-2 border-dashed border-white animate-fadeIn pointer-events-none">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 mb-3 animate-bounce">
+                      <UploadCloud className="h-8 w-8 text-white" />
+                    </div>
+                    <h4 className="text-base font-bold">Déposez votre fichier ici</h4>
+                    <p className="text-xs text-blue-100 mt-1 text-center max-w-sm">
+                      Photos (15 Mo), Vidéos (50 Mo), Documents PDF & Médicaux (25 Mo)
+                    </p>
+                  </div>
+                )}
                 {messages.length >= 15 && hasMoreOlder && (
                   <div className="flex justify-center pb-2">
                     <button
@@ -1855,44 +1970,50 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
 
                                         if (att.type === 'audio') {
                                           return (
-                                            <div
-                                              key={attIdx}
-                                              className={`flex items-center gap-2 rounded-2xl p-2.5 ${
-                                                isMe
-                                                  ? 'bg-blue-700/60 text-white'
-                                                  : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
-                                              }`}
-                                            >
-                                              <audio src={att.url} controls className="h-8 w-56" />
+                                            <div key={attIdx} className="my-1">
+                                              <VoiceNotePlayer url={att.url} isMe={isMe} />
                                             </div>
                                           );
                                         }
 
+                                        const badge = getDocumentBadgeInfo(att.name, att.mime_type);
                                         return (
-                                          <a
+                                          <div
                                             key={attIdx}
-                                            href={att.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className={`flex items-center gap-2.5 rounded-2xl p-2.5 transition ${
+                                            className={`flex items-center gap-3 rounded-2xl p-2.5 sm:p-3 transition border ${
                                               isMe
-                                                ? 'bg-blue-700/60 hover:bg-blue-700 text-white'
-                                                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200'
+                                                ? 'bg-blue-700/70 border-blue-400/30 text-white'
+                                                : 'bg-slate-50 border-slate-200 text-slate-800 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-200'
                                             }`}
                                           >
-                                            <FileText className="h-6 w-6 flex-shrink-0" />
+                                            <div
+                                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-black text-[10px] tracking-wider border shadow-2xs ${badge.badgeBg}`}
+                                            >
+                                              {badge.label}
+                                            </div>
                                             <div className="flex-1 min-w-0 text-left">
-                                              <p className="truncate text-xs font-semibold">
+                                              <p className="truncate text-xs font-bold leading-tight">
                                                 {att.name}
                                               </p>
-                                              <span className="text-[10px] opacity-75">
-                                                {att.size
-                                                  ? `${(att.size / 1024).toFixed(1)} Ko`
-                                                  : 'Document'}
+                                              <span className="text-[10px] opacity-75 font-mono">
+                                                {att.size ? formatFileSize(att.size) : 'Document'}
                                               </span>
                                             </div>
-                                            <Download className="h-4 w-4" />
-                                          </a>
+                                            <a
+                                              href={att.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              download={att.name}
+                                              className={`p-2 rounded-xl transition shrink-0 ${
+                                                isMe
+                                                  ? 'hover:bg-white/20 text-white'
+                                                  : 'hover:bg-slate-200 text-slate-700 dark:hover:bg-slate-700 dark:text-slate-300'
+                                              }`}
+                                              title="Télécharger le document"
+                                            >
+                                              <Download className="h-4 w-4" />
+                                            </a>
+                                          </div>
                                         );
                                       })}
                                     </div>
@@ -2054,11 +2175,71 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Barre de téléversement */}
+              {/* Barre de téléversement animée avec progression en temps réel */}
               {isUploading && (
-                <div className="bg-blue-50 px-4 py-1.5 border-t border-blue-100 flex items-center justify-between text-xs text-blue-700 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-300">
-                  <span>Téléversement vers Firebase Storage...</span>
-                  <span className="font-bold">{uploadProgress}%</span>
+                <div className="border-t border-blue-200 bg-blue-50/95 px-4 py-2.5 dark:border-blue-900 dark:bg-blue-950/90 animate-fadeIn">
+                  <div className="flex items-center justify-between text-xs text-blue-900 dark:text-blue-200 mb-1.5 font-semibold">
+                    <span className="flex items-center gap-2 truncate">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 shrink-0" />
+                      <span className="truncate">
+                        Téléversement vers Firebase Storage : {uploadingFileName || 'Fichier en cours...'}
+                      </span>
+                    </span>
+                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300 shrink-0 ml-2">
+                      {uploadProgress}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-blue-200 dark:bg-blue-900">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 transition-all duration-300 rounded-full"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tiroir de prévisualisation avant envoi (Staging Facebook Messenger) */}
+              {stagedFile && !isUploading && (
+                <div className="flex items-center justify-between border-t border-blue-200 bg-blue-50/80 px-4 py-2.5 dark:border-blue-900/60 dark:bg-blue-950/50 animate-fadeIn">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {stagedCategory === 'image' && stagedPreviewUrl ? (
+                      <div className="relative h-12 w-12 rounded-xl overflow-hidden ring-2 ring-blue-500/30 shrink-0">
+                        <img
+                          src={stagedPreviewUrl}
+                          alt="Aperçu"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : stagedCategory === 'video' ? (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 shrink-0">
+                        <Film className="h-6 w-6" />
+                      </div>
+                    ) : stagedCategory === 'audio' ? (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 shrink-0">
+                        <Volume2 className="h-6 w-6" />
+                      </div>
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
+                        <FileText className="h-6 w-6" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {stagedFile.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {stagedFormattedSize} · Pièce jointe prête (ajoutez une légende ou validez)
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={discardStagedFile}
+                    className="p-1.5 text-slate-400 hover:text-red-500 rounded-xl hover:bg-slate-200/50 transition shrink-0"
+                    title="Retirer cette pièce jointe"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               )}
 
@@ -2152,20 +2333,76 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,video/*,application/pdf,.doc,.docx"
                   onChange={handleFileSelect}
                   className="hidden"
                   disabled={isOtherUserBlocked}
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || isOtherUserBlocked}
-                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-800"
-                  title="Joindre un fichier"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
+
+                {/* Bouton Popover d'ajout de pièces jointes (Photos, Vidéos, Documents) */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowAttachmentMenu((prev) => !prev)}
+                    disabled={isUploading || isOtherUserBlocked}
+                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl transition disabled:opacity-30 ${
+                      showAttachmentMenu
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800'
+                    }`}
+                    title="Ajouter une pièce jointe"
+                  >
+                    <Plus className={`h-5 w-5 transition-transform duration-200 ${showAttachmentMenu ? 'rotate-45' : ''}`} />
+                  </button>
+
+                  {/* Popover Menu des pièces jointes style Facebook Messenger */}
+                  {showAttachmentMenu && (
+                    <div className="absolute bottom-12 left-0 z-30 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-800 animate-fadeIn">
+                      <button
+                        type="button"
+                        onClick={() => openFilePicker('image/*')}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-200 dark:hover:bg-slate-700 transition"
+                      >
+                        <ImageIcon className="h-4 w-4 text-emerald-500" />
+                        <span>Photos & Images</span>
+                        <span className="ml-auto text-[10px] text-slate-400">15 Mo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openFilePicker('video/*')}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-purple-700 dark:text-slate-200 dark:hover:bg-slate-700 transition"
+                      >
+                        <Film className="h-4 w-4 text-purple-500" />
+                        <span>Vidéos</span>
+                        <span className="ml-auto text-[10px] text-slate-400">50 Mo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openFilePicker(
+                            '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip'
+                          )
+                        }
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700 dark:text-slate-200 dark:hover:bg-slate-700 transition"
+                      >
+                        <FileText className="h-4 w-4 text-rose-500" />
+                        <span>Documents & PDF</span>
+                        <span className="ml-auto text-[10px] text-slate-400">25 Mo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAttachmentMenu(false);
+                          startVoiceRecording();
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700 dark:text-slate-200 dark:hover:bg-slate-700 transition"
+                      >
+                        <Mic className="h-4 w-4 text-red-500" />
+                        <span>Message vocal</span>
+                        <span className="ml-auto text-[10px] text-slate-400">20 Mo</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <button
                   type="button"
@@ -2192,6 +2429,8 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                     placeholder={
                       isOtherUserBlocked
                         ? 'Cet utilisateur est bloqué.'
+                        : stagedFile
+                        ? 'Ajoutez une légende (optionnel)...'
                         : 'Écrivez un message...'
                     }
                     className="max-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/70 py-2.5 pl-4 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -2228,7 +2467,7 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                 <button
                   type="submit"
                   disabled={
-                    (!inputText.trim() && !recordedAudioBlob) ||
+                    (!inputText.trim() && !recordedAudioBlob && !stagedFile) ||
                     isUploading ||
                     isOtherUserBlocked
                   }
@@ -2446,26 +2685,56 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                         <div
                           key={msg.id}
                           onClick={() => setLightboxImageUrl(att.url)}
-                          className="cursor-pointer overflow-hidden rounded-xl aspect-square bg-slate-200 dark:bg-slate-800"
+                          className="cursor-pointer overflow-hidden rounded-xl aspect-square bg-slate-200 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 relative group/m"
+                          title={att.name}
                         >
                           <img
                             src={att.url}
                             alt={att.name}
-                            className="h-full w-full object-cover transition hover:scale-110"
+                            className="h-full w-full object-cover transition group-hover/m:scale-110"
                           />
                         </div>
                       );
                     }
+                    if (att.type === 'video') {
+                      return (
+                        <div
+                          key={msg.id}
+                          className="flex aspect-square flex-col items-center justify-center rounded-xl bg-purple-50 p-1.5 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-1 ring-purple-200 dark:ring-purple-900"
+                          title={att.name}
+                        >
+                          <Film className="h-6 w-6 text-purple-600 mb-1" />
+                          <span className="truncate max-w-[55px] text-[10px] font-semibold">{att.name}</span>
+                        </div>
+                      );
+                    }
+                    if (att.type === 'audio') {
+                      return (
+                        <div
+                          key={msg.id}
+                          className="flex aspect-square flex-col items-center justify-center rounded-xl bg-amber-50 p-1.5 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900"
+                          title="Note vocale"
+                        >
+                          <Volume2 className="h-6 w-6 text-amber-600 mb-1" />
+                          <span className="text-[10px] font-semibold">Vocal</span>
+                        </div>
+                      );
+                    }
+                    const badge = getDocumentBadgeInfo(att.name, att.mime_type);
                     return (
                       <a
                         key={msg.id}
                         href={att.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex aspect-square flex-col items-center justify-center rounded-xl bg-slate-100 p-1 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+                        download={att.name}
+                        className="flex aspect-square flex-col items-center justify-center rounded-xl bg-slate-100 p-1 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 transition"
+                        title={att.name}
                       >
-                        <FileText className="h-6 w-6 text-blue-600 mb-1" />
-                        <span className="truncate max-w-[50px] text-[10px]">{att.name}</span>
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md mb-1 ${badge.badgeBg}`}>
+                          {badge.label}
+                        </span>
+                        <span className="truncate max-w-[55px] text-[10px] font-medium">{att.name}</span>
                       </a>
                     );
                   })}
@@ -3104,18 +3373,31 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
           onClick={() => setLightboxImageUrl(null)}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md animate-fadeIn"
         >
-          <div className="relative max-h-[90vh] max-w-[90vw]">
+          <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
             <img
               src={lightboxImageUrl}
               alt="Aperçu agrandi"
               className="max-h-[90vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
             />
-            <button
-              onClick={() => setLightboxImageUrl(null)}
-              className="absolute -top-4 -right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              <a
+                href={lightboxImageUrl}
+                download="image_zaure.jpg"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition shadow-md"
+                title="Télécharger l'image"
+              >
+                <Download className="h-5 w-5" />
+              </a>
+              <button
+                onClick={() => setLightboxImageUrl(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition shadow-md"
+                title="Fermer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
       )}

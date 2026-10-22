@@ -1,0 +1,85 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper: Vérifie si l'utilisateur est authentifié
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Vérifie la taille maximale d'un fichier (50 Mo max)
+    function isUnderMaxSize() {
+      return request.resource.size <= 50 * 1024 * 1024;
+    }
+
+    // Helper: Vérifie que le fichier est une image valide
+    function isAllowedImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size <= 15 * 1024 * 1024;
+    }
+
+    // Helper: Vérifie que le fichier est une vidéo autorisée
+    function isAllowedVideo() {
+      return request.resource.contentType.matches('video/.*')
+        && request.resource.size <= 50 * 1024 * 1024;
+    }
+
+    // Helper: Vérifie que le fichier est un message vocal / audio
+    function isAllowedAudio() {
+      return request.resource.contentType.matches('audio/.*')
+        && request.resource.size <= 20 * 1024 * 1024;
+    }
+
+    // Helper: Vérifie les documents (PDF, Office, texte, archives)
+    function isAllowedDocument() {
+      return (
+        request.resource.contentType.matches('application/pdf') ||
+        request.resource.contentType.matches('application/msword') ||
+        request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*') ||
+        request.resource.contentType.matches('text/.*') ||
+        request.resource.contentType.matches('application/zip') ||
+        request.resource.contentType.matches('application/octet-stream')
+      ) && request.resource.size <= 25 * 1024 * 1024;
+    }
+
+    // 1. Photos de profil / Avatars utilisateurs
+    match /avatars/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId && isAllowedImage();
+    }
+
+    // 2. Pièces jointes images de discussion privée
+    match /chat_images/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isAllowedImage();
+      allow delete: if isAuthenticated();
+    }
+
+    // 3. Pièces jointes vidéos de discussion
+    match /chat_videos/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isAllowedVideo();
+      allow delete: if isAuthenticated();
+    }
+
+    // 4. Notes vocales audio de discussion
+    match /chat_audio/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isAllowedAudio();
+      allow delete: if isAuthenticated();
+    }
+
+    // 5. Documents PDF & fichiers médicaux de discussion
+    match /chat_documents/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isAllowedDocument();
+      allow delete: if isAuthenticated();
+    }
+
+    // 6. Fichiers par défaut
+    match /{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isUnderMaxSize();
+    }
+  }
+}
