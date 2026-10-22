@@ -157,6 +157,7 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'groups' | 'archived'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showMobileInfoModal, setShowMobileInfoModal] = useState(false);
   const [presenceStatus, setPresenceStatus] = useState<'online' | 'busy' | 'offline'>('online');
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -1050,7 +1051,7 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
   // RENDER
   // --------------------------------------------------------------------------
   return (
-    <div className="relative flex flex-col h-[calc(100vh-5.5rem)] min-h-[650px] w-full overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
+    <div className="relative flex flex-col h-[calc(100vh-4.5rem)] md:h-[calc(100vh-5.5rem)] min-h-[500px] md:min-h-[650px] w-full overflow-hidden rounded-2xl md:rounded-3xl border border-slate-200/90 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
       {/* ==================================================================== */}
       {/* 1. BARRE SUPÉRIEURE MESSENGER (BRANDING SAAS & CENTRE NOTIFICATIONS)   */}
       {/* ==================================================================== */}
@@ -1786,9 +1787,15 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
                     <Video className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => setShowRightPanel((prev) => !prev)}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) {
+                        setShowMobileInfoModal(true);
+                      } else {
+                        setShowRightPanel((prev) => !prev);
+                      }
+                    }}
                     className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
-                      showRightPanel
+                      showRightPanel || showMobileInfoModal
                         ? 'bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400'
                         : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
                     }`}
@@ -3537,6 +3544,180 @@ export default function ChatView({ currentUser, initialSelectedUser = null }: Ch
               >
                 <PhoneOff className="h-6 w-6" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 8. MODALE : INFORMATIONS DISCUSSION MOBILE                          */}
+      {/* ==================================================================== */}
+      {showMobileInfoModal && activeConversation && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => setShowMobileInfoModal(false)}
+              className="absolute top-4 right-4 rounded-xl p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex flex-col items-center text-center pb-4 border-b border-slate-200/80 dark:border-slate-800">
+              <div
+                onClick={() => {
+                  if (activeOtherUser) {
+                    setShowMobileInfoModal(false);
+                    setViewingUserProfile(activeOtherUser);
+                  }
+                }}
+                className="mb-3 flex h-20 w-20 cursor-pointer items-center justify-center rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-2xl font-bold text-white shadow-lg"
+              >
+                {activeConversation.type === 'group' ? (
+                  activeConversation.group_photo ? (
+                    <img
+                      src={activeConversation.group_photo}
+                      alt={activeConversation.group_name}
+                      className="h-full w-full rounded-3xl object-cover"
+                    />
+                  ) : (
+                    <Users className="h-10 w-10" />
+                  )
+                ) : activeOtherUser?.avatar_url ? (
+                  <img
+                    src={activeOtherUser.avatar_url}
+                    alt={activeOtherUser.nom}
+                    className="h-full w-full rounded-3xl object-cover"
+                  />
+                ) : (
+                  <span>
+                    {(activeOtherUser?.nom || activeConversation.group_name || 'Z')
+                      .charAt(0)
+                      .toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                {activeConversation.type === 'group'
+                  ? activeConversation.group_name
+                  : activeOtherUser?.nom || 'Membre Zaure'}
+              </h4>
+              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                {activeConversation.type === 'group'
+                  ? 'Groupe de discussion médical'
+                  : activeOtherUser?.role === 'mentor'
+                  ? '🩺 Mentor certifié'
+                  : 'Étudiant en médecine'}
+              </span>
+            </div>
+
+            <div className="py-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-around text-slate-600 dark:text-slate-300">
+              <button
+                onClick={() => zaureService.toggleMuteConversation(activeConversation.id)}
+                className="flex flex-col items-center gap-1 text-xs hover:text-blue-600 transition"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+                  <Bell className="h-4 w-4" />
+                </div>
+                <span>Sourdine</span>
+              </button>
+              <button
+                onClick={() => zaureService.toggleArchiveConversation(activeConversation.id)}
+                className="flex flex-col items-center gap-1 text-xs hover:text-blue-600 transition"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+                  <Archive className="h-4 w-4" />
+                </div>
+                <span>Archiver</span>
+              </button>
+              {activeOtherUser && (
+                <button
+                  onClick={() => handleToggleBlockUser(activeOtherUser)}
+                  className="flex flex-col items-center gap-1 text-xs hover:text-red-600 transition"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+                    <UserX className="h-4 w-4" />
+                  </div>
+                  <span>Bloquer</span>
+                </button>
+              )}
+            </div>
+
+            {activeConversation.type === 'group' && (
+              <div className="py-4 border-b border-slate-200/80 dark:border-slate-800">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                  Membres ({activeConversation.participant_ids.length})
+                </span>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {activeConversation.participant_ids.map((uid) => {
+                    const p = activeConversation.participants?.[uid];
+                    const isAdmin = activeConversation.admin_ids?.includes(uid);
+                    return (
+                      <div
+                        key={uid}
+                        onClick={() => {
+                          if (uid !== currentUser?.id) {
+                            const target = availableUsers.find((u) => u.id === uid);
+                            if (target) {
+                              setShowMobileInfoModal(false);
+                              handleStartDirectChat(target);
+                            }
+                          }
+                        }}
+                        className="flex cursor-pointer items-center justify-between text-xs p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-200 font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {p?.avatar_url ? (
+                              <img src={p.avatar_url} alt={p.nom} className="h-full w-full rounded-lg object-cover" />
+                            ) : (
+                              p?.nom?.charAt(0).toUpperCase() || 'M'
+                            )}
+                          </div>
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {uid === currentUser?.id ? 'Vous' : p?.nom || 'Membre'}
+                          </span>
+                        </div>
+                        {isAdmin && (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            Admin
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="py-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 block">
+                Fichiers & Médias ({sharedMediaMessages.length})
+              </span>
+              {sharedMediaMessages.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">Aucun média partagé.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {sharedMediaMessages.slice(0, 6).map((msg) => {
+                    const att = msg.attachments?.[0];
+                    if (!att) return null;
+                    if (att.type === 'image') {
+                      return (
+                        <div
+                          key={msg.id}
+                          onClick={() => {
+                            setShowMobileInfoModal(false);
+                            setLightboxImageUrl(att.url);
+                          }}
+                          className="cursor-pointer overflow-hidden rounded-xl aspect-square bg-slate-200 dark:bg-slate-800 relative"
+                        >
+                          <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
