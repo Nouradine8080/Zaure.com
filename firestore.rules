@@ -44,5 +44,9 @@ service cloud.firestore {
         allow read, write: if true;
       }
     }
+    // Reports
+    match /reports/{reportId} {
+      allow read, write: if true;
+    }
   }
 }

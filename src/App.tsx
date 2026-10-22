@@ -894,15 +894,18 @@ export default function App() {
         )}
       </header>
 
-      {/* ============================================================ */}
-      {/* 2. BODY LAYOUT (FACEBOOK-STYLE 3-COLUMN ARCHITECTURE) */}
-      {/* ============================================================ */}
-      <div className="flex-1 max-w-[1520px] w-full mx-auto px-2 sm:px-4 lg:px-6 py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center" id="main-layout-container">
+      <div 
+        className={`flex-1 w-full mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center ${
+          activeTab === 'chat' ? 'max-w-[1600px] h-[calc(100vh-4.25rem)]' : 'max-w-[1520px]'
+        }`} 
+        id="main-layout-container"
+      >
         
         {/* ======================================================== */}
         {/* COLONNE GAUCHE (NAVIGATION LATÉRALE & RACCOURCIS) */}
         {/* ======================================================== */}
-        <aside className="hidden lg:block w-64 xl:w-72 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
+        {activeTab !== 'chat' && (
+          <aside className="hidden lg:block w-64 xl:w-72 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
           
           {/* Quick User Identity card */}
           {currentUser ? (
@@ -1192,12 +1195,13 @@ export default function App() {
             <p>© 2026 Zaure · Partage du Savoir en Afrique de l'Ouest</p>
             <p className="mt-1">Français · Hausa · English</p>
           </div>
-        </aside>
+          </aside>
+        )}
 
         {/* ======================================================== */}
         {/* COLONNE CENTRALE : FIL D'ACTUALITÉ / FEED PRINCIPAL */}
         {/* ======================================================== */}
-        <main className="flex-1 min-w-0 max-w-2xl w-full space-y-4">
+        <main className={`flex-1 min-w-0 w-full ${activeTab === 'chat' ? 'h-full max-w-full' : 'max-w-2xl space-y-4'}`}>
 
           {/* 1. VUE SPÉCIFIQUE : PARAMÈTRES */}
           {activeTab === 'settings' && (
@@ -1872,7 +1876,8 @@ export default function App() {
         {/* ======================================================== */}
         {/* COLONNE DROITE CONTEXTUELLE (DESKTOP XL >= 1280px) */}
         {/* ======================================================== */}
-        <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
+        {activeTab !== 'chat' && (
+          <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
           
           {/* 1. Cercles recommandés (Suggested Circles) */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xs">
@@ -2031,7 +2036,8 @@ export default function App() {
             </div>
           </div>
 
-        </aside>
+          </aside>
+        )}
 
       </div>
 

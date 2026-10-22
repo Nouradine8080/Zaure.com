@@ -7,6 +7,20 @@ export interface UserProfile {
   role: 'utilisateur' | 'mentor' | 'verifie';
   langue_preferee: 'fr' | 'ha' | 'en';
   created_at?: string;
+  availability?: 'online' | 'busy' | 'offline';
+  status_message?: string;
+  last_active?: string;
+}
+
+export interface UserReport {
+  id: string;
+  reporter_id: string;
+  reporter_nom: string;
+  reported_user_id: string;
+  reason: 'spam' | 'harcelement' | 'usurpation' | 'contenu_inapproprie' | 'autre';
+  details?: string;
+  status: 'en_attente' | 'examine' | 'traite';
+  created_at: string;
 }
 
 export interface Circle {

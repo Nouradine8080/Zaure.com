@@ -31,7 +31,8 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
-  increment
+  increment,
+  limit
 } from 'firebase/firestore';
 import {
   getStorage,
@@ -52,7 +53,8 @@ import {
   Conversation,
   ConversationParticipant,
   MessageAttachment,
-  MessageReplyInfo
+  MessageReplyInfo,
+  UserReport
 } from './types';
 
 // Firebase Project Config
@@ -1234,8 +1236,65 @@ export const zaureService = {
       await updateDoc(ref, {
         [`unread_counts.${currentUser.id}`]: 0
       });
+
+      // Synchroniser les accusés de lecture réels sur les messages récents (Étape 3)
+      const messagesRef = collection(dbFirestore, 'conversations', convId, 'messages');
+      const q = query(messagesRef, orderBy('created_at', 'desc'), limit(25));
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        const readBy: string[] = d.read_by || [];
+        if (!readBy.includes(currentUser.id)) {
+          updateDoc(docSnap.ref, {
+            read_by: arrayUnion(currentUser.id),
+            status: 'read'
+          }).catch(() => {});
+        }
+      });
     } catch (e) {
       // Silent
+    }
+  },
+
+  loadOlderMessages: async (convId: string, beforeTimestamp: string, count: number = 20): Promise<Message[]> => {
+    if (!dbFirestore || !convId) return [];
+    try {
+      const messagesRef = collection(dbFirestore, 'conversations', convId, 'messages');
+      const q = query(
+        messagesRef,
+        where('created_at', '<', beforeTimestamp),
+        orderBy('created_at', 'desc'),
+        limit(count)
+      );
+      const snapshot = await getDocs(q);
+      const list: Message[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        list.push({
+          id: docSnap.id || data.id,
+          conversation_id: convId,
+          sender_id: data.sender_id || data.senderId || '',
+          receiver_id: data.receiver_id || data.receiverId || '',
+          content: data.content || '',
+          created_at: data.created_at || data.createdAt || new Date().toISOString(),
+          updated_at: data.updated_at || undefined,
+          sender_nom: data.sender_nom || data.senderNom || 'Membre',
+          sender_avatar: data.sender_avatar || data.senderAvatar || null,
+          type: data.type || 'texte',
+          attachments: data.attachments || [],
+          reply_to: data.reply_to || null,
+          reactions: data.reactions || {},
+          read_by: data.read_by || [],
+          status: data.status || 'sent',
+          is_edited: data.is_edited || false,
+          is_deleted: data.is_deleted || false
+        });
+      });
+      list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      return list;
+    } catch (e) {
+      console.warn('Info - pagination anciens messages:', e);
+      return [];
     }
   },
 
@@ -1412,6 +1471,159 @@ export const zaureService = {
       return { user: currentUser, error: null };
     } catch (error: any) {
       return { user: null, error: error.message || 'Erreur lors de la mise à jour' };
+    }
+  },
+
+  // --- USER AVAILABILITY & PROFILE MANAGEMENT (ÉTAPE 2) ---
+  setUserAvailability: async (status: 'online' | 'busy' | 'offline', statusMessage?: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    try {
+      const updates: any = {
+        availability: status,
+        last_active: new Date().toISOString()
+      };
+      if (statusMessage !== undefined) updates.status_message = statusMessage;
+      await updateDoc(doc(dbFirestore, 'users', currentUser.id), updates);
+      currentUser.availability = status;
+      if (statusMessage !== undefined) currentUser.status_message = statusMessage;
+      currentUser.last_active = updates.last_active;
+    } catch (e) {
+      console.warn('Info - maj disponibilite:', e);
+    }
+  },
+
+  uploadAndSetAvatar: async (file: File | Blob): Promise<{ url: string | null; error: string | null }> => {
+    if (!currentUser) return { url: null, error: 'Non connecté' };
+    try {
+      let downloadUrl = '';
+      if (storage) {
+        const fileRef = storageRef(storage, `avatars/${currentUser.id}_${Date.now()}.jpg`);
+        const snapshot = await uploadBytesResumable(fileRef, file, { contentType: file.type || 'image/jpeg' });
+        downloadUrl = await getDownloadURL(snapshot.ref);
+      } else {
+        downloadUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (auth && auth.currentUser) {
+        await updateProfile(auth.currentUser, { photoURL: downloadUrl });
+      }
+
+      if (dbFirestore) {
+        await updateDoc(doc(dbFirestore, 'users', currentUser.id), { avatar_url: downloadUrl });
+      }
+
+      currentUser.avatar_url = downloadUrl;
+      return { url: downloadUrl, error: null };
+    } catch (err: any) {
+      console.error('Erreur upload avatar:', err);
+      return { url: null, error: err.message || "Erreur lors du téléversement de l'avatar" };
+    }
+  },
+
+  blockUser: async (targetUserId: string): Promise<boolean> => {
+    if (!currentUser || !dbFirestore) return false;
+    try {
+      const settingsRef = doc(dbFirestore, 'user_settings', currentUser.id);
+      await updateDoc(settingsRef, {
+        utilisateurs_bloques: arrayUnion(targetUserId)
+      });
+      return true;
+    } catch (e) {
+      try {
+        await setDoc(doc(dbFirestore, 'user_settings', currentUser.id), {
+          ...DEFAULT_USER_SETTINGS,
+          utilisateurs_bloques: [targetUserId]
+        }, { merge: true });
+        return true;
+      } catch (err) {
+        console.error('Erreur blocage utilisateur:', err);
+        return false;
+      }
+    }
+  },
+
+  unblockUser: async (targetUserId: string): Promise<boolean> => {
+    if (!currentUser || !dbFirestore) return false;
+    try {
+      const settingsRef = doc(dbFirestore, 'user_settings', currentUser.id);
+      await updateDoc(settingsRef, {
+        utilisateurs_bloques: arrayRemove(targetUserId)
+      });
+      return true;
+    } catch (err) {
+      console.error('Erreur déblocage utilisateur:', err);
+      return false;
+    }
+  },
+
+  getBlockedUserIds: async (): Promise<string[]> => {
+    if (!currentUser || !dbFirestore) return [];
+    try {
+      const settingsDoc = await getDoc(doc(dbFirestore, 'user_settings', currentUser.id));
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data();
+        return data.utilisateurs_bloques || [];
+      }
+    } catch (e) {
+      console.warn('Info - lecture utilisateurs bloques:', e);
+    }
+    return [];
+  },
+
+  reportUser: async (params: {
+    targetUserId: string;
+    targetUserNom: string;
+    reason: 'spam' | 'harcelement' | 'usurpation' | 'contenu_inapproprie' | 'autre';
+    details?: string;
+  }): Promise<{ success: boolean; error: string | null }> => {
+    if (!currentUser) return { success: false, error: 'Non connecté' };
+    if (!dbFirestore) return { success: false, error: 'Firestore indisponible' };
+    try {
+      const reportId = `rep-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const reportData: UserReport = {
+        id: reportId,
+        reporter_id: currentUser.id,
+        reporter_nom: currentUser.nom,
+        reported_user_id: params.targetUserId,
+        reason: params.reason,
+        details: params.details || '',
+        status: 'en_attente',
+        created_at: new Date().toISOString()
+      };
+      await setDoc(doc(dbFirestore, 'reports', reportId), reportData);
+      return { success: true, error: null };
+    } catch (err: any) {
+      console.error('Erreur signalement utilisateur:', err);
+      return { success: false, error: err.message || 'Erreur lors du signalement' };
+    }
+  },
+
+  getUserPublicProfile: async (userId: string): Promise<(UserProfile & { circles_count?: number }) | null> => {
+    if (!dbFirestore) return null;
+    try {
+      const userDoc = await getDoc(doc(dbFirestore, 'users', userId));
+      if (!userDoc.exists()) return null;
+      const data = userDoc.data();
+      return {
+        id: userDoc.id,
+        nom: data.nom || 'Membre Zaure',
+        email: data.email || '',
+        bio: data.bio || null,
+        avatar_url: data.avatar_url || null,
+        role: data.role || 'utilisateur',
+        langue_preferee: data.langue_preferee || 'fr',
+        created_at: data.created_at || undefined,
+        availability: data.availability || 'online',
+        status_message: data.status_message || '',
+        last_active: data.last_active || undefined
+      };
+    } catch (e) {
+      console.error('Erreur profil public:', e);
+      return null;
     }
   },
 
