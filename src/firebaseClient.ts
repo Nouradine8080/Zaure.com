@@ -12,7 +12,9 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   sendEmailVerification,
-  updateProfile
+  updateProfile,
+  RecaptchaVerifier,
+  signInWithPhoneNumber
 } from 'firebase/auth';
 import { 
   initializeFirestore,
@@ -128,6 +130,16 @@ export const formatFirebaseAuthError = (err: any): string => {
       return "Problème de connexion réseau. Vérifiez votre accès internet.";
     case 'auth/operation-not-allowed':
       return "Cette méthode de connexion n'est pas encore activée dans votre console Firebase.";
+    case 'auth/billing-not-enabled':
+      return "L'envoi de SMS par Firebase nécessite l'activation de la facturation (Plan Blaze) sur la console Firebase, ou l'utilisation de numéros de test. Veuillez utiliser la connexion par e-mail ou Google.";
+    case 'auth/invalid-phone-number':
+      return "Format du numéro de téléphone invalide. Utilisez le format international (ex: +227 90 12 34 56).";
+    case 'auth/quota-exceeded':
+      return "Quota SMS Firebase dépassé. Veuillez réessayez plus tard ou utiliser la connexion par e-mail.";
+    case 'auth/captcha-check-failed':
+      return "La vérification de sécurité reCAPTCHA a échoué. Veuillez rafraîchir et réessayez.";
+    case 'auth/argument-error':
+      return "Numéro de téléphone ou paramètre SMS invalide. Vérifiez le format international.";
     default:
       return err.message || "Une erreur d'authentification est survenue.";
   }
@@ -182,7 +194,8 @@ export const zaureService = {
     role: 'utilisateur' | 'mentor' | 'verifie' = 'utilisateur', 
     langue: 'fr' | 'ha' | 'en' = 'fr',
     password?: string,
-    avatarUrl?: string
+    avatarUrl?: string,
+    phone?: string
   ): Promise<{ user: UserProfile | null, error: string | null }> => {
     if (!auth || !dbFirestore) {
       return { user: null, error: 'Firebase n\'est pas connecté.' };
@@ -214,6 +227,7 @@ export const zaureService = {
           id: firebaseUser.uid,
           nom,
           email,
+          phone: phone || undefined,
           bio: bio || null,
           avatar_url: finalAvatar,
           role,
@@ -296,6 +310,70 @@ export const zaureService = {
         return { user: profile, error: null };
       }
       return { user: null, error: 'La connexion Google a échoué.' };
+    } catch (err: any) {
+      return { user: null, error: formatFirebaseAuthError(err) };
+    }
+  },
+
+  createRecaptchaVerifier: (elementId: string) => {
+    if (!auth) throw new Error("Firebase Auth non initialisé");
+    const el = document.getElementById(elementId);
+    if (el) {
+      el.innerHTML = '';
+    }
+    return new RecaptchaVerifier(auth, elementId, {
+      size: 'normal',
+      callback: () => {},
+      'expired-callback': () => {}
+    });
+  },
+
+  signInWithPhone: async (phoneNumber: string, recaptchaVerifier: any): Promise<{ confirmationResult: any; error: string | null }> => {
+    if (!auth) {
+      return { confirmationResult: null, error: 'Firebase n\'est pas connecté.' };
+    }
+    try {
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
+      return { confirmationResult, error: null };
+    } catch (err: any) {
+      return { confirmationResult: null, error: formatFirebaseAuthError(err) };
+    }
+  },
+
+  confirmPhoneCode: async (
+    confirmationResult: any, 
+    code: string,
+    profileData?: { nom: string; role: any; bio: string; langue: any; avatarUrl: string }
+  ): Promise<{ user: UserProfile | null; error: string | null }> => {
+    if (!auth || !dbFirestore) {
+      return { user: null, error: 'Firebase n\'est pas connecté.' };
+    }
+    try {
+      const result = await confirmationResult.confirm(code);
+      const firebaseUser = result.user;
+      if (firebaseUser) {
+        const userDoc = await getDoc(doc(dbFirestore, 'users', firebaseUser.uid));
+        let profile: UserProfile;
+        if (userDoc.exists()) {
+          profile = userDoc.data() as UserProfile;
+        } else {
+          const finalAvatar = profileData?.avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`;
+          profile = {
+            id: firebaseUser.uid,
+            nom: profileData?.nom || 'Membre Zaure',
+            email: firebaseUser.email || `${firebaseUser.phoneNumber?.replace('+', '') || 'user'}@zaure.net`,
+            bio: profileData?.bio || 'Inscrit par numéro de téléphone',
+            avatar_url: finalAvatar,
+            role: profileData?.role || 'utilisateur',
+            langue_preferee: profileData?.langue || 'fr',
+            created_at: new Date().toISOString()
+          };
+          await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), profile);
+        }
+        currentUser = profile;
+        return { user: profile, error: null };
+      }
+      return { user: null, error: 'La validation du code SMS a échoué.' };
     } catch (err: any) {
       return { user: null, error: formatFirebaseAuthError(err) };
     }
@@ -1492,38 +1570,6 @@ export const zaureService = {
     }
   },
 
-  uploadAndSetAvatar: async (file: File | Blob): Promise<{ url: string | null; error: string | null }> => {
-    if (!currentUser) return { url: null, error: 'Non connecté' };
-    try {
-      let downloadUrl = '';
-      if (storage) {
-        const fileRef = storageRef(storage, `avatars/${currentUser.id}_${Date.now()}.jpg`);
-        const snapshot = await uploadBytesResumable(fileRef, file, { contentType: file.type || 'image/jpeg' });
-        downloadUrl = await getDownloadURL(snapshot.ref);
-      } else {
-        downloadUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-      }
-
-      if (auth && auth.currentUser) {
-        await updateProfile(auth.currentUser, { photoURL: downloadUrl });
-      }
-
-      if (dbFirestore) {
-        await updateDoc(doc(dbFirestore, 'users', currentUser.id), { avatar_url: downloadUrl });
-      }
-
-      currentUser.avatar_url = downloadUrl;
-      return { url: downloadUrl, error: null };
-    } catch (err: any) {
-      console.error('Erreur upload avatar:', err);
-      return { url: null, error: err.message || "Erreur lors du téléversement de l'avatar" };
-    }
-  },
-
   blockUser: async (targetUserId: string): Promise<boolean> => {
     if (!currentUser || !dbFirestore) return false;
     try {
@@ -1788,5 +1834,49 @@ export const zaureService = {
       created_at: nowIso,
       read_by: [currentUser.id]
     });
+  },
+
+  uploadAndSetAvatar: async (file: File): Promise<{ avatarUrl: string | null; url: string | null; error: string | null }> => {
+    if (!currentUser || !dbFirestore) {
+      return { avatarUrl: null, url: null, error: 'Utilisateur non connecté ou Firestore indisponible.' };
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.src = ev.target?.result as string;
+          img.onload = () => {
+            const maxWidth = 250;
+            const maxHeight = 250;
+            let w = img.width;
+            let h = img.height;
+            if (w > h) {
+              if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+            } else {
+              if (h > maxHeight) { w = Math.round((w * maxHeight) / h); h = maxHeight; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return reject(new Error('Canvas error'));
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+          };
+          img.onerror = () => reject(new Error('Erreur de traitement image'));
+        };
+        reader.onerror = () => reject(new Error('Erreur de lecture du fichier'));
+      });
+
+      await updateDoc(doc(dbFirestore, 'users', currentUser.id), {
+        avatar_url: dataUrl
+      });
+      currentUser.avatar_url = dataUrl;
+      return { avatarUrl: dataUrl, url: dataUrl, error: null };
+    } catch (err: any) {
+      return { avatarUrl: null, url: null, error: err.message || 'Erreur lors de la mise à jour de la photo.' };
+    }
   }
 };

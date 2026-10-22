@@ -2,6 +2,7 @@ export interface UserProfile {
   id: string; // Auth UID
   nom: string;
   email: string;
+  phone?: string;
   bio: string | null;
   avatar_url: string | null;
   role: 'utilisateur' | 'mentor' | 'verifie';

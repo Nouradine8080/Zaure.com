@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, 
   Shield, 
@@ -23,11 +23,14 @@ import {
   UserX,
   Sparkles,
   Eye,
-  MessageSquare
+  MessageSquare,
+  Camera,
+  Upload
 } from 'lucide-react';
 import { UserProfile, UserSettings, DEFAULT_USER_SETTINGS, Circle } from '../types';
 import { zaureService } from '../firebaseClient';
 import { useTranslation } from '../context/LanguageContext';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface SettingsViewProps {
   currentUser: UserProfile;
@@ -47,6 +50,26 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
   const [bio, setBio] = useState(currentUser.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatar_url || '');
   const [languePreferee, setLanguePreferee] = useState<'fr' | 'ha' | 'en'>(currentUser.langue_preferee || 'fr');
+
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [isCompressingAvatar, setIsCompressingAvatar] = useState(false);
+
+  const handleSelectAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressingAvatar(true);
+      const compressedDataUrl = await compressImageFile(file, 250, 250, 0.8);
+      setAvatarUrl(compressedDataUrl);
+      showToast('Photo sélectionnée');
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors du traitement de la photo');
+    } finally {
+      setIsCompressingAvatar(false);
+      if (avatarFileInputRef.current) avatarFileInputRef.current.value = '';
+    }
+  };
 
   // Email & Password forms
   const [email, setEmail] = useState(currentUser.email);
@@ -361,21 +384,35 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                 {/* Avatar Picker */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Avatar de profil</label>
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleSelectAvatarFile}
+                    className="hidden"
+                  />
                   <div className="flex items-center gap-3 mb-3">
-                    <img
-                      src={avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
-                      alt="Avatar"
-                      className="w-14 h-14 rounded-full object-cover ring-2 ring-blue-500"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex-1">
-                      <input
-                        type="url"
-                        placeholder="Lien URL de votre image (ex: Unsplash)"
-                        value={avatarUrl}
-                        onChange={(e) => setAvatarUrl(e.target.value)}
-                        className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    <div className="relative group cursor-pointer" onClick={() => avatarFileInputRef.current?.click()}>
+                      <img
+                        src={avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
+                        alt="Avatar"
+                        className="w-14 h-14 rounded-full object-cover ring-2 ring-blue-500"
+                        referrerPolicy="no-referrer"
                       />
+                      <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
+                        <Camera className="w-5 h-5" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <button
+                        type="button"
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        disabled={isCompressingAvatar}
+                        className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <Camera className="w-4 h-4 text-blue-600" />
+                        <span>{isCompressingAvatar ? 'Traitement photo...' : '📸 Choisir ma propre photo (Galerie/Appareil)'}</span>
+                      </button>
                     </div>
                   </div>
                   

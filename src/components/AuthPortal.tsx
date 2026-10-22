@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   User, 
   Mail, 
@@ -16,10 +16,12 @@ import {
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle,
-  KeyRound
+  KeyRound,
+  Camera
 } from 'lucide-react';
 import { zaureService } from '../firebaseClient';
 import { Circle, UserProfile } from '../types';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface AuthPortalProps {
   onAuthSuccess: (user: UserProfile) => void;
@@ -78,16 +80,109 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
   const [avatarUrl, setAvatarUrl] = useState<string>(AVATAR_PRESETS[0].url);
   const [selectedCircleIds, setSelectedCircleIds] = useState<string[]>([]);
   
+  const regAvatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [isCompressingRegAvatar, setIsCompressingRegAvatar] = useState(false);
+
+  const handleRegAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressingRegAvatar(true);
+      const dataUrl = await compressImageFile(file, 250, 250, 0.8);
+      setAvatarUrl(dataUrl);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erreur lors du traitement de la photo.');
+    } finally {
+      setIsCompressingRegAvatar(false);
+      if (regAvatarFileInputRef.current) regAvatarFileInputRef.current.value = '';
+    }
+  };
+
   // UI states
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Phone Auth States
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const [recaptchaVerifierInstance, setRecaptchaVerifierInstance] = useState<any>(null);
+
+  const handleSendSmsCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!phoneNumber.trim() || !phoneNumber.startsWith('+')) {
+      setErrorMessage('Veuillez entrer un numéro de téléphone valide au format international (ex: +22790123456).');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (recaptchaVerifierInstance) {
+        try {
+          recaptchaVerifierInstance.clear();
+        } catch {
+          // ignore
+        }
+      }
+      const verifier = zaureService.createRecaptchaVerifier('recaptcha-container');
+      setRecaptchaVerifierInstance(verifier);
+
+      const { confirmationResult: res, error } = await zaureService.signInWithPhone(phoneNumber.trim(), verifier);
+      if (error) {
+        setErrorMessage(error);
+      } else if (res) {
+        setConfirmationResult(res);
+        setSuccessMessage('Code SMS envoyé avec succès !');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erreur lors de l’envoi du SMS.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifySmsCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (!smsCode.trim() || smsCode.length < 6) {
+      setErrorMessage('Veuillez entrer le code de vérification SMS à 6 chiffres.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { user, error } = await zaureService.confirmPhoneCode(confirmationResult, smsCode.trim(), {
+        nom: nom.trim() || 'Membre Zaure',
+        role,
+        bio: bio.trim() || 'Inscrit par téléphone sur Zaure',
+        langue,
+        avatarUrl
+      });
+      if (error) {
+        setErrorMessage(error);
+      } else if (user) {
+        onAuthSuccess(user);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Code SMS incorrect.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const resetFormState = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setShowPassword(false);
+    setConfirmationResult(null);
+    setSmsCode('');
   };
 
   const handleSpecialtySelect = (spec: 'medecine' | 'mentor' | 'etudiant' | 'chercheur') => {
@@ -137,6 +232,10 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
       }
       if (!password || password.length < 6) {
         setErrorMessage('Le mot de passe doit comporter au moins 6 caractères.');
+        return;
+      }
+      if (!phoneNumber.trim() || !phoneNumber.startsWith('+')) {
+        setErrorMessage('Veuillez entrer un numéro de téléphone valide au format international (+227..., +225..., +223..., +221..., +226...).');
         return;
       }
       if (passwordConfirm && password !== passwordConfirm) {
@@ -220,7 +319,8 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
         role,
         langue,
         password,
-        avatarUrl
+        avatarUrl,
+        phoneNumber.trim()
       );
 
       if (error) {
@@ -401,55 +501,139 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
             {/* VUE 1 : CONNEXION DIRECTE                                */}
             {/* ======================================================== */}
             {authMode === 'login' && (
-              <form onSubmit={handleLoginSubmit} className="space-y-3.5">
-                <div>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      placeholder="Adresse e-mail universitaire ou personnelle"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 placeholder:text-slate-400 bg-slate-50 focus:bg-white transition"
-                    />
-                  </div>
+              <>
+                <div className="flex p-1 bg-slate-100 rounded-xl mb-4 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMethod('email'); resetFormState(); }}
+                    className={`flex-1 py-2 rounded-lg transition ${authMethod === 'email' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600'}`}
+                  >
+                    Par Email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMethod('phone'); resetFormState(); }}
+                    className={`flex-1 py-2 rounded-lg transition ${authMethod === 'phone' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600'}`}
+                  >
+                    Par Téléphone (SMS)
+                  </button>
                 </div>
 
-                <div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Mot de passe"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full text-sm pl-4 pr-11 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 placeholder:text-slate-400 bg-slate-50 focus:bg-white transition"
-                    />
+                {authMethod === 'email' ? (
+                  <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+                    <div>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          placeholder="Adresse e-mail universitaire ou personnelle"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 placeholder:text-slate-400 bg-slate-50 focus:bg-white transition"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Mot de passe"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full text-sm pl-4 pr-11 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 placeholder:text-slate-400 bg-slate-50 focus:bg-white transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
                     <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
-                      tabIndex={-1}
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {isLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                          Connexion en cours...
+                        </span>
+                      ) : (
+                        <span>Se connecter</span>
+                      )}
                     </button>
-                  </div>
-                </div>
+                  </form>
+                ) : (
+                  <div className="space-y-3.5">
+                    {!confirmationResult ? (
+                      <form onSubmit={handleSendSmsCode} className="space-y-3.5">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Numéro de téléphone (Format international ex: +227...)
+                          </label>
+                          <input
+                            type="tel"
+                            placeholder="+227 90 12 34 56"
+                            required
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
+                          />
+                        </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                      Connexion en cours...
-                    </span>
-                  ) : (
-                    <span>Se connecter</span>
-                  )}
-                </button>
+                        <div id="recaptcha-container" className="my-2 flex justify-center"></div>
+
+                        <button
+                          type="submit"
+                          disabled={isLoading}
+                          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isLoading ? 'Envoi du SMS...' : 'Envoyer le code SMS'}
+                        </button>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleVerifySmsCode} className="space-y-3.5">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            Code de vérification SMS (6 chiffres)
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={6}
+                            placeholder="123456"
+                            required
+                            value={smsCode}
+                            onChange={(e) => setSmsCode(e.target.value)}
+                            className="w-full text-center tracking-widest text-lg font-mono px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isLoading}
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isLoading ? 'Vérification...' : 'Valider le code & Se connecter'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => { setConfirmationResult(null); setSmsCode(''); }}
+                          className="w-full text-center text-xs text-blue-600 hover:underline pt-2 font-semibold"
+                        >
+                          ← Utiliser un autre numéro ou méthode
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
 
                 <div className="text-center pt-1">
                   <button
@@ -502,7 +686,7 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
                     <span>Créer un nouveau compte</span>
                   </button>
                 </div>
-              </form>
+              </>
             )}
 
             {/* ======================================================== */}
@@ -592,6 +776,45 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
                           className="w-full text-xs pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Numéro de téléphone (SMS - Niger, CI, Mali, Sénégal, Burkina) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1 mb-1.5">
+                        {[
+                          { code: '+227', label: '🇳🇪 NE' },
+                          { code: '+225', label: '🇨🇮 CI' },
+                          { code: '+223', label: '🇲🇱 ML' },
+                          { code: '+221', label: '🇸🇳 SN' },
+                          { code: '+226', label: '🇧🇫 BF' },
+                        ].map((c) => (
+                          <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => {
+                              const clean = phoneNumber.replace(/^\+\d+/, '').trim();
+                              setPhoneNumber(c.code + (clean ? clean : ''));
+                            }}
+                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
+                              phoneNumber.startsWith(c.code)
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {c.label} ({c.code})
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder="+227 90 12 34 56"
+                        required
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
+                      />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -796,8 +1019,41 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
                   <div className="space-y-3 animate-fadeIn">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Choisissez votre avatar
+                        Photo de profil / Avatar
                       </label>
+
+                      <input
+                        ref={regAvatarFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleRegAvatarFileChange}
+                        className="hidden"
+                      />
+
+                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 mb-2 flex items-center gap-3">
+                        <img
+                          src={avatarUrl}
+                          alt="Aperçu avatar"
+                          className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-600 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => regAvatarFileInputRef.current?.click()}
+                            disabled={isCompressingRegAvatar}
+                            className="w-full px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            <Camera className="w-3.5 h-3.5 text-blue-600" />
+                            <span>
+                              {isCompressingRegAvatar ? 'Traitement photo...' : '📸 Importez votre photo (Galerie)'}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Ou choisir un modèle :</span>
+                      </div>
                       <div className="grid grid-cols-6 gap-1.5">
                         {AVATAR_PRESETS.map((preset) => (
                           <button
