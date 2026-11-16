@@ -16,6 +16,7 @@ import {
   Info,
   X,
   ChevronLeft,
+  ArrowLeft,
   Search,
   Users,
   UserPlus,
@@ -84,6 +85,7 @@ interface ChatViewProps {
   mobileView?: 'list' | 'chat';
   onMobileViewChange?: (view: 'list' | 'chat') => void;
   onProfileUpdated?: (updatedUser: UserProfile) => void;
+  onExitChat?: () => void;
 }
 
 // Popular reaction emojis
@@ -149,7 +151,8 @@ export default function ChatView({
   initialSelectedUser = null,
   mobileView: propMobileView = 'list',
   onMobileViewChange,
-  onProfileUpdated
+  onProfileUpdated,
+  onExitChat
 }: ChatViewProps) {
   const { t } = useTranslation();
 
@@ -1080,12 +1083,27 @@ export default function ChatView({
   // RENDER
   // --------------------------------------------------------------------------
   return (
-    <div className="relative flex flex-col h-[calc(100vh-4.5rem)] md:h-[calc(100vh-5.5rem)] min-h-[500px] md:min-h-[650px] w-full overflow-hidden rounded-2xl md:rounded-3xl border border-slate-200/90 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
+    <div className="relative flex flex-col h-full w-full overflow-hidden bg-white dark:bg-slate-950">
       {/* ==================================================================== */}
       {/* 1. BARRE SUPÉRIEURE MESSENGER (BRANDING SAAS & CENTRE NOTIFICATIONS)   */}
       {/* ==================================================================== */}
-      <header className="flex h-14 items-center justify-between border-b border-slate-200/80 bg-white px-4 dark:border-slate-800 dark:bg-slate-900 z-20">
-        <div className="flex items-center gap-3">
+      <header
+        className={`h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-3 sm:px-4 dark:border-slate-800 dark:bg-slate-900 z-20 ${
+          mobileView === 'chat' ? 'hidden md:flex' : 'flex'
+        }`}
+      >
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onExitChat && (
+            <button
+              type="button"
+              onClick={onExitChat}
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2 sm:px-2.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition dark:text-slate-300 dark:hover:bg-slate-800"
+              title="Retour au fil Zaure"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span className="text-xs font-bold hidden sm:inline">Accueil</span>
+            </button>
+          )}
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black shadow-md shadow-blue-500/20">
             Z
           </div>
@@ -1334,6 +1352,26 @@ export default function ChatView({
               >
                 <Plus className="h-5 w-5" />
               </button>
+            </div>
+
+            <div className="relative md:hidden">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Rechercher discussions ou membres..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-full border border-slate-200 bg-white py-2 pl-9 pr-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">

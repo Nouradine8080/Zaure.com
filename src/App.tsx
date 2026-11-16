@@ -623,6 +623,7 @@ export default function App() {
       return;
     }
     setDirectChatUser(user);
+    setChatMobileView('chat');
     setActiveTab('chat');
   };
 
@@ -651,6 +652,29 @@ export default function App() {
           zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds);
         }}
       />
+    );
+  }
+
+  // 3. Dedicated Full-Screen Page for Messaging (edge-to-edge on mobile & desktop)
+  if (activeTab === 'chat') {
+    return (
+      <div
+        className="w-full h-[100dvh] bg-white dark:bg-slate-950 overflow-hidden flex flex-col"
+        id="chat-fullscreen-page"
+      >
+        <ChatView
+          currentUser={currentUser}
+          initialSelectedUser={directChatUser}
+          mobileView={chatMobileView}
+          onMobileViewChange={setChatMobileView}
+          onProfileUpdated={(updated) => setCurrentUser(updated)}
+          onExitChat={() => {
+            setActiveTab('feed');
+            setDirectChatUser(null);
+            setChatMobileView('list');
+          }}
+        />
+      </div>
     );
   }
 
@@ -774,20 +798,15 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
+                setDirectChatUser(null);
+                setChatMobileView('list');
                 setActiveTab('chat');
               }}
-              className={`h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'chat'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
-              }`}
+              className="h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl"
               title="Messagerie"
             >
-              <MessageSquare className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <MessageSquare className="w-5 h-5 stroke-2" />
               <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Messages</span>
-              {activeTab === 'chat' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
             </button>
 
             {/* 4. Paramètres */}
@@ -937,17 +956,14 @@ export default function App() {
       </header>
 
       <div 
-        className={`flex-1 w-full mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center ${
-          activeTab === 'chat' ? 'max-w-[1600px] h-[calc(100vh-4.25rem)]' : 'max-w-[1520px]'
-        }`} 
+        className="flex-1 w-full mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center max-w-[1520px]" 
         id="main-layout-container"
       >
         
         {/* ======================================================== */}
         {/* COLONNE GAUCHE (NAVIGATION LATÉRALE & RACCOURCIS) */}
         {/* ======================================================== */}
-        {activeTab !== 'chat' && (
-          <aside className="hidden lg:block w-64 xl:w-72 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
+        <aside className="hidden lg:block w-64 xl:w-72 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
           
           {/* Quick User Identity card */}
           {currentUser ? (
@@ -1136,13 +1152,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
+                setDirectChatUser(null);
+                setChatMobileView('list');
                 setActiveTab('chat');
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'chat'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition text-slate-700 hover:bg-slate-50"
             >
               <MessageSquare className="w-4 h-4 text-blue-600" />
               <span>Messagerie directe</span>
@@ -1238,12 +1252,11 @@ export default function App() {
             <p className="mt-1">Français · Hausa · English</p>
           </div>
           </aside>
-        )}
 
         {/* ======================================================== */}
         {/* COLONNE CENTRALE : FIL D'ACTUALITÉ / FEED PRINCIPAL */}
         {/* ======================================================== */}
-        <main className={`flex-1 min-w-0 w-full ${activeTab === 'chat' ? 'h-full max-w-full' : 'max-w-2xl space-y-4'}`}>
+        <main className="flex-1 min-w-0 w-full max-w-2xl space-y-4">
 
           {/* 1. VUE SPÉCIFIQUE : PARAMÈTRES */}
           {activeTab === 'settings' && (
@@ -1260,38 +1273,6 @@ export default function App() {
                   <h3 className="font-bold text-slate-900 text-base">Identifiez-vous pour vos réglages</h3>
                   <p className="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
                     Connectez-vous pour personnaliser votre profil, modifier votre biographie et choisir vos langues préférées.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setIsSignUp(false);
-                      setShowAuthModal(true);
-                    }}
-                    className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
-                  >
-                    Se connecter maintenant
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 2. VUE SPÉCIFIQUE : MESSAGERIE */}
-          {activeTab === 'chat' && (
-            <div className="animate-fadeIn">
-              {currentUser ? (
-                <ChatView 
-                  currentUser={currentUser} 
-                  initialSelectedUser={directChatUser}
-                  mobileView={chatMobileView}
-                  onMobileViewChange={setChatMobileView}
-                  onProfileUpdated={(updated) => setCurrentUser(updated)}
-                />
-              ) : (
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs">
-                  <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-3 stroke-1" />
-                  <h3 className="font-bold text-slate-900 text-base">Identifiez-vous pour la messagerie</h3>
-                  <p className="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
-                    Échangez directement avec des mentors, médecins et autres apprenants de la communauté sahélienne.
                   </p>
                   <button
                     onClick={() => {
@@ -1921,8 +1902,7 @@ export default function App() {
         {/* ======================================================== */}
         {/* COLONNE DROITE CONTEXTUELLE (DESKTOP XL >= 1280px) */}
         {/* ======================================================== */}
-        {activeTab !== 'chat' && (
-          <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
+        <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
           
           {/* 1. Cercles recommandés (Suggested Circles) */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xs">
@@ -2082,15 +2062,13 @@ export default function App() {
           </div>
 
           </aside>
-        )}
 
       </div>
 
       {/* ============================================================ */}
       {/* 3. FIXED MOBILE BOTTOM NAVIGATION BAR (< 768px) */}
       {/* ============================================================ */}
-      {!(activeTab === 'chat' && chatMobileView === 'chat') && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-2 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-2 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
         
         {/* Fil */}
         <button
@@ -2131,14 +2109,14 @@ export default function App() {
         {/* Messages */}
         <button
           type="button"
-          onClick={() => setActiveTab('chat')}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
-            activeTab === 'chat'
-              ? 'text-blue-700 font-bold'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
+          onClick={() => {
+            setDirectChatUser(null);
+            setChatMobileView('list');
+            setActiveTab('chat');
+          }}
+          className="min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 text-slate-500 hover:text-slate-800"
         >
-          <MessageSquare className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <MessageSquare className="w-5 h-5 stroke-2" />
           <span className="text-[11px] font-semibold tracking-tight mt-0.5">Messages</span>
         </button>
 
@@ -2156,7 +2134,6 @@ export default function App() {
           <span className="text-[11px] font-semibold tracking-tight mt-0.5">Profil</span>
         </button>
       </nav>
-      )}
 
       {/* ============================================================ */}
       {/* 4. MODAL : CRÉER UN CERCLE DE SAVOIR */}
