@@ -13,7 +13,6 @@ import {
   GraduationCap, 
   Lightbulb, 
   Microscope, 
-  ShieldCheck, 
   CheckCircle2, 
   AlertCircle,
   KeyRound,
@@ -391,100 +390,31 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] flex flex-col justify-between text-slate-800 font-sans selection:bg-blue-100">
-      {/* Top Banner on Mobile */}
-      <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-xs">
-            Z
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xl font-black text-blue-600 tracking-tight">Zaure</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <PWAInstallButton compact />
-          <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-            Partage du Savoir
-          </span>
-        </div>
-      </header>
-
-      {/* Main Split Layout Inspired by Facebook */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8 sm:py-12 lg:py-24 flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-14">
-        
-        {/* Left Column: Brand & Value Proposition (Facebook-inspired) */}
-        <section className="w-full lg:w-[54%] text-center lg:text-left pt-2 lg:pt-0">
-          <div className="hidden lg:flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-2xl shadow-sm">
+    <div className="min-h-screen bg-[#F0F2F5] flex flex-col items-center justify-center px-4 py-6 text-slate-800 font-sans selection:bg-blue-100">
+      <div className="w-full max-w-[430px] mx-auto">
+        {/* Centered Zaure Logo */}
+        <div className="relative flex items-center justify-center mb-6 px-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-2xl shadow-sm">
               Z
             </div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-4xl lg:text-5xl font-black text-blue-600 tracking-tight">
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">
                 Zaure
               </h1>
-              <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+              <span className="w-2 h-2 rounded-full bg-red-600"></span>
             </div>
           </div>
-
-          <h2 className="text-2xl sm:text-3xl lg:text-[28px] font-bold text-slate-900 leading-snug lg:leading-normal max-w-xl mx-auto lg:mx-0">
-            Avec Zaure, partagez vos savoirs, découvrez des cercles d'apprentissage et progressez au sein de la communauté.
-          </h2>
-
-          <p className="mt-3 text-sm sm:text-base text-slate-600 max-w-lg mx-auto lg:mx-0 leading-relaxed">
-            Une plateforme collaborative dédiée aux étudiants en médecine, chercheurs, enseignants et passionnés de sciences.
-          </p>
-
-          {/* Value Badges */}
-          <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto lg:mx-0 text-left">
-            <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
-                <Stethoscope className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">Savoirs Médicaux & Cliniques</p>
-                <p className="text-[11px] text-slate-500 truncate">Fiches de sémiologie & pharmacologie</p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">Capsules Vocales & Écrites</p>
-                <p className="text-[11px] text-slate-500 truncate">Français, Hausa & Anglais</p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                <GraduationCap className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">Cercles & Mentorat</p>
-                <p className="text-[11px] text-slate-500 truncate">Groupes d'études par discipline</p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center flex-shrink-0">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">Sécurité Firebase</p>
-                <p className="text-[11px] text-slate-500 truncate">Données chiffrées & profils vérifiés</p>
-              </div>
-            </div>
+          <div className="absolute right-0">
+            <PWAInstallButton compact />
           </div>
-        </section>
+        </div>
 
-        {/* Right Column: Facebook-Inspired Authentication Card */}
-        <section className="w-full lg:w-[46%] max-w-[430px] mx-auto">
+        {/* Authentication Card */}
+        <section className="w-full">
           
           {/* Main Card */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-xl sm:shadow-2xl border border-slate-200/90 relative">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-xl border border-slate-200/90 relative">
             
             {/* Notifications / Errors */}
             {errorMessage && (
@@ -1227,34 +1157,8 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
             )}
 
           </div>
-
-          {/* Facebook-style Card Footer Note */}
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>
-              <strong className="text-slate-700 font-bold">Créer un espace</strong> pour une faculté de médecine, un laboratoire ou un groupe de recherche.
-            </p>
-          </div>
         </section>
-
-      </main>
-
-      {/* Footer (Facebook-style minimal footer) */}
-      <footer className="bg-white border-t border-slate-200/80 py-4 px-4 text-center text-xs text-slate-500">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-blue-600">Zaure Platform</span>
-            <span>•</span>
-            <span>Français</span>
-            <span>•</span>
-            <span>Hausa</span>
-            <span>•</span>
-            <span>English</span>
-          </div>
-          <div>
-            <span>© {new Date().getFullYear()} Zaure • Firebase Authenticated Platform</span>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 }

@@ -124,6 +124,8 @@ export default function App() {
   const [showCreateCircle, setShowCreateCircle] = useState(false);
   const [showCreateCapsule, setShowCreateCapsule] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Multi-step Auth form states
   const [authEmail, setAuthEmail] = useState('');
@@ -491,10 +493,23 @@ export default function App() {
     }
   };
 
-  const handleSignOut = async () => {
-    await zaureService.signOut();
-    setCurrentUser(null);
-    setJoinedCircleIds([]);
+  const requestSignOut = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const executeSignOut = async () => {
+    setIsLoggingOut(true);
+    try {
+      await zaureService.signOut();
+      setCurrentUser(null);
+      setJoinedCircleIds([]);
+      setDirectChatUser(null);
+      setChatMobileView('list');
+      setActiveTab('feed');
+      setShowLogoutConfirm(false);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   // Create Circle Submit
@@ -659,7 +674,7 @@ export default function App() {
   if (activeTab === 'chat') {
     return (
       <div
-        className="w-full h-[100dvh] bg-white dark:bg-slate-950 overflow-hidden flex flex-col"
+        className="w-full h-[100dvh] bg-[#F0F2F5] text-slate-900 overflow-hidden flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900"
         id="chat-fullscreen-page"
       >
         <ChatView
@@ -901,9 +916,9 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={handleSignOut}
+                  onClick={requestSignOut}
                   title="Déconnexion"
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-[#F0F2F5] rounded-full transition"
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -1265,7 +1280,8 @@ export default function App() {
                 <SettingsView
                   currentUser={currentUser}
                   onProfileUpdated={(updated) => setCurrentUser(updated)}
-                  onSignOut={handleSignOut}
+                  onSignOut={requestSignOut}
+                  onImmediateSignOut={executeSignOut}
                 />
               ) : (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs">
@@ -3024,6 +3040,92 @@ export default function App() {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 7. MODAL : CONFIRMATION DE DÉCONNEXION (PLATEFORME ZAURE) */}
+      {/* ============================================================ */}
+      {showLogoutConfirm && (
+        <div
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn"
+          onClick={() => !isLoggingOut && setShowLogoutConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200/90 animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+                <LogOut className="w-6 h-6" />
+              </div>
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => setShowLogoutConfirm(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <h3 className="text-lg font-extrabold text-slate-950">
+              Confirmer la déconnexion
+            </h3>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              Voulez-vous vraiment vous déconnecter de votre compte Zaure ? Vous pourrez vous reconnecter à tout moment.
+            </p>
+
+            {currentUser && (
+              <div className="mt-4 p-3 rounded-2xl bg-[#F0F2F5] border border-slate-200/80 flex items-center gap-3">
+                {currentUser.avatar_url ? (
+                  <img
+                    src={currentUser.avatar_url}
+                    alt={currentUser.nom}
+                    className="w-10 h-10 rounded-full object-cover border border-white shadow-xs shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                    {currentUser.nom.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-extrabold text-slate-900 truncate">{currentUser.nom}</p>
+                  <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5 mt-6">
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isLoggingOut}
+                onClick={executeSignOut}
+                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {isLoggingOut ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Déconnexion...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Se déconnecter</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

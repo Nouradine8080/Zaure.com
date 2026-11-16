@@ -201,6 +201,8 @@ export default function ChatView({
   const [reportDetails, setReportDetails] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [reportSuccessToast, setReportSuccessToast] = useState(false);
+  const [pendingBlockUser, setPendingBlockUser] = useState<UserProfile | null>(null);
+  const [pendingDeleteMessageId, setPendingDeleteMessageId] = useState<string | null>(null);
 
   // State: Edit Own Profile Modal
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -547,11 +549,15 @@ export default function ChatView({
       await zaureService.unblockUser(targetUser.id);
       setBlockedUserIds((prev) => prev.filter((id) => id !== targetUser.id));
     } else {
-      if (window.confirm(`Voulez-vous bloquer ${targetUser.nom} ? Vous ne recevrez plus ses messages.`)) {
-        await zaureService.blockUser(targetUser.id);
-        setBlockedUserIds((prev) => [...prev, targetUser.id]);
-      }
+      setPendingBlockUser(targetUser);
     }
+  };
+
+  const confirmBlockUser = async () => {
+    if (!pendingBlockUser) return;
+    await zaureService.blockUser(pendingBlockUser.id);
+    setBlockedUserIds((prev) => [...prev, pendingBlockUser.id]);
+    setPendingBlockUser(null);
   };
 
   const handleSubmitReport = async (e: React.FormEvent) => {
@@ -888,11 +894,15 @@ export default function ChatView({
     setHoveredMessageId(null);
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
+  const handleDeleteMessage = (messageId: string) => {
     if (!activeConvId) return;
-    if (window.confirm('Voulez-vous vraiment supprimer ce message pour tout le monde ?')) {
-      await zaureService.deleteChatMessage(activeConvId, messageId);
-    }
+    setPendingDeleteMessageId(messageId);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!activeConvId || !pendingDeleteMessageId) return;
+    await zaureService.deleteChatMessage(activeConvId, pendingDeleteMessageId);
+    setPendingDeleteMessageId(null);
   };
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -1083,12 +1093,12 @@ export default function ChatView({
   // RENDER
   // --------------------------------------------------------------------------
   return (
-    <div className="relative flex flex-col h-full w-full overflow-hidden bg-white dark:bg-slate-950">
+    <div className="relative flex flex-col h-full w-full overflow-hidden bg-[#F0F2F5] text-slate-900">
       {/* ==================================================================== */}
-      {/* 1. BARRE SUPÉRIEURE MESSENGER (BRANDING SAAS & CENTRE NOTIFICATIONS)   */}
+      {/* 1. BARRE SUPÉRIEURE MESSENGER (MÊME DESIGN & COULEURS ZAURE)         */}
       {/* ==================================================================== */}
       <header
-        className={`h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-3 sm:px-4 dark:border-slate-800 dark:bg-slate-900 z-20 ${
+        className={`h-14 sm:h-16 shrink-0 items-center justify-between border-b border-slate-200/90 bg-white px-3 sm:px-4 lg:px-6 shadow-xs z-20 ${
           mobileView === 'chat' ? 'hidden md:flex' : 'flex'
         }`}
       >
@@ -1097,25 +1107,25 @@ export default function ChatView({
             <button
               type="button"
               onClick={onExitChat}
-              className="flex h-9 items-center gap-1.5 rounded-xl px-2 sm:px-2.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition dark:text-slate-300 dark:hover:bg-slate-800"
+              className="flex h-9 items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 text-slate-700 hover:bg-slate-200 hover:text-slate-950 transition"
               title="Retour au fil Zaure"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
               <span className="text-xs font-bold hidden sm:inline">Accueil</span>
             </button>
           )}
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black shadow-md shadow-blue-500/20">
+          <div className="bg-blue-600 text-white font-black text-lg tracking-wider rounded-xl w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shadow-xs">
             Z
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col leading-none">
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">
-                Zaure <span className="text-blue-600 dark:text-blue-400 font-semibold">Messenger</span>
+              <span className="text-base sm:text-lg font-black tracking-tight text-slate-950">
+                Zaure <span className="text-blue-600 font-bold">Messages</span>
               </span>
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Synchronisé Firebase" />
             </div>
-            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
-              Réseau Médical & Académique
+            <span className="text-[10px] text-red-600 font-semibold uppercase tracking-wider mt-0.5 hidden sm:inline">
+              Savoirs du Sahel
             </span>
           </div>
         </div>
@@ -1206,7 +1216,7 @@ export default function ChatView({
               className="flex items-center gap-2 rounded-xl p-1 hover:bg-slate-100 transition dark:hover:bg-slate-800"
             >
               <div className="relative">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-xs font-bold text-white shadow-xs">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-xs font-bold text-white shadow-xs">
                   {currentUser?.avatar_url ? (
                     <img
                       src={currentUser.avatar_url}
@@ -1756,7 +1766,7 @@ export default function ChatView({
                     className="relative cursor-pointer"
                     title="Consulter le profil public"
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 font-bold text-white shadow-sm">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 font-bold text-white shadow-xs">
                       {activeConversation.type === 'group' ? (
                         activeConversation.group_photo ? (
                           <img
@@ -3821,6 +3831,85 @@ export default function ChatView({
                 title="Fermer"
               >
                 <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 9. MODALES DE CONFIRMATION PLATEFORME (BLOCAGE & SUPPRESSION)         */}
+      {/* ==================================================================== */}
+      {pendingBlockUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setPendingBlockUser(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-slate-200/90 bg-white p-6 shadow-2xl animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <UserX className="h-6 w-6" />
+            </div>
+            <h3 className="text-base font-extrabold text-slate-950">
+              Bloquer {pendingBlockUser.nom} ?
+            </h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+              Vous ne recevrez plus ses messages privés. Vous pourrez le débloquer à tout moment depuis vos paramètres.
+            </p>
+            <div className="mt-5 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPendingBlockUser(null)}
+                className="flex-1 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmBlockUser}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white hover:bg-red-700 transition shadow-xs"
+              >
+                Bloquer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteMessageId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fadeIn"
+          onClick={() => setPendingDeleteMessageId(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-slate-200/90 bg-white p-6 shadow-2xl animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <h3 className="text-base font-extrabold text-slate-950">
+              Supprimer ce message ?
+            </h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+              Ce message sera supprimé pour tous les participants de la discussion.
+            </p>
+            <div className="mt-5 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteMessageId(null)}
+                className="flex-1 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMessage}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white hover:bg-red-700 transition shadow-xs"
+              >
+                Supprimer
               </button>
             </div>
           </div>

@@ -37,9 +37,10 @@ interface SettingsViewProps {
   currentUser: UserProfile;
   onProfileUpdated: (updatedUser: UserProfile) => void;
   onSignOut: () => void;
+  onImmediateSignOut?: () => void;
 }
 
-export default function SettingsView({ currentUser, onProfileUpdated, onSignOut }: SettingsViewProps) {
+export default function SettingsView({ currentUser, onProfileUpdated, onSignOut, onImmediateSignOut }: SettingsViewProps) {
   const { language, setLanguage, t } = useTranslation();
   const [activeSection, setActiveSection] = useState<'compte' | 'confidentialite' | 'notifications' | 'contenu' | 'cercles' | 'accessibilite' | 'apropos'>('compte');
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
@@ -209,7 +210,11 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
       return;
     }
     await zaureService.deleteAccount(currentUser.id);
-    onSignOut();
+    if (onImmediateSignOut) {
+      onImmediateSignOut();
+    } else {
+      onSignOut();
+    }
   };
 
   // Circle toggle
