@@ -22,6 +22,7 @@ import {
 import { zaureService } from '../firebaseClient';
 import { Circle, UserProfile } from '../types';
 import { compressImageFile } from '../utils/imageCompressor';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface AuthPortalProps {
   onAuthSuccess: (user: UserProfile) => void;
@@ -402,9 +403,12 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
             <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
           </div>
         </div>
-        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-          Partage du Savoir
-        </span>
+        <div className="flex items-center gap-2">
+          <PWAInstallButton compact />
+          <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+            Partage du Savoir
+          </span>
+        </div>
       </header>
 
       {/* Main Split Layout Inspired by Facebook */}

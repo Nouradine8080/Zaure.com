@@ -83,6 +83,7 @@ interface ChatViewProps {
   initialSelectedUser?: UserProfile | null;
   mobileView?: 'list' | 'chat';
   onMobileViewChange?: (view: 'list' | 'chat') => void;
+  onProfileUpdated?: (updatedUser: UserProfile) => void;
 }
 
 // Popular reaction emojis
@@ -147,7 +148,8 @@ export default function ChatView({
   currentUser, 
   initialSelectedUser = null,
   mobileView: propMobileView = 'list',
-  onMobileViewChange
+  onMobileViewChange,
+  onProfileUpdated
 }: ChatViewProps) {
   const { t } = useTranslation();
 
@@ -586,6 +588,8 @@ export default function ChatView({
       const res = await zaureService.uploadAndSetAvatar(file);
       if (res.error) {
         alert(res.error);
+      } else if (res.avatarUrl && onProfileUpdated) {
+        onProfileUpdated({ ...currentUser, avatar_url: res.avatarUrl });
       }
     } catch (err) {
       console.error('Erreur mise à jour avatar:', err);
@@ -601,12 +605,21 @@ export default function ChatView({
 
     try {
       setIsSavingProfile(true);
-      await zaureService.updateUserProfile(currentUser.id, {
+      const { user } = await zaureService.updateUserProfile(currentUser.id, {
         nom: editName.trim(),
         bio: editBio.trim()
       });
       await zaureService.setUserAvailability(presenceStatus, editStatusMsg.trim());
       setStatusMessage(editStatusMsg.trim());
+      if (onProfileUpdated) {
+        onProfileUpdated({
+          ...(user || currentUser),
+          nom: editName.trim(),
+          bio: editBio.trim(),
+          availability: presenceStatus,
+          status_message: editStatusMsg.trim()
+        });
+      }
       setIsEditProfileOpen(false);
     } catch (err) {
       console.error('Erreur sauvegarde profil:', err);

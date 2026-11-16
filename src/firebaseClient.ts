@@ -22,6 +22,7 @@ import {
   setLogLevel,
   doc, 
   getDoc, 
+  getDocFromServer,
   setDoc, 
   collection, 
   getDocs, 
@@ -103,6 +104,89 @@ if (isFirebaseConfigured) {
 
 let currentUser: UserProfile | null = null;
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData?.map((provider: any) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+async function testConnection() {
+  if (!dbFirestore) return;
+  try {
+    await getDocFromServer(doc(dbFirestore, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+testConnection();
+
+function buildPublicProfilePayload(profile: UserProfile) {
+  return {
+    id: profile.id,
+    nom: (profile.nom || 'Membre Zaure').slice(0, 120),
+    bio: profile.bio ? profile.bio.slice(0, 1000) : null,
+    avatar_url: profile.avatar_url || null,
+    role: profile.role || 'utilisateur',
+    langue_preferee: profile.langue_preferee || 'fr',
+    availability: profile.availability || 'online',
+    status_message: (profile.status_message || '').slice(0, 160),
+    last_active: profile.last_active || new Date().toISOString(),
+    created_at: profile.created_at || new Date().toISOString()
+  };
+}
+
+async function syncPublicProfile(profile: UserProfile): Promise<void> {
+  if (!dbFirestore || !auth?.currentUser || auth.currentUser.uid !== profile.id) return;
+  try {
+    await setDoc(doc(dbFirestore, 'public_profiles', profile.id), buildPublicProfilePayload(profile), { merge: true });
+  } catch (err) {
+    console.warn('Info - sync public_profiles:', err);
+  }
+}
+
 // Helper pour traduire les erreurs Firebase Auth en français clair
 export const formatFirebaseAuthError = (err: any): string => {
   if (!err) return "Une erreur d'authentification est survenue.";
@@ -175,7 +259,9 @@ export const zaureService = {
               langue_preferee: 'fr',
               created_at: new Date().toISOString()
             };
+            await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), currentUser);
           }
+          await syncPublicProfile(currentUser);
         } catch (e) {
           console.warn('Erreur lors de la récupération du profil utilisateur:', e);
         }
@@ -206,12 +292,13 @@ export const zaureService = {
       if (firebaseUser) {
         const finalAvatar = avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`;
         
-        // Mettre à jour le profil standard Firebase Auth (displayName et photoURL)
+        // Mettre à jour le profil standard Firebase Auth (displayName et photoURL si URL courte)
         try {
-          await updateProfile(firebaseUser, {
-            displayName: nom,
-            photoURL: finalAvatar
-          });
+          const authProfileUpdate: { displayName: string; photoURL?: string } = { displayName: nom };
+          if (finalAvatar && !finalAvatar.startsWith('data:') && finalAvatar.length < 1800) {
+            authProfileUpdate.photoURL = finalAvatar;
+          }
+          await updateProfile(firebaseUser, authProfileUpdate);
         } catch (profileErr) {
           console.warn('Note: mise à jour du displayName Firebase:', profileErr);
         }
@@ -225,10 +312,10 @@ export const zaureService = {
 
         const profile: UserProfile = {
           id: firebaseUser.uid,
-          nom,
-          email,
-          phone: phone || undefined,
-          bio: bio || null,
+          nom: nom.trim().slice(0, 120),
+          email: email.trim().slice(0, 200),
+          ...(phone?.trim() ? { phone: phone.trim().slice(0, 32) } : {}),
+          bio: bio ? bio.trim().slice(0, 1000) : null,
           avatar_url: finalAvatar,
           role,
           langue_preferee: langue,
@@ -236,6 +323,7 @@ export const zaureService = {
         };
         
         await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), profile);
+        await syncPublicProfile(profile);
         currentUser = profile;
         return { user: profile, error: null };
       }
@@ -257,12 +345,13 @@ export const zaureService = {
         if (userDoc.exists()) {
           const profile = userDoc.data() as UserProfile;
           currentUser = profile;
+          await syncPublicProfile(profile);
           return { user: profile, error: null };
         }
         const profile: UserProfile = {
           id: firebaseUser.uid,
-          nom: firebaseUser.displayName || email.split('@')[0],
-          email: firebaseUser.email || email,
+          nom: (firebaseUser.displayName || email.split('@')[0]).slice(0, 120),
+          email: (firebaseUser.email || email).slice(0, 200),
           bio: 'Inscrit via email',
           avatar_url: firebaseUser.photoURL || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
           role: 'utilisateur',
@@ -270,6 +359,7 @@ export const zaureService = {
           created_at: new Date().toISOString()
         };
         await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), profile);
+        await syncPublicProfile(profile);
         currentUser = profile;
         return { user: profile, error: null };
       }
@@ -296,8 +386,8 @@ export const zaureService = {
         } else {
           profile = {
             id: firebaseUser.uid,
-            nom: firebaseUser.displayName || 'Utilisateur Google',
-            email: firebaseUser.email || '',
+            nom: (firebaseUser.displayName || 'Utilisateur Google').slice(0, 120),
+            email: (firebaseUser.email || '').slice(0, 200),
             bio: 'Inscrit via Google',
             avatar_url: firebaseUser.photoURL || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
             role: 'utilisateur',
@@ -306,6 +396,7 @@ export const zaureService = {
           };
           await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), profile);
         }
+        await syncPublicProfile(profile);
         currentUser = profile;
         return { user: profile, error: null };
       }
@@ -370,6 +461,7 @@ export const zaureService = {
           };
           await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), profile);
         }
+        await syncPublicProfile(profile);
         currentUser = profile;
         return { user: profile, error: null };
       }
@@ -415,15 +507,32 @@ export const zaureService = {
   },
 
   getAvailableUsers: async (): Promise<UserProfile[]> => {
-    if (!dbFirestore) return [];
+    if (!dbFirestore || !auth?.currentUser) return [];
     try {
-      const snap = await getDocs(collection(dbFirestore, 'users'));
+      const snap = await getDocs(collection(dbFirestore, 'public_profiles'));
       const list: UserProfile[] = [];
-      snap.forEach(d => list.push(d.data() as UserProfile));
+      snap.forEach(d => {
+        const data = d.data();
+        list.push({
+          id: data.id || d.id,
+          nom: data.nom || 'Membre Zaure',
+          email: '',
+          bio: data.bio || null,
+          avatar_url: data.avatar_url || null,
+          role: data.role || 'utilisateur',
+          langue_preferee: data.langue_preferee || 'fr',
+          availability: data.availability || 'online',
+          status_message: data.status_message || '',
+          last_active: data.last_active,
+          created_at: data.created_at
+        });
+      });
+      if (currentUser && !list.some(u => u.id === currentUser!.id)) {
+        list.push({ ...currentUser, email: '' });
+      }
       return list;
     } catch (e) {
-      console.warn('Info - Chargement utilisateurs:', e);
-      return [];
+      handleFirestoreError(e, OperationType.LIST, 'public_profiles');
     }
   },
 
@@ -435,7 +544,6 @@ export const zaureService = {
       const cloudCircles: Circle[] = [];
       querySnapshot.forEach((docSnap) => {
         const c = docSnap.data() as Circle;
-        // Filter out explicit demo/test circles
         const isDemo = c.id.startsWith('demo-') || 
                        c.id.startsWith('mock-') || 
                        c.id.includes('demo') ||
@@ -446,19 +554,20 @@ export const zaureService = {
                        ));
         if (!isDemo) {
           cloudCircles.push(c);
-        } else {
+        } else if (auth?.currentUser) {
           deleteDoc(doc(dbFirestore, 'circles', docSnap.id)).catch(() => {});
         }
       });
 
-      if (cloudCircles.length === 0) {
-        const initialCircles: Circle[] = [
+      if (cloudCircles.length === 0 && auth?.currentUser) {
+        const initialCircles: (Circle & { created_by?: string })[] = [
           {
             id: 'circle-sante-premiers-secours',
             nom: 'Santé & Premiers secours',
             description: 'Gestes de premiers secours, prise en charge des urgences communautaires, brûlures et soins de santé primaire en Afrique de l\'Ouest.',
             categorie: 'Médecine',
             image: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&q=80&w=600',
+            created_by: auth.currentUser.uid,
             created_at: new Date().toISOString()
           },
           {
@@ -467,6 +576,7 @@ export const zaureService = {
             description: 'Apprentissage, vocabulaire et sagesse des langues régionales (Haoussa, Zarma, Bambara, Fulfulde).',
             categorie: 'Langues',
             image: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=600',
+            created_by: auth.currentUser.uid,
             created_at: new Date().toISOString()
           },
           {
@@ -475,6 +585,7 @@ export const zaureService = {
             description: 'Pratiques d\'irrigation durable, conservation de l\'eau et fertilisation biologique.',
             categorie: 'Sciences',
             image: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=600',
+            created_by: auth.currentUser.uid,
             created_at: new Date().toISOString()
           }
         ];
@@ -497,17 +608,21 @@ export const zaureService = {
   },
 
   deleteCircle: async (circleId: string): Promise<boolean> => {
-    if (!dbFirestore) return false;
+    if (!dbFirestore || !auth?.currentUser) return false;
     try {
       await deleteDoc(doc(dbFirestore, 'circles', circleId));
       try {
-        const q = query(collection(dbFirestore, 'circle_members'), where('circle_id', '==', circleId));
+        const q = query(
+          collection(dbFirestore, 'circle_members'),
+          where('user_id', '==', auth.currentUser.uid),
+          where('circle_id', '==', circleId)
+        );
         const snap = await getDocs(q);
-        snap.forEach(async (d) => {
+        for (const d of snap.docs) {
           await deleteDoc(d.ref);
-        });
+        }
       } catch {
-        // ignore
+        // ignore member cleanup error
       }
       return true;
     } catch (error) {
@@ -517,19 +632,19 @@ export const zaureService = {
   },
 
   createCircle: async (nom: string, description: string, categorie: string, image: string): Promise<Circle> => {
-    if (!dbFirestore) throw new Error('Firestore non connecté.');
-    const newCircle: Circle = {
+    if (!dbFirestore || !currentUser) throw new Error('Utilisateur non connecté.');
+    const newCircle: Circle & { created_by: string } = {
       id: `circle-${Date.now()}`,
-      nom,
-      description,
-      categorie,
+      nom: nom.trim().slice(0, 120),
+      description: description.trim().slice(0, 1000),
+      categorie: categorie.trim().slice(0, 60),
       image: image || 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&q=80&w=600',
+      created_by: currentUser.id,
       created_at: new Date().toISOString()
     };
 
-    await setDoc(doc(dbFirestore, 'circles', newCircle.id), newCircle);
-
-    if (currentUser) {
+    try {
+      await setDoc(doc(dbFirestore, 'circles', newCircle.id), newCircle);
       const member: CircleMember = {
         user_id: currentUser.id,
         circle_id: newCircle.id,
@@ -537,6 +652,8 @@ export const zaureService = {
         joined_at: new Date().toISOString()
       };
       await setDoc(doc(dbFirestore, 'circle_members', `${currentUser.id}_${newCircle.id}`), member);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `circles/${newCircle.id}`);
     }
     return newCircle;
   },
@@ -590,7 +707,7 @@ export const zaureService = {
 
   // --- CAPSULES ---
   getCapsules: async (circleIds?: string[]): Promise<Capsule[]> => {
-    if (!dbFirestore) return [];
+    if (!dbFirestore || !auth?.currentUser) return [];
     try {
       let capsulesData: Capsule[] = [];
 
@@ -654,7 +771,9 @@ export const zaureService = {
                          c.contenu.toLowerCase().includes('bienvenue sur zaure')
                        ));
         if (isDemo) {
-          deleteDoc(doc(dbFirestore, 'capsules', c.id)).catch(() => {});
+          if (auth?.currentUser && c.auteur_id === auth.currentUser.uid) {
+            deleteDoc(doc(dbFirestore, 'capsules', c.id)).catch(() => {});
+          }
           return false;
         }
         return true;
@@ -662,6 +781,7 @@ export const zaureService = {
 
       // Seed burns capsule for Santé & Premiers secours if empty
       if (
+        auth?.currentUser &&
         capsulesData.length === 0 && 
         circleIds && 
         circleIds.length === 1 && 
@@ -669,14 +789,14 @@ export const zaureService = {
       ) {
         const seedCapsule: Capsule = {
           id: `capsule-brulures-${Date.now()}`,
-          auteur_id: 'dr-mahamadou-medecin',
+          auteur_id: auth.currentUser.uid,
           circle_id: circleIds[0],
           type: 'texte',
           contenu: 'Prise en charge immédiate des brûlures thermiques : Refroidir immédiatement la zone brûlée avec de l\'eau propre à température ambiante (15-20°C) pendant au moins 15 minutes. Ne jamais appliquer d\'huile, dentifrice ou glace. Couvrir avec un linge propre et consulter un centre de santé.',
           langue_dorigine: 'fr',
           created_at: new Date().toISOString(),
-          auteur_nom: 'Dr. Mahamadou',
-          auteur_role: 'verifie',
+          auteur_nom: currentUser?.nom || 'Dr. Mahamadou',
+          auteur_role: currentUser?.role || 'verifie',
           circle_nom: 'Santé & Premiers secours'
         };
 
@@ -709,7 +829,7 @@ export const zaureService = {
         let auteurAvatar = c.auteur_avatar || '';
 
         try {
-          const uDoc = await getDoc(doc(dbFirestore, 'users', c.auteur_id));
+          const uDoc = await getDoc(doc(dbFirestore, 'public_profiles', c.auteur_id));
           if (uDoc.exists()) {
             const profile = uDoc.data() as UserProfile;
             auteurNom = profile.nom;
@@ -733,8 +853,7 @@ export const zaureService = {
 
       return finalCapsules.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     } catch (e) {
-      console.warn('Info - Chargement capsules:', e);
-      return [];
+      handleFirestoreError(e, OperationType.LIST, 'capsules');
     }
   },
 
@@ -747,6 +866,9 @@ export const zaureService = {
     if (!currentUser) throw new Error('Utilisateur non connecté.');
     if (!dbFirestore) throw new Error('Firestore non connecté.');
 
+    const safeContenu = (contenu || '').trim().slice(0, 650000);
+    if (!safeContenu) throw new Error('Le contenu de la capsule ne peut pas être vide.');
+
     const circlesData = await zaureService.getCircles();
     const circleNom = circlesData.find(c => c.id === circleId)?.nom || 'Cercle';
 
@@ -755,7 +877,7 @@ export const zaureService = {
       auteur_id: currentUser.id,
       circle_id: circleId,
       type,
-      contenu,
+      contenu: safeContenu,
       langue_dorigine: langue,
       created_at: new Date().toISOString(),
       auteur_nom: currentUser.nom,
@@ -764,28 +886,31 @@ export const zaureService = {
       circle_nom: circleNom
     };
 
-    await setDoc(doc(dbFirestore, 'capsules', newCapsule.id), {
-      id: newCapsule.id,
-      auteur_id: newCapsule.auteur_id,
-      circle_id: newCapsule.circle_id,
-      circleId: newCapsule.circle_id,
-      type: newCapsule.type,
-      contenu: newCapsule.contenu,
-      langue_dorigine: newCapsule.langue_dorigine,
-      created_at: newCapsule.created_at
-    });
+    try {
+      await setDoc(doc(dbFirestore, 'capsules', newCapsule.id), {
+        id: newCapsule.id,
+        auteur_id: newCapsule.auteur_id,
+        circle_id: newCapsule.circle_id,
+        circleId: newCapsule.circle_id,
+        type: newCapsule.type,
+        contenu: newCapsule.contenu,
+        langue_dorigine: newCapsule.langue_dorigine,
+        created_at: newCapsule.created_at
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, `capsules/${newCapsule.id}`);
+    }
 
     return newCapsule;
   },
 
   deleteCapsule: async (capsuleId: string): Promise<boolean> => {
-    if (!dbFirestore) return false;
+    if (!dbFirestore || !auth?.currentUser) return false;
     try {
       await deleteDoc(doc(dbFirestore, 'capsules', capsuleId));
       return true;
     } catch (e) {
-      console.warn('Info - Supprimer capsule:', e);
-      return false;
+      handleFirestoreError(e, OperationType.DELETE, `capsules/${capsuleId}`);
     }
   },
 
@@ -830,7 +955,7 @@ export const zaureService = {
 
   // --- COMMENTS ---
   getComments: async (capsuleId: string): Promise<Comment[]> => {
-    if (!dbFirestore) return [];
+    if (!dbFirestore || !auth?.currentUser) return [];
     try {
       const q = query(collection(dbFirestore, 'comments'), where('capsule_id', '==', capsuleId));
       const querySnapshot = await getDocs(q);
@@ -845,7 +970,7 @@ export const zaureService = {
         let auteurAvatar = '';
 
         try {
-          const uDoc = await getDoc(doc(dbFirestore, 'users', c.auteur_id));
+          const uDoc = await getDoc(doc(dbFirestore, 'public_profiles', c.auteur_id));
           if (uDoc.exists()) {
             const profile = uDoc.data() as UserProfile;
             auteurNom = profile.nom;
@@ -864,8 +989,7 @@ export const zaureService = {
 
       return finalComments.sort((a, b) => new Date(a.created_at).getTime() - new Date(a.created_at).getTime());
     } catch (error) {
-      console.warn('Info - Commentaires:', error);
-      return [];
+      handleFirestoreError(error, OperationType.LIST, `comments?capsule_id=${capsuleId}`);
     }
   },
 
@@ -873,23 +997,30 @@ export const zaureService = {
     if (!currentUser) throw new Error('Utilisateur non connecté.');
     if (!dbFirestore) throw new Error('Firestore non connecté.');
 
+    const safeContenu = (contenu || '').trim().slice(0, 2000);
+    if (!safeContenu) throw new Error('Le commentaire ne peut pas être vide.');
+
     const newComment: Comment = {
       id: `comment-${Date.now()}`,
       capsule_id: capsuleId,
       auteur_id: currentUser.id,
-      contenu,
+      contenu: safeContenu,
       created_at: new Date().toISOString(),
       auteur_nom: currentUser.nom,
       auteur_avatar: currentUser.avatar_url || ''
     };
 
-    await setDoc(doc(dbFirestore, 'comments', newComment.id), {
-      id: newComment.id,
-      capsule_id: newComment.capsule_id,
-      auteur_id: newComment.auteur_id,
-      contenu: newComment.contenu,
-      created_at: newComment.created_at
-    });
+    try {
+      await setDoc(doc(dbFirestore, 'comments', newComment.id), {
+        id: newComment.id,
+        capsule_id: newComment.capsule_id,
+        auteur_id: newComment.auteur_id,
+        contenu: newComment.contenu,
+        created_at: newComment.created_at
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `comments/${newComment.id}`);
+    }
 
     return newComment;
   },
@@ -993,7 +1124,7 @@ export const zaureService = {
 
   // --- CONVERSATIONS TEMPS RÉEL (STYLE MESSENGER) ---
   subscribeUserConversations: (userId: string, callback: (conversations: Conversation[]) => void): (() => void) => {
-    if (!dbFirestore || !userId) {
+    if (!dbFirestore || !userId || !auth?.currentUser) {
       callback([]);
       return () => {};
     }
@@ -1026,7 +1157,11 @@ export const zaureService = {
         list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
         callback(list);
       }, (error) => {
-        console.warn('Info - Listener conversations:', error);
+        try {
+          handleFirestoreError(error, OperationType.LIST, 'conversations');
+        } catch {
+          // Structured error logged in handleFirestoreError
+        }
         callback([]);
       });
       return unsubscribe;
@@ -1038,7 +1173,7 @@ export const zaureService = {
   },
 
   subscribeConversationMessages: (convId: string, callback: (messages: Message[]) => void): (() => void) => {
-    if (!dbFirestore || !convId) {
+    if (!dbFirestore || !convId || !auth?.currentUser) {
       callback([]);
       return () => {};
     }
@@ -1071,7 +1206,11 @@ export const zaureService = {
         });
         callback(list);
       }, (error) => {
-        console.warn('Info - Listener messages:', error);
+        try {
+          handleFirestoreError(error, OperationType.LIST, `conversations/${convId}/messages`);
+        } catch {
+          // Structured error logged in handleFirestoreError
+        }
         callback([]);
       });
       return unsubscribe;
@@ -1095,111 +1234,125 @@ export const zaureService = {
     if (!dbFirestore) throw new Error('Firestore non connecté.');
 
     const { conversationId, receiverId, content, type = 'texte', attachments = [], replyTo = null, otherUser } = params;
+    const safeContent = (content || '').slice(0, 10000);
     const messageId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const nowIso = new Date().toISOString();
 
-    const newMessage: Message = {
+    let displayPreview = safeContent.slice(0, 300);
+    if (type === 'image') displayPreview = '📷 Photo';
+    else if (type === 'video') displayPreview = '🎥 Vidéo';
+    else if (type === 'audio') displayPreview = '🎤 Note vocale';
+    else if (type === 'file') displayPreview = `📎 ${(attachments[0]?.name || 'Fichier').slice(0, 120)}`;
+
+    // IMPORTANT (Master Gate RLS): Ensure parent conversation exists and includes currentUser BEFORE creating the message
+    const convDocRef = doc(dbFirestore, 'conversations', conversationId);
+    try {
+      const convSnap = await getDoc(convDocRef);
+      const typingResetKey = `typing.${currentUser.id}`;
+
+      if (convSnap.exists()) {
+        const updateData: any = {
+          updated_at: nowIso,
+          last_message: {
+            content: displayPreview,
+            sender_id: currentUser.id,
+            sender_nom: currentUser.nom,
+            type,
+            created_at: nowIso
+          },
+          [typingResetKey]: false
+        };
+
+        if (receiverId) {
+          updateData[`unread_counts.${receiverId}`] = increment(1);
+        } else {
+          const convData = convSnap.data();
+          const pIds: string[] = convData.participant_ids || [];
+          pIds.forEach((pid) => {
+            if (pid !== currentUser.id) {
+              updateData[`unread_counts.${pid}`] = increment(1);
+            }
+          });
+        }
+
+        await updateDoc(convDocRef, updateData);
+      } else {
+        const participantsMap: Record<string, ConversationParticipant> = {
+          [currentUser.id]: {
+            id: currentUser.id,
+            nom: currentUser.nom,
+            avatar_url: currentUser.avatar_url || null,
+            role: currentUser.role,
+            is_online: true
+          }
+        };
+
+        const participantIds = [currentUser.id];
+        if (receiverId) {
+          participantIds.push(receiverId);
+          participantsMap[receiverId] = {
+            id: receiverId,
+            nom: otherUser?.nom || 'Membre Zaure',
+            avatar_url: otherUser?.avatar_url || null,
+            role: otherUser?.role || 'utilisateur'
+          };
+        }
+
+        await setDoc(convDocRef, {
+          id: conversationId,
+          type: 'direct',
+          participant_ids: participantIds,
+          participants: participantsMap,
+          created_at: nowIso,
+          updated_at: nowIso,
+          last_message: {
+            content: displayPreview,
+            sender_id: currentUser.id,
+            sender_nom: currentUser.nom,
+            type,
+            created_at: nowIso
+          },
+          unread_counts: receiverId ? { [receiverId]: 1, [currentUser.id]: 0 } : {},
+          typing: { [currentUser.id]: false },
+          is_archived_by: [],
+          is_muted_by: []
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `conversations/${conversationId}`);
+    }
+
+    const messagePayload: Record<string, any> = {
       id: messageId,
       conversation_id: conversationId,
       sender_id: currentUser.id,
-      receiver_id: receiverId,
-      content,
+      content: safeContent,
       created_at: nowIso,
       sender_nom: currentUser.nom,
-      sender_avatar: currentUser.avatar_url || undefined,
       type,
-      attachments,
-      reply_to: replyTo,
+      attachments: attachments.slice(0, 5),
+      reply_to: replyTo || null,
       reactions: {},
       read_by: [currentUser.id],
       status: 'sent',
       is_edited: false,
       is_deleted: false
     };
+    if (receiverId) messagePayload.receiver_id = receiverId;
+    if (currentUser.avatar_url) messagePayload.sender_avatar = currentUser.avatar_url;
 
     const msgDocRef = doc(dbFirestore, 'conversations', conversationId, 'messages', messageId);
-    await setDoc(msgDocRef, newMessage);
-
-    let displayPreview = content;
-    if (type === 'image') displayPreview = '📷 Photo';
-    else if (type === 'video') displayPreview = '🎥 Vidéo';
-    else if (type === 'audio') displayPreview = '🎤 Note vocale';
-    else if (type === 'file') displayPreview = `📎 ${attachments[0]?.name || 'Fichier'}`;
-
-    const convDocRef = doc(dbFirestore, 'conversations', conversationId);
-    const convSnap = await getDoc(convDocRef);
-    const typingResetKey = `typing.${currentUser.id}`;
-
-    if (convSnap.exists()) {
-      const updateData: any = {
-        updated_at: nowIso,
-        last_message: {
-          content: displayPreview,
-          sender_id: currentUser.id,
-          sender_nom: currentUser.nom,
-          type,
-          created_at: nowIso
-        },
-        [typingResetKey]: false
-      };
-
-      if (receiverId) {
-        updateData[`unread_counts.${receiverId}`] = increment(1);
-      } else {
-        const convData = convSnap.data();
-        const pIds: string[] = convData.participant_ids || [];
-        pIds.forEach((pid) => {
-          if (pid !== currentUser.id) {
-            updateData[`unread_counts.${pid}`] = increment(1);
-          }
-        });
-      }
-
-      await updateDoc(convDocRef, updateData);
-    } else {
-      const participantsMap: Record<string, ConversationParticipant> = {
-        [currentUser.id]: {
-          id: currentUser.id,
-          nom: currentUser.nom,
-          avatar_url: currentUser.avatar_url,
-          role: currentUser.role,
-          is_online: true
-        }
-      };
-
-      const participantIds = [currentUser.id];
-      if (receiverId) {
-        participantIds.push(receiverId);
-        participantsMap[receiverId] = {
-          id: receiverId,
-          nom: otherUser?.nom || 'Membre Zaure',
-          avatar_url: otherUser?.avatar_url || null,
-          role: otherUser?.role || 'utilisateur'
-        };
-      }
-
-      await setDoc(convDocRef, {
-        id: conversationId,
-        type: 'direct',
-        participant_ids: participantIds,
-        participants: participantsMap,
-        created_at: nowIso,
-        updated_at: nowIso,
-        last_message: {
-          content: displayPreview,
-          sender_id: currentUser.id,
-          sender_nom: currentUser.nom,
-          type,
-          created_at: nowIso
-        },
-        unread_counts: receiverId ? { [receiverId]: 1, [currentUser.id]: 0 } : {},
-        typing: { [currentUser.id]: false },
-        is_archived_by: [],
-        is_muted_by: []
-      });
+    try {
+      await setDoc(msgDocRef, messagePayload);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `conversations/${conversationId}/messages/${messageId}`);
     }
 
-    return newMessage;
+    return {
+      ...messagePayload,
+      receiver_id: receiverId,
+      sender_avatar: currentUser.avatar_url || undefined
+    } as Message;
   },
 
   createGroupConversation: async (params: {
@@ -1214,13 +1367,15 @@ export const zaureService = {
 
     const groupId = `grp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const nowIso = new Date().toISOString();
-    const uniqueMemberIds = Array.from(new Set([currentUser.id, ...params.memberIds]));
+    const uniqueMemberIds = Array.from(new Set([currentUser.id, ...params.memberIds])).slice(0, 50);
+    const safeGroupName = params.groupName.trim().slice(0, 120);
+    const safeGroupDesc = (params.groupDescription || '').trim().slice(0, 500);
 
     const participantsMap: Record<string, ConversationParticipant> = {
       [currentUser.id]: {
         id: currentUser.id,
         nom: currentUser.nom,
-        avatar_url: currentUser.avatar_url,
+        avatar_url: currentUser.avatar_url || null,
         role: currentUser.role,
         is_online: true
       }
@@ -1232,7 +1387,7 @@ export const zaureService = {
           participantsMap[u.id] = {
             id: u.id,
             nom: u.nom,
-            avatar_url: u.avatar_url,
+            avatar_url: u.avatar_url || null,
             role: u.role
           };
         }
@@ -1249,12 +1404,12 @@ export const zaureService = {
       type: 'group',
       participant_ids: uniqueMemberIds,
       participants: participantsMap,
-      group_name: params.groupName,
-      group_description: params.groupDescription || '',
+      group_name: safeGroupName,
+      group_description: safeGroupDesc,
       group_photo: params.groupPhoto || '',
       admin_ids: [currentUser.id],
       last_message: {
-        content: `${currentUser.nom} a créé le groupe « ${params.groupName} »`,
+        content: `${currentUser.nom} a créé le groupe « ${safeGroupName} »`,
         sender_id: currentUser.id,
         sender_nom: currentUser.nom,
         type: 'system',
@@ -1268,31 +1423,42 @@ export const zaureService = {
       is_muted_by: []
     };
 
-    const groupRef = doc(dbFirestore, 'conversations', groupId);
-    await setDoc(groupRef, newGroup);
+    try {
+      const groupRef = doc(dbFirestore, 'conversations', groupId);
+      await setDoc(groupRef, newGroup);
 
-    const msgId = `msg-sys-${Date.now()}`;
-    await setDoc(doc(dbFirestore, 'conversations', groupId, 'messages', msgId), {
-      id: msgId,
-      conversation_id: groupId,
-      sender_id: currentUser.id,
-      sender_nom: currentUser.nom,
-      content: `${currentUser.nom} a créé le groupe « ${params.groupName} »`,
-      type: 'system',
-      created_at: nowIso,
-      read_by: [currentUser.id]
-    });
+      const msgId = `msg-sys-${Date.now()}`;
+      await setDoc(doc(dbFirestore, 'conversations', groupId, 'messages', msgId), {
+        id: msgId,
+        conversation_id: groupId,
+        sender_id: currentUser.id,
+        sender_nom: currentUser.nom,
+        content: `${currentUser.nom} a créé le groupe « ${safeGroupName} »`,
+        type: 'system',
+        created_at: nowIso,
+        read_by: [currentUser.id]
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `conversations/${groupId}`);
+    }
 
     return newGroup;
   },
 
   updateGroupDetails: async (convId: string, updates: Partial<Conversation>): Promise<void> => {
     if (!dbFirestore) return;
-    const ref = doc(dbFirestore, 'conversations', convId);
-    await updateDoc(ref, {
-      ...updates,
-      updated_at: new Date().toISOString()
-    });
+    try {
+      const allowedUpdates: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+      if (updates.group_name !== undefined) allowedUpdates.group_name = updates.group_name.trim().slice(0, 120);
+      if (updates.group_description !== undefined) allowedUpdates.group_description = updates.group_description.trim().slice(0, 500);
+      if (updates.group_photo !== undefined) allowedUpdates.group_photo = updates.group_photo;
+      const ref = doc(dbFirestore, 'conversations', convId);
+      await updateDoc(ref, allowedUpdates);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}`);
+    }
   },
 
   setTypingStatus: async (convId: string, isTyping: boolean): Promise<void> => {
@@ -1378,49 +1544,63 @@ export const zaureService = {
 
   addReactionToMessage: async (convId: string, messageId: string, emoji: string): Promise<void> => {
     if (!currentUser || !dbFirestore) return;
-    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
-    const snap = await getDoc(msgRef);
-    if (!snap.exists()) return;
+    try {
+      const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+      const snap = await getDoc(msgRef);
+      if (!snap.exists()) return;
 
-    const data = snap.data();
-    const reactions: Record<string, string[]> = data.reactions || {};
-    const currentList = reactions[emoji] || [];
+      const data = snap.data();
+      const reactions: Record<string, string[]> = data.reactions || {};
+      const currentList = reactions[emoji] || [];
 
-    if (currentList.includes(currentUser.id)) {
-      reactions[emoji] = currentList.filter((id) => id !== currentUser.id);
-      if (reactions[emoji].length === 0) {
-        delete reactions[emoji];
+      if (currentList.includes(currentUser.id)) {
+        reactions[emoji] = currentList.filter((id) => id !== currentUser.id);
+        if (reactions[emoji].length === 0) {
+          delete reactions[emoji];
+        }
+      } else {
+        Object.keys(reactions).forEach((em) => {
+          reactions[em] = (reactions[em] || []).filter((id) => id !== currentUser.id);
+          if (reactions[em].length === 0) delete reactions[em];
+        });
+        reactions[emoji] = [...(reactions[emoji] || []), currentUser.id];
       }
-    } else {
-      Object.keys(reactions).forEach((em) => {
-        reactions[em] = (reactions[em] || []).filter((id) => id !== currentUser.id);
-        if (reactions[em].length === 0) delete reactions[em];
-      });
-      reactions[emoji] = [...(reactions[emoji] || []), currentUser.id];
-    }
 
-    await updateDoc(msgRef, { reactions });
+      await updateDoc(msgRef, { reactions });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}/messages/${messageId}`);
+    }
   },
 
   editChatMessage: async (convId: string, messageId: string, newContent: string): Promise<void> => {
     if (!currentUser || !dbFirestore) return;
-    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
-    await updateDoc(msgRef, {
-      content: newContent,
-      is_edited: true,
-      updated_at: new Date().toISOString()
-    });
+    const safeContent = (newContent || '').trim().slice(0, 10000);
+    if (!safeContent) return;
+    try {
+      const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+      await updateDoc(msgRef, {
+        content: safeContent,
+        is_edited: true,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}/messages/${messageId}`);
+    }
   },
 
   deleteChatMessage: async (convId: string, messageId: string): Promise<void> => {
     if (!currentUser || !dbFirestore) return;
-    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
-    await updateDoc(msgRef, {
-      content: 'Ce message a été supprimé',
-      attachments: [],
-      is_deleted: true,
-      updated_at: new Date().toISOString()
-    });
+    try {
+      const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+      await updateDoc(msgRef, {
+        content: 'Ce message a été supprimé',
+        attachments: [],
+        is_deleted: true,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}/messages/${messageId}`);
+    }
   },
 
   toggleArchiveConversation: async (convId: string): Promise<void> => {
@@ -1539,12 +1719,23 @@ export const zaureService = {
     userId: string, 
     updates: { nom?: string; bio?: string; avatar_url?: string; langue_preferee?: 'fr' | 'ha' | 'en' }
   ): Promise<{ user: UserProfile | null, error: string | null }> => {
-    if (!dbFirestore) return { user: null, error: 'Firestore non connecté' };
+    if (!dbFirestore || !auth?.currentUser || auth.currentUser.uid !== userId) {
+      return { user: null, error: 'Non autorisé ou Firestore non connecté' };
+    }
+
+    const sanitized: Record<string, any> = {};
+    if (updates.nom !== undefined) sanitized.nom = updates.nom.trim().slice(0, 120);
+    if (updates.bio !== undefined) sanitized.bio = updates.bio ? updates.bio.trim().slice(0, 1000) : null;
+    if (updates.avatar_url !== undefined) sanitized.avatar_url = updates.avatar_url;
+    if (updates.langue_preferee !== undefined) sanitized.langue_preferee = updates.langue_preferee;
 
     try {
-      await updateDoc(doc(dbFirestore, 'users', userId), updates);
+      await updateDoc(doc(dbFirestore, 'users', userId), sanitized);
       if (currentUser && currentUser.id === userId) {
-        currentUser = { ...currentUser, ...updates };
+        currentUser = { ...currentUser, ...sanitized };
+        await syncPublicProfile(currentUser);
+      } else {
+        await setDoc(doc(dbFirestore, 'public_profiles', userId), sanitized, { merge: true });
       }
       return { user: currentUser, error: null };
     } catch (error: any) {
@@ -1554,17 +1745,18 @@ export const zaureService = {
 
   // --- USER AVAILABILITY & PROFILE MANAGEMENT (ÉTAPE 2) ---
   setUserAvailability: async (status: 'online' | 'busy' | 'offline', statusMessage?: string): Promise<void> => {
-    if (!currentUser || !dbFirestore) return;
+    if (!currentUser || !dbFirestore || !auth?.currentUser || auth.currentUser.uid !== currentUser.id) return;
     try {
       const updates: any = {
         availability: status,
         last_active: new Date().toISOString()
       };
-      if (statusMessage !== undefined) updates.status_message = statusMessage;
+      if (statusMessage !== undefined) updates.status_message = statusMessage.slice(0, 160);
       await updateDoc(doc(dbFirestore, 'users', currentUser.id), updates);
       currentUser.availability = status;
-      if (statusMessage !== undefined) currentUser.status_message = statusMessage;
+      if (statusMessage !== undefined) currentUser.status_message = updates.status_message;
       currentUser.last_active = updates.last_active;
+      await syncPublicProfile(currentUser);
     } catch (e) {
       console.warn('Info - maj disponibilite:', e);
     }
@@ -1649,15 +1841,15 @@ export const zaureService = {
   },
 
   getUserPublicProfile: async (userId: string): Promise<(UserProfile & { circles_count?: number }) | null> => {
-    if (!dbFirestore) return null;
+    if (!dbFirestore || !auth?.currentUser) return null;
     try {
-      const userDoc = await getDoc(doc(dbFirestore, 'users', userId));
+      const userDoc = await getDoc(doc(dbFirestore, 'public_profiles', userId));
       if (!userDoc.exists()) return null;
       const data = userDoc.data();
       return {
         id: userDoc.id,
         nom: data.nom || 'Membre Zaure',
-        email: data.email || '',
+        email: '',
         bio: data.bio || null,
         avatar_url: data.avatar_url || null,
         role: data.role || 'utilisateur',
@@ -1668,8 +1860,7 @@ export const zaureService = {
         last_active: data.last_active || undefined
       };
     } catch (e) {
-      console.error('Erreur profil public:', e);
-      return null;
+      handleFirestoreError(e, OperationType.GET, `public_profiles/${userId}`);
     }
   },
 
@@ -1679,10 +1870,11 @@ export const zaureService = {
       return { success: false, error: 'Firebase non disponible' };
     }
 
+    const safeEmail = newEmail.trim().slice(0, 200);
     try {
-      await updateEmail(auth.currentUser, newEmail);
-      await updateDoc(doc(dbFirestore, 'users', currentUser.id), { email: newEmail });
-      currentUser.email = newEmail;
+      await updateEmail(auth.currentUser, safeEmail);
+      await updateDoc(doc(dbFirestore, 'users', currentUser.id), { email: safeEmail });
+      currentUser.email = safeEmail;
       return { success: true, error: null };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erreur lors de la mise à jour de l\'email' };
@@ -1707,7 +1899,8 @@ export const zaureService = {
 
     try {
       await deleteDoc(doc(dbFirestore, 'users', userId));
-      await deleteDoc(doc(dbFirestore, 'user_settings', userId));
+      await deleteDoc(doc(dbFirestore, 'public_profiles', userId)).catch(() => {});
+      await deleteDoc(doc(dbFirestore, 'user_settings', userId)).catch(() => {});
       if (auth && auth.currentUser) {
         await deleteUser(auth.currentUser);
       }
@@ -1724,116 +1917,145 @@ export const zaureService = {
 
   addGroupMember: async (convId: string, userToAdd: UserProfile): Promise<void> => {
     if (!dbFirestore || !currentUser) return;
-    const ref = doc(dbFirestore, 'conversations', convId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return;
-    const data = snap.data() as Conversation;
-    if (data.participant_ids?.includes(userToAdd.id)) return;
+    try {
+      const ref = doc(dbFirestore, 'conversations', convId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data() as Conversation;
+      if (data.participant_ids?.includes(userToAdd.id)) return;
 
-    const newParticipantIds = [...(data.participant_ids || []), userToAdd.id];
-    const newParticipants = {
-      ...(data.participants || {}),
-      [userToAdd.id]: {
-        id: userToAdd.id,
-        nom: userToAdd.nom,
-        avatar_url: userToAdd.avatar_url || '',
-        role: userToAdd.role || 'utilisateur',
-        is_online: userToAdd.availability !== 'offline'
-      }
-    };
-    const newUnread = {
-      ...(data.unread_counts || {}),
-      [userToAdd.id]: 0
-    };
+      const newParticipantIds = [...(data.participant_ids || []), userToAdd.id];
+      const newParticipants = {
+        ...(data.participants || {}),
+        [userToAdd.id]: {
+          id: userToAdd.id,
+          nom: userToAdd.nom,
+          avatar_url: userToAdd.avatar_url || '',
+          role: userToAdd.role || 'utilisateur',
+          is_online: userToAdd.availability !== 'offline'
+        }
+      };
+      const newUnread = {
+        ...(data.unread_counts || {}),
+        [userToAdd.id]: 0
+      };
 
-    const nowIso = new Date().toISOString();
-    await updateDoc(ref, {
-      participant_ids: newParticipantIds,
-      participants: newParticipants,
-      unread_counts: newUnread,
-      updated_at: nowIso
-    });
+      const nowIso = new Date().toISOString();
+      await updateDoc(ref, {
+        participant_ids: newParticipantIds,
+        participants: newParticipants,
+        unread_counts: newUnread,
+        updated_at: nowIso
+      });
 
-    const msgId = `msg-sys-${Date.now()}`;
-    await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
-      id: msgId,
-      conversation_id: convId,
-      sender_id: currentUser.id,
-      sender_nom: currentUser.nom,
-      content: `${currentUser.nom} a ajouté ${userToAdd.nom} au groupe.`,
-      type: 'system',
-      created_at: nowIso,
-      read_by: [currentUser.id]
-    });
+      const msgId = `msg-sys-${Date.now()}`;
+      await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+        id: msgId,
+        conversation_id: convId,
+        sender_id: currentUser.id,
+        sender_nom: currentUser.nom,
+        content: `${currentUser.nom} a ajouté ${userToAdd.nom} au groupe.`,
+        type: 'system',
+        created_at: nowIso,
+        read_by: [currentUser.id]
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}`);
+    }
   },
 
   removeGroupMember: async (convId: string, userIdToRemove: string, targetName: string): Promise<void> => {
     if (!dbFirestore || !currentUser) return;
-    const ref = doc(dbFirestore, 'conversations', convId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return;
-    const data = snap.data() as Conversation;
+    try {
+      const ref = doc(dbFirestore, 'conversations', convId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data() as Conversation;
 
-    const newParticipantIds = (data.participant_ids || []).filter((id) => id !== userIdToRemove);
-    const newParticipants = { ...(data.participants || {}) };
-    delete newParticipants[userIdToRemove];
+      const nowIso = new Date().toISOString();
+      // If leaving self, post system message while still in participant_ids so RLS Master Gate permits it
+      if (userIdToRemove === currentUser.id) {
+        const msgId = `msg-sys-${Date.now()}`;
+        await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+          id: msgId,
+          conversation_id: convId,
+          sender_id: currentUser.id,
+          sender_nom: currentUser.nom,
+          content: `${currentUser.nom} a quitté le groupe.`,
+          type: 'system',
+          created_at: nowIso,
+          read_by: [currentUser.id]
+        });
+      }
 
-    const newAdmins = (data.admin_ids || []).filter((id) => id !== userIdToRemove);
+      const newParticipantIds = (data.participant_ids || []).filter((id) => id !== userIdToRemove);
+      const newParticipants = { ...(data.participants || {}) };
+      delete newParticipants[userIdToRemove];
 
-    const nowIso = new Date().toISOString();
-    await updateDoc(ref, {
-      participant_ids: newParticipantIds,
-      participants: newParticipants,
-      admin_ids: newAdmins,
-      updated_at: nowIso
-    });
+      const newAdmins = (data.admin_ids || []).filter((id) => id !== userIdToRemove);
 
-    const msgId = `msg-sys-${Date.now()}`;
-    await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
-      id: msgId,
-      conversation_id: convId,
-      sender_id: currentUser.id,
-      sender_nom: currentUser.nom,
-      content: `${currentUser.nom} a retiré ${targetName} du groupe.`,
-      type: 'system',
-      created_at: nowIso,
-      read_by: [currentUser.id]
-    });
+      await updateDoc(ref, {
+        participant_ids: newParticipantIds,
+        participants: newParticipants,
+        admin_ids: newAdmins,
+        updated_at: nowIso
+      });
+
+      if (userIdToRemove !== currentUser.id) {
+        const msgId = `msg-sys-${Date.now()}`;
+        await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+          id: msgId,
+          conversation_id: convId,
+          sender_id: currentUser.id,
+          sender_nom: currentUser.nom,
+          content: `${currentUser.nom} a retiré ${targetName} du groupe.`,
+          type: 'system',
+          created_at: nowIso,
+          read_by: [currentUser.id]
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}`);
+    }
   },
 
   toggleGroupAdmin: async (convId: string, userId: string, makeAdmin: boolean, targetName: string): Promise<void> => {
     if (!dbFirestore || !currentUser) return;
-    const ref = doc(dbFirestore, 'conversations', convId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return;
-    const data = snap.data() as Conversation;
+    try {
+      const ref = doc(dbFirestore, 'conversations', convId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data() as Conversation;
 
-    let admins = [...(data.admin_ids || [])];
-    if (makeAdmin && !admins.includes(userId)) {
-      admins.push(userId);
-    } else if (!makeAdmin) {
-      admins = admins.filter((id) => id !== userId);
+      let admins = [...(data.admin_ids || [])];
+      if (makeAdmin && !admins.includes(userId)) {
+        admins.push(userId);
+      } else if (!makeAdmin) {
+        admins = admins.filter((id) => id !== userId);
+      }
+
+      const nowIso = new Date().toISOString();
+      await updateDoc(ref, {
+        admin_ids: admins,
+        updated_at: nowIso
+      });
+
+      const msgId = `msg-sys-${Date.now()}`;
+      await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
+        id: msgId,
+        conversation_id: convId,
+        sender_id: currentUser.id,
+        sender_nom: currentUser.nom,
+        content: makeAdmin
+          ? `${currentUser.nom} a promu ${targetName} administrateur du groupe.`
+          : `${currentUser.nom} a retiré les droits d'administration à ${targetName}.`,
+        type: 'system',
+        created_at: nowIso,
+        read_by: [currentUser.id]
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}`);
     }
-
-    const nowIso = new Date().toISOString();
-    await updateDoc(ref, {
-      admin_ids: admins,
-      updated_at: nowIso
-    });
-
-    const msgId = `msg-sys-${Date.now()}`;
-    await setDoc(doc(dbFirestore, 'conversations', convId, 'messages', msgId), {
-      id: msgId,
-      conversation_id: convId,
-      sender_id: currentUser.id,
-      sender_nom: currentUser.nom,
-      content: makeAdmin
-        ? `${currentUser.nom} a promu ${targetName} administrateur du groupe.`
-        : `${currentUser.nom} a retiré les droits d'administration à ${targetName}.`,
-      type: 'system',
-      created_at: nowIso,
-      read_by: [currentUser.id]
-    });
   },
 
   uploadAndSetAvatar: async (file: File): Promise<{ avatarUrl: string | null; url: string | null; error: string | null }> => {
@@ -1874,6 +2096,10 @@ export const zaureService = {
         avatar_url: dataUrl
       });
       currentUser.avatar_url = dataUrl;
+      await syncPublicProfile(currentUser);
+      await setDoc(doc(dbFirestore, 'user_settings', currentUser.id), {
+        avatar_url: dataUrl
+      }, { merge: true }).catch(() => {});
       return { avatarUrl: dataUrl, url: dataUrl, error: null };
     } catch (err: any) {
       return { avatarUrl: null, url: null, error: err.message || 'Erreur lors de la mise à jour de la photo.' };

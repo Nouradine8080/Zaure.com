@@ -31,6 +31,7 @@ import { UserProfile, UserSettings, DEFAULT_USER_SETTINGS, Circle } from '../typ
 import { zaureService } from '../firebaseClient';
 import { useTranslation } from '../context/LanguageContext';
 import { compressImageFile } from '../utils/imageCompressor';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsViewProps {
   currentUser: UserProfile;
@@ -312,16 +313,19 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
           </p>
         </div>
 
-        <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
-          <img
-            src={avatarUrl || currentUser.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
-            alt={nom}
-            className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500"
-            referrerPolicy="no-referrer"
-          />
-          <div>
-            <p className="text-xs font-bold text-slate-900">{nom || currentUser.nom}</p>
-            <p className="text-[10px] text-slate-400">{currentUser.email}</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <PWAInstallButton />
+          <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+            <img
+              src={avatarUrl || currentUser.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
+              alt={nom}
+              className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500"
+              referrerPolicy="no-referrer"
+            />
+            <div>
+              <p className="text-xs font-bold text-slate-900">{nom || currentUser.nom}</p>
+              <p className="text-[10px] text-slate-400">{currentUser.email}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -683,7 +687,9 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut 
                             />
                             <div>
                               <p className="text-xs font-bold text-slate-800">{u.nom}</p>
-                              <p className="text-[10px] text-slate-400">{u.email}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {u.role === 'mentor' ? 'Mentor' : u.role === 'verifie' ? 'Vérifié' : 'Membre'}
+                              </p>
                             </div>
                           </div>
 

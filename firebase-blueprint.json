@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private user account record including PII (email and phone).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "avatar_url": { "type": "string", "maxLength": 350000 },
+        "role": { "type": "string", "enum": ["utilisateur", "mentor", "verifie"] },
+        "langue_preferee": { "type": "string", "enum": ["fr", "ha", "en"] },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "availability": { "type": "string", "enum": ["online", "busy", "offline"] },
+        "status_message": { "type": "string", "maxLength": 160 },
+        "last_active": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "nom", "role", "langue_preferee"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Publicly visible member profile inside the authenticated network without PII.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "avatar_url": { "type": "string", "maxLength": 350000 },
+        "role": { "type": "string", "enum": ["utilisateur", "mentor", "verifie"] },
+        "langue_preferee": { "type": "string", "enum": ["fr", "ha", "en"] },
+        "availability": { "type": "string", "enum": ["online", "busy", "offline"] },
+        "status_message": { "type": "string", "maxLength": 160 },
+        "last_active": { "type": "string", "maxLength": 64 },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "nom", "role", "langue_preferee"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Private user preferences, privacy controls, and blocklist.",
+      "type": "object",
+      "properties": {
+        "nom": { "type": "string", "maxLength": 120 },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "avatar_url": { "type": "string", "maxLength": 350000 },
+        "langue_preferee": { "type": "string", "enum": ["fr", "ha", "en"] },
+        "email": { "type": "string", "maxLength": 200 },
+        "profil_visibilite": { "type": "string", "enum": ["public", "cercles", "mentors"] },
+        "capsules_visibilite": { "type": "string", "enum": ["public", "cercles", "mentors"] },
+        "messages_autorises": { "type": "string", "enum": ["tous", "cercles", "mentors"] },
+        "mentorat_autorise": { "type": "string", "enum": ["tous", "verifies", "aucun"] },
+        "utilisateurs_bloques": { "type": "array" },
+        "notif_capsule": { "type": "boolean" },
+        "notif_message": { "type": "boolean" },
+        "notif_mentorat": { "type": "boolean" },
+        "notif_reaction": { "type": "boolean" },
+        "canal_notif": { "type": "string", "enum": ["inapp", "email", "les_deux"] },
+        "langue_interface": { "type": "string", "enum": ["fr", "ha", "en"] },
+        "traduction_auto": { "type": "boolean" },
+        "telechargement_hors_ligne": { "type": "boolean" },
+        "masquer_suggestions": { "type": "boolean" },
+        "mode_faible_consommation": { "type": "boolean" },
+        "taille_texte": { "type": "string", "enum": ["normal", "grand", "tres_grand"] }
+      }
+    },
+    "Circle": {
+      "title": "Circle",
+      "description": "Thematic knowledge sharing circle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nom": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "categorie": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "image": { "type": "string", "maxLength": 350000 },
+        "created_by": { "type": "string", "maxLength": 128 },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "nom", "description", "categorie"]
+    },
+    "CircleMember": {
+      "title": "CircleMember",
+      "description": "Membership record linking a user to a circle.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["membre", "moderateur"] },
+        "joined_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["user_id", "circle_id", "role", "joined_at"]
+    },
+    "Capsule": {
+      "title": "Capsule",
+      "description": "Educational text or audio capsule shared inside a circle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auteur_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circleId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["texte", "audio", "video", "image"] },
+        "contenu": { "type": "string", "minLength": 1, "maxLength": 650000 },
+        "langue_dorigine": { "type": "string", "enum": ["fr", "ha", "en"] },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "auteur_id", "circle_id", "type", "contenu", "langue_dorigine", "created_at"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Comment on a knowledge capsule.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "capsule_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auteur_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contenu": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "capsule_id", "auteur_id", "contenu", "created_at"]
+    },
+    "Reaction": {
+      "title": "Reaction",
+      "description": "User reaction on a capsule.",
+      "type": "object",
+      "properties": {
+        "capsule_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["utile", "merci", "question"] }
+      },
+      "required": ["capsule_id", "user_id", "type"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Direct or group chat thread restricted strictly to participant_ids.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["direct", "group"] },
+        "participant_ids": { "type": "array" },
+        "participants": { "type": "object" },
+        "group_name": { "type": "string", "maxLength": 120 },
+        "group_photo": { "type": "string", "maxLength": 350000 },
+        "group_description": { "type": "string", "maxLength": 500 },
+        "admin_ids": { "type": "array" },
+        "last_message": { "type": "object" },
+        "unread_counts": { "type": "object" },
+        "typing": { "type": "object" },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "updated_at": { "type": "string", "maxLength": 64 },
+        "is_archived_by": { "type": "array" },
+        "is_muted_by": { "type": "array" }
+      },
+      "required": ["id", "type", "participant_ids", "created_at", "updated_at"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message inside a conversation subcollection.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "conversation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sender_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "receiver_id": { "type": "string", "maxLength": 128 },
+        "content": { "type": "string", "maxLength": 10000 },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "updated_at": { "type": "string", "maxLength": 64 },
+        "sender_nom": { "type": "string", "maxLength": 120 },
+        "sender_avatar": { "type": "string", "maxLength": 350000 },
+        "type": { "type": "string", "enum": ["texte", "image", "video", "audio", "file", "system"] },
+        "attachments": { "type": "array" },
+        "reply_to": { "type": "object" },
+        "reactions": { "type": "object" },
+        "read_by": { "type": "array" },
+        "status": { "type": "string", "enum": ["sending", "sent", "delivered", "read"] },
+        "is_edited": { "type": "boolean" },
+        "is_deleted": { "type": "boolean" }
+      },
+      "required": ["id", "sender_id", "content", "created_at"]
+    },
+    "UserReport": {
+      "title": "UserReport",
+      "description": "Abuse/moderation report submitted by an authenticated user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporter_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporter_nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "reported_user_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reason": { "type": "string", "enum": ["spam", "harcelement", "usurpation", "contenu_inapproprie", "autre"] },
+        "details": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["en_attente", "examine", "traite"] },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "reporter_id", "reporter_nom", "reported_user_id", "reason", "status", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Owner-only private user accounts containing PII (email, phone)."
+    },
+    "/public_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Non-PII public member profiles readable by authenticated users."
+    },
+    "/user_settings/{userId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "Owner-only private user settings and blocked users list."
+    },
+    "/circles/{circleId}": {
+      "schema": { "$ref": "#/entities/Circle" },
+      "description": "Publicly readable catalog of thematic learning circles."
+    },
+    "/circle_members/{memberId}": {
+      "schema": { "$ref": "#/entities/CircleMember" },
+      "description": "Owner-scoped circle membership links."
+    },
+    "/capsules/{capsuleId}": {
+      "schema": { "$ref": "#/entities/Capsule" },
+      "description": "Educational capsules authored by authenticated users."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments attached to existing capsules."
+    },
+    "/reactions/{reactionId}": {
+      "schema": { "$ref": "#/entities/Reaction" },
+      "description": "User reactions attached to existing capsules."
+    },
+    "/conversations/{convId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Private 1-on-1 and group conversations restricted to participant_ids."
+    },
+    "/conversations/{convId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Messages inside a conversation, gated by parent conversation participation."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/UserReport" },
+      "description": "Moderation reports readable only by reporter or verified admin."
+    }
+  }
+}

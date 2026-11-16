@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, 
   Sparkles, 
@@ -36,8 +36,10 @@ import {
   GraduationCap,
   Lightbulb,
   Microscope,
-  UserCheck
+  UserCheck,
+  Camera
 } from 'lucide-react';
+import { compressImageFile } from './utils/imageCompressor';
 import { zaureService } from './firebaseClient';
 import { Circle, Capsule, UserProfile } from './types';
 import CircleCard from './components/CircleCard';
@@ -47,6 +49,7 @@ import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
 import CircleGroupPage from './components/CircleGroupPage';
 import AuthPortal from './components/AuthPortal';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { useTranslation } from './context/LanguageContext';
 
 const AVATAR_PRESETS = [
@@ -134,6 +137,23 @@ export default function App() {
   const [authAvatarUrl, setAuthAvatarUrl] = useState<string>(AVATAR_PRESETS[0].url);
   const [authSelectedCircleIds, setAuthSelectedCircleIds] = useState<string[]>([]);
   const [signupStep, setSignupStep] = useState<number>(1);
+  const [isCompressingAuthAvatar, setIsCompressingAuthAvatar] = useState(false);
+  const authAvatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAuthAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsCompressingAuthAvatar(true);
+      const dataUrl = await compressImageFile(file, 250, 250, 0.8);
+      setAuthAvatarUrl(dataUrl);
+    } catch (err: any) {
+      setAuthError(err.message || 'Erreur lors du traitement de la photo.');
+    } finally {
+      setIsCompressingAuthAvatar(false);
+      if (authAvatarFileInputRef.current) authAvatarFileInputRef.current.value = '';
+    }
+  };
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -171,7 +191,18 @@ export default function App() {
       setCurrentUser(user);
       setIsAuthResolving(false);
       if (user) {
-        zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds);
+        zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
+        zaureService.getAvailableUsers().then(setAllUsers).catch(() => {});
+        zaureService.getCircles().then((freshCircles) => {
+          setCircles(freshCircles);
+          if (freshCircles.length > 0) {
+            setNewCapsuleCircleId((prev) => prev || freshCircles[0].id);
+          }
+        }).catch(() => {});
+      } else {
+        setJoinedCircleIds([]);
+        setAllUsers([]);
+        setCapsules([]);
       }
     });
 
@@ -193,10 +224,14 @@ export default function App() {
     };
   }, []);
 
-  // Reload feed whenever filters or joined circles change
+  // Reload feed whenever user, filters or joined circles change
   useEffect(() => {
-    loadCapsules();
-  }, [joinedCircleIds, selectedCircleId, feedFilter]);
+    if (currentUser) {
+      loadCapsules();
+    } else {
+      setCapsules([]);
+    }
+  }, [currentUser, joinedCircleIds, selectedCircleId, feedFilter]);
 
   const loadInitialData = async () => {
     try {
@@ -207,11 +242,10 @@ export default function App() {
         setNewCapsuleCircleId(allCircles[0].id);
       }
 
-      const users = await zaureService.getAvailableUsers();
-      setAllUsers(users);
-
       const user = zaureService.getCurrentUser();
       if (user) {
+        const users = await zaureService.getAvailableUsers();
+        setAllUsers(users);
         const joined = await zaureService.getJoinedCircleIds(user.id);
         setJoinedCircleIds(joined);
       }
@@ -221,6 +255,10 @@ export default function App() {
   };
 
   const loadCapsules = async () => {
+    if (!currentUser) {
+      setCapsules([]);
+      return;
+    }
     try {
       let filteredIds: string[] = [];
 
@@ -773,9 +811,12 @@ export default function App() {
             </button>
           </nav>
 
-          {/* ZONE DROITE : Langue + Bouton Créer + Profil Utilisateur */}
+          {/* ZONE DROITE : Installer PWA + Langue + Bouton Créer + Profil Utilisateur */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             
+            {/* In-App PWA Install Button */}
+            <PWAInstallButton compact />
+
             {/* Language Switcher */}
             <div className="flex items-center gap-1 bg-[#F0F2F5] hover:bg-slate-200/80 px-2 py-1.5 rounded-full text-xs text-slate-700 transition">
               <Languages className="w-3.5 h-3.5 text-blue-600 shrink-0" />
@@ -1243,6 +1284,7 @@ export default function App() {
                   initialSelectedUser={directChatUser}
                   mobileView={chatMobileView}
                   onMobileViewChange={setChatMobileView}
+                  onProfileUpdated={(updated) => setCurrentUser(updated)}
                 />
               ) : (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs">
@@ -2843,8 +2885,34 @@ export default function App() {
                   {/* Avatar Picker */}
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                      Choisissez votre avatar de profil
+                      Photo de profil / Avatar
                     </label>
+                    <input
+                      ref={authAvatarFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAuthAvatarFileChange}
+                      className="hidden"
+                    />
+                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 mb-2 flex items-center gap-3">
+                      <img
+                        src={authAvatarUrl}
+                        alt="Aperçu avatar"
+                        className="w-11 h-11 rounded-full object-cover ring-2 ring-blue-600 shrink-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => authAvatarFileInputRef.current?.click()}
+                        disabled={isCompressingAuthAvatar}
+                        className="flex-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-blue-600" />
+                        <span>
+                          {isCompressingAuthAvatar ? 'Traitement photo...' : '📸 Importer ma propre photo (Galerie)'}
+                        </span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ou choisir un modèle :</p>
                     <div className="grid grid-cols-6 gap-2">
                       {AVATAR_PRESETS.map((preset) => (
                         <button

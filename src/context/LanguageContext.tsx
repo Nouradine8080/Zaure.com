@@ -101,7 +101,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'settings.account.info': 'Informations du profil',
     'settings.account.fullname': 'Nom complet',
     'settings.account.bio': 'Biographie / Présentation',
-    'settings.account.avatar': 'URL de votre photo de profil',
+    'settings.account.avatar': 'Votre photo de profil',
     'settings.account.pref_lang': 'Langue préférée du profil',
     'settings.account.save_profile': 'Enregistrer le profil',
 
@@ -267,7 +267,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'settings.account.info': 'Bayanin Bayani na Kanka',
     'settings.account.fullname': 'Cikakken Suna',
     'settings.account.bio': 'Bayanin Kanka',
-    'settings.account.avatar': 'Hoto na Bayani (Mahaɗa)',
+    'settings.account.avatar': 'Hoton Bayani',
     'settings.account.pref_lang': 'Harshen da aka fi so',
     'settings.account.save_profile': 'Ajiye Sauye-sauye',
 
@@ -433,7 +433,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'settings.account.info': 'Profile Information',
     'settings.account.fullname': 'Full Name',
     'settings.account.bio': 'Bio / Introduction',
-    'settings.account.avatar': 'Profile Picture URL',
+    'settings.account.avatar': 'Profile Picture',
     'settings.account.pref_lang': 'Preferred Profile Language',
     'settings.account.save_profile': 'Save Profile',
 

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="zaureBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#1E3A8A" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#zaureBg)" />
+  <path
+    d="M148 156 H356 L356 202 L220 318 H360 V368 H144 V322 L280 206 H148 Z"
+    fill="#FFFFFF"
+  />
+  <circle cx="382" cy="148" r="28" fill="#DC2626" stroke="#FFFFFF" stroke-width="8" />
+</svg>

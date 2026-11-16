@@ -2,51 +2,463 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users
+    // -------------------------------------------------------------------------
+    // Global Safety Net (Default Deny)
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Hardened Primitives & Validation Helpers
+    // -------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'mahamadougarbamoussa8080@gmail.com' &&
+         request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidRole(role) {
+      return role is string && role in ['utilisateur', 'mentor', 'verifie'];
+    }
+
+    function isValidLang(lang) {
+      return lang is string && lang in ['fr', 'ha', 'en'];
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || data[key] == null || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptionalList(data, key, maxItems) {
+      return !(key in data) || (data[key] is list && data[key].size() <= maxItems);
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation Blueprints (Server-Side Schema & Bounds Enforcement)
+    // -------------------------------------------------------------------------
+    function isValidUserPrivate(data, userId) {
+      return data.keys().hasAll(['id', 'nom', 'role', 'langue_preferee']) &&
+        data.keys().hasOnly([
+          'id', 'nom', 'email', 'phone', 'bio', 'avatar_url', 'role',
+          'langue_preferee', 'created_at', 'availability', 'status_message', 'last_active'
+        ]) &&
+        data.id == userId &&
+        isValidId(data.id) &&
+        data.nom is string && data.nom.size() >= 1 && data.nom.size() <= 120 &&
+        isValidRole(data.role) &&
+        isValidLang(data.langue_preferee) &&
+        isOptionalString(data, 'email', 200) &&
+        isOptionalString(data, 'phone', 32) &&
+        isOptionalString(data, 'bio', 1000) &&
+        isOptionalString(data, 'avatar_url', 350000) &&
+        isOptionalString(data, 'created_at', 64) &&
+        (!( 'availability' in data ) || (data.availability is string && data.availability in ['online', 'busy', 'offline'])) &&
+        isOptionalString(data, 'status_message', 160) &&
+        isOptionalString(data, 'last_active', 64);
+    }
+
+    function isValidPublicProfile(data, userId) {
+      return data.keys().hasAll(['id', 'nom', 'role', 'langue_preferee']) &&
+        data.keys().hasOnly([
+          'id', 'nom', 'bio', 'avatar_url', 'role',
+          'langue_preferee', 'availability', 'status_message', 'last_active', 'created_at'
+        ]) &&
+        data.id == userId &&
+        isValidId(data.id) &&
+        data.nom is string && data.nom.size() >= 1 && data.nom.size() <= 120 &&
+        isValidRole(data.role) &&
+        isValidLang(data.langue_preferee) &&
+        isOptionalString(data, 'bio', 1000) &&
+        isOptionalString(data, 'avatar_url', 350000) &&
+        (!( 'availability' in data ) || (data.availability is string && data.availability in ['online', 'busy', 'offline'])) &&
+        isOptionalString(data, 'status_message', 160) &&
+        isOptionalString(data, 'last_active', 64) &&
+        isOptionalString(data, 'created_at', 64);
+    }
+
+    function isValidUserSettings(data) {
+      return data.keys().hasOnly([
+        'nom', 'bio', 'avatar_url', 'langue_preferee', 'email',
+        'profil_visibilite', 'capsules_visibilite', 'messages_autorises', 'mentorat_autorise',
+        'utilisateurs_bloques', 'notif_capsule', 'notif_message', 'notif_mentorat', 'notif_reaction',
+        'canal_notif', 'langue_interface', 'traduction_auto', 'telechargement_hors_ligne',
+        'masquer_suggestions', 'mode_faible_consommation', 'taille_texte'
+      ]) &&
+      isOptionalString(data, 'nom', 120) &&
+      isOptionalString(data, 'bio', 1000) &&
+      isOptionalString(data, 'avatar_url', 350000) &&
+      (!( 'langue_preferee' in data ) || isValidLang(data.langue_preferee)) &&
+      isOptionalString(data, 'email', 200) &&
+      (!( 'profil_visibilite' in data ) || (data.profil_visibilite is string && data.profil_visibilite in ['public', 'cercles', 'mentors'])) &&
+      (!( 'capsules_visibilite' in data ) || (data.capsules_visibilite is string && data.capsules_visibilite in ['public', 'cercles', 'mentors'])) &&
+      (!( 'messages_autorises' in data ) || (data.messages_autorises is string && data.messages_autorises in ['tous', 'cercles', 'mentors'])) &&
+      (!( 'mentorat_autorise' in data ) || (data.mentorat_autorise is string && data.mentorat_autorise in ['tous', 'verifies', 'aucun'])) &&
+      isOptionalList(data, 'utilisateurs_bloques', 200) &&
+      (!( 'utilisateurs_bloques' in data ) || data.utilisateurs_bloques.size() == 0 || data.utilisateurs_bloques[0] is string) &&
+      (!( 'notif_capsule' in data ) || data.notif_capsule is bool) &&
+      (!( 'notif_message' in data ) || data.notif_message is bool) &&
+      (!( 'notif_mentorat' in data ) || data.notif_mentorat is bool) &&
+      (!( 'notif_reaction' in data ) || data.notif_reaction is bool) &&
+      (!( 'canal_notif' in data ) || (data.canal_notif is string && data.canal_notif in ['inapp', 'email', 'les_deux'])) &&
+      (!( 'langue_interface' in data ) || isValidLang(data.langue_interface)) &&
+      (!( 'traduction_auto' in data ) || data.traduction_auto is bool) &&
+      (!( 'telechargement_hors_ligne' in data ) || data.telechargement_hors_ligne is bool) &&
+      (!( 'masquer_suggestions' in data ) || data.masquer_suggestions is bool) &&
+      (!( 'mode_faible_consommation' in data ) || data.mode_faible_consommation is bool) &&
+      (!( 'taille_texte' in data ) || (data.taille_texte is string && data.taille_texte in ['normal', 'grand', 'tres_grand']));
+    }
+
+    function isValidCircle(data, circleId) {
+      return data.keys().hasAll(['id', 'nom', 'description', 'categorie']) &&
+        data.keys().hasOnly(['id', 'nom', 'description', 'categorie', 'image', 'created_by', 'created_at']) &&
+        data.id == circleId &&
+        isValidId(data.id) &&
+        data.nom is string && data.nom.size() >= 2 && data.nom.size() <= 120 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+        data.categorie is string && data.categorie.size() >= 1 && data.categorie.size() <= 60 &&
+        isOptionalString(data, 'image', 350000) &&
+        isOptionalString(data, 'created_by', 128) &&
+        isOptionalString(data, 'created_at', 64);
+    }
+
+    function isValidCircleMember(data) {
+      return data.keys().hasAll(['user_id', 'circle_id', 'role', 'joined_at']) &&
+        data.keys().hasOnly(['user_id', 'circle_id', 'role', 'joined_at']) &&
+        isValidId(data.user_id) &&
+        isValidId(data.circle_id) &&
+        data.role is string && data.role in ['membre', 'moderateur'] &&
+        data.joined_at is string && data.joined_at.size() <= 64;
+    }
+
+    function isValidCapsule(data, capsuleId) {
+      return data.keys().hasAll(['id', 'auteur_id', 'circle_id', 'type', 'contenu', 'langue_dorigine', 'created_at']) &&
+        data.keys().hasOnly([
+          'id', 'auteur_id', 'circle_id', 'circleId', 'type', 'contenu',
+          'langue_dorigine', 'created_at', 'auteur_nom', 'auteur_role', 'auteur_avatar', 'circle_nom'
+        ]) &&
+        data.id == capsuleId &&
+        isValidId(data.id) &&
+        isValidId(data.auteur_id) &&
+        isValidId(data.circle_id) &&
+        (!( 'circleId' in data ) || data.circleId == data.circle_id) &&
+        data.type is string && data.type in ['texte', 'audio', 'video', 'image'] &&
+        data.contenu is string && data.contenu.size() >= 1 && data.contenu.size() <= 650000 &&
+        isValidLang(data.langue_dorigine) &&
+        data.created_at is string && data.created_at.size() <= 64 &&
+        isOptionalString(data, 'auteur_nom', 120) &&
+        isOptionalString(data, 'auteur_role', 32) &&
+        isOptionalString(data, 'auteur_avatar', 350000) &&
+        isOptionalString(data, 'circle_nom', 120);
+    }
+
+    function isValidComment(data, commentId) {
+      return data.keys().hasAll(['id', 'capsule_id', 'auteur_id', 'contenu', 'created_at']) &&
+        data.keys().hasOnly(['id', 'capsule_id', 'auteur_id', 'contenu', 'created_at', 'auteur_nom', 'auteur_avatar']) &&
+        data.id == commentId &&
+        isValidId(data.id) &&
+        isValidId(data.capsule_id) &&
+        isValidId(data.auteur_id) &&
+        data.contenu is string && data.contenu.size() >= 1 && data.contenu.size() <= 2000 &&
+        data.created_at is string && data.created_at.size() <= 64 &&
+        isOptionalString(data, 'auteur_nom', 120) &&
+        isOptionalString(data, 'auteur_avatar', 350000);
+    }
+
+    function isValidReaction(data) {
+      return data.keys().hasAll(['capsule_id', 'user_id', 'type']) &&
+        data.keys().hasOnly(['capsule_id', 'user_id', 'type']) &&
+        isValidId(data.capsule_id) &&
+        isValidId(data.user_id) &&
+        data.type is string && data.type in ['utile', 'merci', 'question'];
+    }
+
+    function isValidConversation(data, convId) {
+      return data.keys().hasAll(['id', 'type', 'participant_ids', 'created_at', 'updated_at']) &&
+        data.keys().hasOnly([
+          'id', 'type', 'participant_ids', 'participants', 'group_name', 'group_photo',
+          'group_description', 'admin_ids', 'last_message', 'unread_counts', 'typing',
+          'created_at', 'updated_at', 'is_archived_by', 'is_muted_by'
+        ]) &&
+        data.id == convId &&
+        isValidId(data.id) &&
+        data.type is string && data.type in ['direct', 'group'] &&
+        data.participant_ids is list && data.participant_ids.size() >= 1 && data.participant_ids.size() <= 50 &&
+        data.participant_ids[0] is string &&
+        data.created_at is string && data.created_at.size() <= 64 &&
+        data.updated_at is string && data.updated_at.size() <= 64 &&
+        (!( 'participants' in data ) || data.participants is map) &&
+        isOptionalString(data, 'group_name', 120) &&
+        isOptionalString(data, 'group_photo', 350000) &&
+        isOptionalString(data, 'group_description', 500) &&
+        isOptionalList(data, 'admin_ids', 20) &&
+        (!( 'last_message' in data ) || data.last_message == null || data.last_message is map) &&
+        (!( 'unread_counts' in data ) || data.unread_counts is map) &&
+        (!( 'typing' in data ) || data.typing is map) &&
+        isOptionalList(data, 'is_archived_by', 50) &&
+        isOptionalList(data, 'is_muted_by', 50);
+    }
+
+    function isValidMessage(data, convId, msgId) {
+      return data.keys().hasAll(['id', 'sender_id', 'content', 'created_at']) &&
+        data.keys().hasOnly([
+          'id', 'conversation_id', 'sender_id', 'receiver_id', 'content', 'created_at', 'updated_at',
+          'sender_nom', 'sender_avatar', 'type', 'attachments', 'reply_to', 'reactions',
+          'read_by', 'status', 'is_edited', 'is_deleted'
+        ]) &&
+        data.id == msgId &&
+        isValidId(data.id) &&
+        isValidId(data.sender_id) &&
+        (!( 'conversation_id' in data ) || data.conversation_id == convId) &&
+        isOptionalString(data, 'receiver_id', 128) &&
+        data.content is string && data.content.size() <= 10000 &&
+        data.created_at is string && data.created_at.size() <= 64 &&
+        isOptionalString(data, 'updated_at', 64) &&
+        isOptionalString(data, 'sender_nom', 120) &&
+        isOptionalString(data, 'sender_avatar', 350000) &&
+        (!( 'type' in data ) || (data.type is string && data.type in ['texte', 'image', 'video', 'audio', 'file', 'system'])) &&
+        isOptionalList(data, 'attachments', 5) &&
+        (!( 'reply_to' in data ) || data.reply_to == null || data.reply_to is map) &&
+        (!( 'reactions' in data ) || data.reactions is map) &&
+        isOptionalList(data, 'read_by', 50) &&
+        (!( 'status' in data ) || (data.status is string && data.status in ['sending', 'sent', 'delivered', 'read'])) &&
+        (!( 'is_edited' in data ) || data.is_edited is bool) &&
+        (!( 'is_deleted' in data ) || data.is_deleted is bool);
+    }
+
+    function isValidReport(data, reportId) {
+      return data.keys().hasAll(['id', 'reporter_id', 'reporter_nom', 'reported_user_id', 'reason', 'status', 'created_at']) &&
+        data.keys().hasOnly(['id', 'reporter_id', 'reporter_nom', 'reported_user_id', 'reason', 'details', 'status', 'created_at']) &&
+        data.id == reportId &&
+        isValidId(data.id) &&
+        isValidId(data.reporter_id) &&
+        data.reporter_nom is string && data.reporter_nom.size() >= 1 && data.reporter_nom.size() <= 120 &&
+        isValidId(data.reported_user_id) &&
+        data.reason is string && data.reason in ['spam', 'harcelement', 'usurpation', 'contenu_inapproprie', 'autre'] &&
+        isOptionalString(data, 'details', 2000) &&
+        data.status is string && data.status in ['en_attente', 'examine', 'traite'] &&
+        data.created_at is string && data.created_at.size() <= 64;
+    }
+
+    function isConversationParticipant(convId) {
+      return exists(/databases/$(database)/documents/conversations/$(convId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    // 1. Admin Registry (Read-only by owner/admin; managed server-side)
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // 2. Private User Accounts (PII Isolated: owner or admin only)
     match /users/{userId} {
-      allow read, write: if true;
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserPrivate(incoming(), userId);
+      allow update: if isValidId(userId) && isValidUserPrivate(incoming(), userId) && (
+        isAdmin() || (
+          isOwner(userId) &&
+          incoming().id == existing().id &&
+          incoming().role == existing().role
+        )
+      );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
-    // User Settings
+    // 3. Public Profiles (Non-PII network directory)
+    match /public_profiles/{userId} {
+      allow get: if isValidId(userId) && isSignedIn();
+      allow list: if isSignedIn() && existing().id is string;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidPublicProfile(incoming(), userId);
+      allow update: if isValidId(userId) && isValidPublicProfile(incoming(), userId) && (
+        isAdmin() || (
+          isOwner(userId) &&
+          incoming().id == existing().id &&
+          incoming().role == existing().role
+        )
+      );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    // 4. User Settings & Blocklist (Strictly owner-only)
     match /user_settings/{userId} {
-      allow read, write: if true;
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create, update: if isValidId(userId) && isOwner(userId) && isValidUserSettings(incoming());
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
-    // Circles
+    // 5. Circles (Public catalog for discovery/signup, authenticated validated writes)
     match /circles/{circleId} {
-      allow read, write: if true;
+      allow get: if isValidId(circleId);
+      allow list: if existing().nom is string;
+      allow create: if isValidId(circleId) && isSignedIn() && isValidCircle(incoming(), circleId) && (
+        !( 'created_by' in incoming() ) || incoming().created_by == request.auth.uid
+      );
+      allow update: if isValidId(circleId) && isSignedIn() && isValidCircle(incoming(), circleId) && (
+        isAdmin() ||
+        (('created_by' in existing()) && existing().created_by == request.auth.uid && incoming().created_by == existing().created_by)
+      );
+      allow delete: if isValidId(circleId) && isSignedIn() && (
+        isAdmin() || (('created_by' in existing()) && existing().created_by == request.auth.uid)
+      );
     }
 
-    // Circle Members
+    // 6. Circle Members (Owner-scoped membership)
     match /circle_members/{memberId} {
-      allow read, write: if true;
+      allow get: if isValidId(memberId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
+      allow create: if isValidId(memberId) && isSignedIn() && isValidCircleMember(incoming()) &&
+        incoming().user_id == request.auth.uid &&
+        exists(/databases/$(database)/documents/circles/$(incoming().circle_id));
+      allow update: if false;
+      allow delete: if isValidId(memberId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
     }
 
-    // Capsules
+    // 7. Capsules (Signed-in reads, author-enforced writes)
     match /capsules/{capsuleId} {
-      allow read, write: if true;
+      allow get: if isValidId(capsuleId) && isSignedIn();
+      allow list: if isSignedIn() && existing().auteur_id is string;
+      allow create: if isValidId(capsuleId) && isSignedIn() && isValidCapsule(incoming(), capsuleId) &&
+        incoming().auteur_id == request.auth.uid &&
+        exists(/databases/$(database)/documents/circles/$(incoming().circle_id));
+      allow update: if isValidId(capsuleId) && isSignedIn() && isValidCapsule(incoming(), capsuleId) && (
+        isAdmin() || (
+          existing().auteur_id == request.auth.uid &&
+          incoming().auteur_id == existing().auteur_id &&
+          incoming().created_at == existing().created_at &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['contenu', 'langue_dorigine', 'type'])
+        )
+      );
+      allow delete: if isValidId(capsuleId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isAdmin());
     }
 
-    // Comments
+    // 8. Comments (Signed-in reads, author & parent capsule enforced)
     match /comments/{commentId} {
-      allow read, write: if true;
+      allow get: if isValidId(commentId) && isSignedIn();
+      allow list: if isSignedIn() && existing().capsule_id is string;
+      allow create: if isValidId(commentId) && isSignedIn() && isValidComment(incoming(), commentId) &&
+        incoming().auteur_id == request.auth.uid &&
+        exists(/databases/$(database)/documents/capsules/$(incoming().capsule_id));
+      allow update: if isValidId(commentId) && isSignedIn() && isValidComment(incoming(), commentId) && (
+        isAdmin() || (
+          existing().auteur_id == request.auth.uid &&
+          incoming().auteur_id == existing().auteur_id &&
+          incoming().capsule_id == existing().capsule_id &&
+          incoming().created_at == existing().created_at &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['contenu'])
+        )
+      );
+      allow delete: if isValidId(commentId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isAdmin());
     }
 
-    // Reactions
+    // 9. Reactions (Signed-in reads, owner & parent capsule enforced)
     match /reactions/{reactionId} {
-      allow read, write: if true;
+      allow get: if isValidId(reactionId) && isSignedIn();
+      allow list: if isSignedIn() && existing().capsule_id is string;
+      allow create: if isValidId(reactionId) && isSignedIn() && isValidReaction(incoming()) &&
+        incoming().user_id == request.auth.uid &&
+        exists(/databases/$(database)/documents/capsules/$(incoming().capsule_id));
+      allow update: if false;
+      allow delete: if isValidId(reactionId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
     }
 
-    // Conversations & Messages
+    // 10. Conversations & Messages (Strict participant_ids RLS + Master Gate)
     match /conversations/{convId} {
-      allow read, write: if true;
+      allow get: if isValidId(convId) && isSignedIn() && request.auth.uid in existing().participant_ids;
+      allow list: if isSignedIn() && request.auth.uid in existing().participant_ids;
+      allow create: if isValidId(convId) && isSignedIn() && isValidConversation(incoming(), convId) &&
+        request.auth.uid in incoming().participant_ids &&
+        (incoming().type == 'direct' || (incoming().admin_ids is list && request.auth.uid in incoming().admin_ids));
+      allow update: if isValidId(convId) && isSignedIn() && isValidConversation(incoming(), convId) &&
+        request.auth.uid in existing().participant_ids &&
+        incoming().id == existing().id &&
+        incoming().type == existing().type &&
+        incoming().created_at == existing().created_at && (
+          // Action 1: Messaging, typing, unread count, mute, archive
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'last_message', 'updated_at', 'unread_counts', 'typing', 'is_archived_by', 'is_muted_by'
+          ]) ||
+          // Action 2: Group management by group admin or member self-leave
+          (
+            existing().type == 'group' &&
+            (
+              (existing().admin_ids is list && request.auth.uid in existing().admin_ids) ||
+              (
+                !(request.auth.uid in incoming().participant_ids) &&
+                existing().participant_ids.hasAll(incoming().participant_ids) &&
+                existing().participant_ids.size() == incoming().participant_ids.size() + 1
+              )
+            ) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'group_name', 'group_photo', 'group_description', 'participant_ids',
+              'participants', 'admin_ids', 'unread_counts', 'updated_at'
+            ])
+          )
+        );
+      allow delete: if isValidId(convId) && isAdmin();
+
       match /messages/{messageId} {
-        allow read, write: if true;
+        allow get: if isValidId(convId) && isValidId(messageId) && isSignedIn() && isConversationParticipant(convId);
+        allow list: if isValidId(convId) && isSignedIn() && isConversationParticipant(convId);
+        allow create: if isValidId(convId) && isValidId(messageId) && isSignedIn() &&
+          isValidMessage(incoming(), convId, messageId) &&
+          incoming().sender_id == request.auth.uid &&
+          isConversationParticipant(convId);
+        allow update: if isValidId(convId) && isValidId(messageId) && isSignedIn() &&
+          isValidMessage(incoming(), convId, messageId) &&
+          isConversationParticipant(convId) &&
+          incoming().id == existing().id &&
+          incoming().sender_id == existing().sender_id &&
+          incoming().created_at == existing().created_at && (
+            // Action 1: Sender edit or soft-delete
+            (
+              existing().sender_id == request.auth.uid &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['content', 'attachments', 'is_edited', 'is_deleted', 'updated_at'])
+            ) ||
+            // Action 2: Participant read-receipt or emoji reaction
+            incoming().diff(existing()).affectedKeys().hasOnly(['read_by', 'status', 'reactions'])
+          );
+        allow delete: if isValidId(convId) && isValidId(messageId) && isSignedIn() && (existing().sender_id == request.auth.uid || isAdmin());
       }
     }
-    // Reports
+
+    // 11. Moderation Reports (Reporter create/read-own; Admin manage)
     match /reports/{reportId} {
-      allow read, write: if true;
+      allow get: if isValidId(reportId) && isSignedIn() && (existing().reporter_id == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().reporter_id == request.auth.uid || isAdmin());
+      allow create: if isValidId(reportId) && isSignedIn() && isValidReport(incoming(), reportId) &&
+        incoming().reporter_id == request.auth.uid &&
+        incoming().status == 'en_attente';
+      allow update, delete: if isValidId(reportId) && isAdmin();
     }
   }
 }
