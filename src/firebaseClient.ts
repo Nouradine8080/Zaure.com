@@ -539,66 +539,37 @@ export const zaureService = {
   // --- CIRCLES ---
   getCircles: async (): Promise<Circle[]> => {
     if (!dbFirestore) return [];
+    const SEEDED_FICTIONAL_CIRCLE_IDS = new Set([
+      'circle-sante-premiers-secours',
+      'circle-langues-locales',
+      'circle-agri-sahel'
+    ]);
+
     try {
       const querySnapshot = await getDocs(collection(dbFirestore, 'circles'));
       const cloudCircles: Circle[] = [];
       querySnapshot.forEach((docSnap) => {
         const c = docSnap.data() as Circle;
-        const isDemo = c.id.startsWith('demo-') || 
-                       c.id.startsWith('mock-') || 
-                       c.id.includes('demo') ||
-                       (c.nom && (
-                         c.nom.toLowerCase().includes('démo') || 
-                         c.nom.toLowerCase().includes('demo') ||
-                         c.nom.toLowerCase().includes('exemple')
-                       ));
-        if (!isDemo) {
+        const isFictional =
+          SEEDED_FICTIONAL_CIRCLE_IDS.has(c.id) ||
+          !c.created_by ||
+          c.id.startsWith('demo-') ||
+          c.id.startsWith('mock-') ||
+          c.id.includes('demo') ||
+          (c.nom &&
+            (c.nom.toLowerCase().includes('démo') ||
+              c.nom.toLowerCase().includes('demo') ||
+              c.nom.toLowerCase().includes('exemple')));
+
+        if (!isFictional) {
           cloudCircles.push(c);
-        } else if (auth?.currentUser) {
+        } else if (auth?.currentUser && c.created_by === auth.currentUser.uid) {
           deleteDoc(doc(dbFirestore, 'circles', docSnap.id)).catch(() => {});
+          deleteDoc(
+            doc(dbFirestore, 'circle_members', `${auth.currentUser.uid}_${docSnap.id}`)
+          ).catch(() => {});
         }
       });
-
-      if (cloudCircles.length === 0 && auth?.currentUser) {
-        const initialCircles: (Circle & { created_by?: string })[] = [
-          {
-            id: 'circle-sante-premiers-secours',
-            nom: 'Santé & Premiers secours',
-            description: 'Gestes de premiers secours, prise en charge des urgences communautaires, brûlures et soins de santé primaire en Afrique de l\'Ouest.',
-            categorie: 'Médecine',
-            image: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&q=80&w=600',
-            created_by: auth.currentUser.uid,
-            created_at: new Date().toISOString()
-          },
-          {
-            id: 'circle-langues-locales',
-            nom: 'Langues & Proverbes Africains',
-            description: 'Apprentissage, vocabulaire et sagesse des langues régionales (Haoussa, Zarma, Bambara, Fulfulde).',
-            categorie: 'Langues',
-            image: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=600',
-            created_by: auth.currentUser.uid,
-            created_at: new Date().toISOString()
-          },
-          {
-            id: 'circle-agri-sahel',
-            nom: 'Agriculture & Sols du Sahel',
-            description: 'Pratiques d\'irrigation durable, conservation de l\'eau et fertilisation biologique.',
-            categorie: 'Sciences',
-            image: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=600',
-            created_by: auth.currentUser.uid,
-            created_at: new Date().toISOString()
-          }
-        ];
-
-        for (const circleItem of initialCircles) {
-          try {
-            await setDoc(doc(dbFirestore, 'circles', circleItem.id), circleItem);
-            cloudCircles.push(circleItem);
-          } catch (err) {
-            console.warn('Error seeding initial circle:', err);
-          }
-        }
-      }
 
       return cloudCircles.sort((a, b) => a.nom.localeCompare(b.nom));
     } catch (error) {
@@ -658,16 +629,83 @@ export const zaureService = {
     return newCircle;
   },
 
+  updateCircle: async (
+    circleId: string,
+    updates: { nom?: string; description?: string; categorie?: string; image?: string }
+  ): Promise<Circle | null> => {
+    if (!dbFirestore || !auth?.currentUser) throw new Error('Utilisateur non connecté.');
+    const circleRef = doc(dbFirestore, 'circles', circleId);
+    const sanitized: Record<string, string> = {};
+
+    if (typeof updates.nom === 'string') {
+      const trimmedNom = updates.nom.trim().slice(0, 120);
+      if (trimmedNom.length < 2) {
+        throw new Error('Le nom du cercle doit contenir au moins 2 caractères.');
+      }
+      sanitized.nom = trimmedNom;
+    }
+
+    if (typeof updates.description === 'string') {
+      const trimmedDesc = updates.description.trim().slice(0, 1000);
+      if (trimmedDesc.length < 1) {
+        throw new Error('La description du cercle est requise.');
+      }
+      sanitized.description = trimmedDesc;
+    }
+
+    if (typeof updates.categorie === 'string') {
+      const trimmedCat = updates.categorie.trim().slice(0, 60);
+      if (trimmedCat.length < 1) {
+        throw new Error('La catégorie est requise.');
+      }
+      sanitized.categorie = trimmedCat;
+    }
+
+    if (typeof updates.image === 'string') {
+      const trimmedImg = updates.image.trim();
+      if (trimmedImg.length <= 350000) {
+        sanitized.image = trimmedImg;
+      }
+    }
+
+    try {
+      await updateDoc(circleRef, sanitized);
+      const updatedSnap = await getDoc(circleRef);
+      if (updatedSnap.exists()) {
+        return updatedSnap.data() as Circle;
+      }
+      return null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `circles/${circleId}`);
+      return null;
+    }
+  },
+
   // --- CIRCLE MEMBERSHIP ---
   getJoinedCircleIds: async (userId: string): Promise<string[]> => {
     if (!dbFirestore) return [];
+    const SEEDED_FICTIONAL_CIRCLE_IDS = new Set([
+      'circle-sante-premiers-secours',
+      'circle-langues-locales',
+      'circle-agri-sahel'
+    ]);
     try {
       const q = query(collection(dbFirestore, 'circle_members'), where('user_id', '==', userId));
       const querySnapshot = await getDocs(q);
       const joined: string[] = [];
       querySnapshot.forEach((docSnap) => {
         const m = docSnap.data() as CircleMember;
-        joined.push(m.circle_id);
+        const isFictional =
+          SEEDED_FICTIONAL_CIRCLE_IDS.has(m.circle_id) ||
+          m.circle_id.startsWith('demo-') ||
+          m.circle_id.startsWith('mock-');
+        if (isFictional) {
+          if (auth?.currentUser && m.user_id === auth.currentUser.uid) {
+            deleteDoc(docSnap.ref).catch(() => {});
+          }
+        } else {
+          joined.push(m.circle_id);
+        }
       });
       return joined;
     } catch (error) {
@@ -760,11 +798,19 @@ export const zaureService = {
         }
       }
 
-      // Filter out demo capsules
+      // Filter out demo and seeded fictional capsules
+      const SEEDED_FICTIONAL_CIRCLE_IDS = new Set([
+        'circle-sante-premiers-secours',
+        'circle-langues-locales',
+        'circle-agri-sahel'
+      ]);
       capsulesData = capsulesData.filter(c => {
+        const cid = c.circle_id || (c as any).circleId;
         const isDemo = c.id.startsWith('demo-') || 
                        c.id.startsWith('mock-') || 
+                       c.id.startsWith('capsule-brulures-') ||
                        c.id.includes('demo') ||
+                       SEEDED_FICTIONAL_CIRCLE_IDS.has(cid) ||
                        (c.contenu && (
                          c.contenu.toLowerCase().includes('démo') || 
                          c.contenu.toLowerCase().includes('demo') ||
@@ -778,44 +824,6 @@ export const zaureService = {
         }
         return true;
       });
-
-      // Seed burns capsule for Santé & Premiers secours if empty
-      if (
-        auth?.currentUser &&
-        capsulesData.length === 0 && 
-        circleIds && 
-        circleIds.length === 1 && 
-        (circleIds[0] === 'circle-sante-premiers-secours' || circleIds[0].includes('sante'))
-      ) {
-        const seedCapsule: Capsule = {
-          id: `capsule-brulures-${Date.now()}`,
-          auteur_id: auth.currentUser.uid,
-          circle_id: circleIds[0],
-          type: 'texte',
-          contenu: 'Prise en charge immédiate des brûlures thermiques : Refroidir immédiatement la zone brûlée avec de l\'eau propre à température ambiante (15-20°C) pendant au moins 15 minutes. Ne jamais appliquer d\'huile, dentifrice ou glace. Couvrir avec un linge propre et consulter un centre de santé.',
-          langue_dorigine: 'fr',
-          created_at: new Date().toISOString(),
-          auteur_nom: currentUser?.nom || 'Dr. Mahamadou',
-          auteur_role: currentUser?.role || 'verifie',
-          circle_nom: 'Santé & Premiers secours'
-        };
-
-        try {
-          await setDoc(doc(dbFirestore, 'capsules', seedCapsule.id), {
-            id: seedCapsule.id,
-            auteur_id: seedCapsule.auteur_id,
-            circle_id: seedCapsule.circle_id,
-            circleId: seedCapsule.circle_id,
-            type: seedCapsule.type,
-            contenu: seedCapsule.contenu,
-            langue_dorigine: seedCapsule.langue_dorigine,
-            created_at: seedCapsule.created_at
-          });
-          capsulesData.push(seedCapsule);
-        } catch (err) {
-          console.warn('Error seeding burn capsule:', err);
-        }
-      }
 
       // Sort descending by date
       capsulesData.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());

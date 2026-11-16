@@ -196,6 +196,221 @@
         "created_at": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "reporter_id", "reporter_nom", "reported_user_id", "reason", "status", "created_at"]
+    },
+    "CommunityGroup": {
+      "title": "CommunityGroup",
+      "description": "Advanced community circle with privacy settings, permissions, rules, and counts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "coverPhoto": { "type": "string", "maxLength": 350000 },
+        "avatarPhoto": { "type": "string", "maxLength": 350000 },
+        "privacy": { "type": "string", "enum": ["public", "private"] },
+        "postPermission": { "type": "string", "enum": ["all_members", "admins_only"] },
+        "requirePostApproval": { "type": "boolean" },
+        "requireMemberApproval": { "type": "boolean" },
+        "allowAnonymousPosts": { "type": "boolean" },
+        "rules": { "type": "array" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "memberCount": { "type": "integer" },
+        "postCount": { "type": "integer" }
+      },
+      "required": [
+        "id", "name", "description", "category", "privacy", "postPermission",
+        "requirePostApproval", "requireMemberApproval", "allowAnonymousPosts",
+        "rules", "createdBy", "createdAt", "updatedAt", "memberCount", "postCount"
+      ]
+    },
+    "CommunityMember": {
+      "title": "CommunityMember",
+      "description": "Membership record with deterministic {groupId}_{userId} ID, role, status, and moderator permissions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "userAvatar": { "type": "string", "maxLength": 350000 },
+        "role": { "type": "string", "enum": ["administrateur", "moderateur", "membre"] },
+        "status": { "type": "string", "enum": ["active", "pending", "suspended"] },
+        "permissions": { "type": "object" },
+        "inviteCode": { "type": "string", "maxLength": 64 },
+        "joinedAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "groupId", "userId", "userName", "role", "status", "joinedAt", "updatedAt"]
+    },
+    "GroupPost": {
+      "title": "GroupPost",
+      "description": "Community circle post supporting text, media, links, documents, interactive polls, pinning, anonymous mode, and scheduling.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "authorAvatar": { "type": "string", "maxLength": 350000 },
+        "isAnonymous": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["text", "image", "video", "link", "document", "poll"] },
+        "content": { "type": "string", "maxLength": 10000 },
+        "media": { "type": "array" },
+        "externalLink": { "type": "string", "maxLength": 1000 },
+        "poll": { "type": "object" },
+        "status": { "type": "string", "enum": ["published", "pending", "scheduled"] },
+        "scheduledFor": { "type": "string", "maxLength": 64 },
+        "isPinned": { "type": "boolean" },
+        "reactionCount": { "type": "integer" },
+        "commentCount": { "type": "integer" },
+        "shareCount": { "type": "integer" },
+        "savedBy": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": [
+        "id", "groupId", "authorId", "authorName", "isAnonymous", "type", "content",
+        "media", "status", "isPinned", "reactionCount", "commentCount", "shareCount",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Threaded comment with @mentions, edits, and likes attached to a group post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "parentId": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "authorAvatar": { "type": "string", "maxLength": 350000 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 3000 },
+        "mentions": { "type": "array" },
+        "likedBy": { "type": "array" },
+        "isEdited": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "postId", "groupId", "authorId", "authorName", "content", "createdAt", "updatedAt"]
+    },
+    "PostReaction": {
+      "title": "PostReaction",
+      "description": "Typed user reaction on a group post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "type": { "type": "string", "enum": ["like", "love", "useful", "celebrate", "insightful"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "postId", "groupId", "userId", "userName", "type", "createdAt"]
+    },
+    "GroupEvent": {
+      "title": "GroupEvent",
+      "description": "Community circle event with RSVP attendees and interested members.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 250 },
+        "isOnline": { "type": "boolean" },
+        "meetingLink": { "type": "string", "maxLength": 500 },
+        "startDate": { "type": "string", "maxLength": 64 },
+        "endDate": { "type": "string", "maxLength": 64 },
+        "coverPhoto": { "type": "string", "maxLength": 350000 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdByName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "attendeeIds": { "type": "array" },
+        "interestedIds": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": [
+        "id", "groupId", "title", "description", "location", "isOnline", "startDate",
+        "createdBy", "createdByName", "attendeeIds", "interestedIds", "createdAt"
+      ]
+    },
+    "GroupAnnouncement": {
+      "title": "GroupAnnouncement",
+      "description": "Official pinned or prioritized announcement inside a community circle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "priority": { "type": "string", "enum": ["normal", "important", "urgent"] },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "isPinned": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "groupId", "title", "content", "priority", "authorId", "authorName", "isPinned", "createdAt"]
+    },
+    "GroupInvitation": {
+      "title": "GroupInvitation",
+      "description": "Direct user invitation or shareable invite code for joining a community circle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "groupAvatar": { "type": "string", "maxLength": 350000 },
+        "groupPrivacy": { "type": "string", "enum": ["public", "private"] },
+        "inviterId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "inviterName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "inviteeId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "inviteCode": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "groupId", "groupName", "groupPrivacy", "inviterId", "inviterName", "inviteeId", "status", "createdAt"]
+    },
+    "GroupNotification": {
+      "title": "GroupNotification",
+      "description": "Real-time notification targeted to a specific user about community activity.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "type": { "type": "string", "enum": ["invitation", "member_approved", "new_post", "post_approved", "comment", "mention", "announcement", "event", "role_changed"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "groupId", "groupName", "type", "message", "actorName", "isRead", "createdAt"]
+    },
+    "GroupReport": {
+      "title": "GroupReport",
+      "description": "Content or member moderation report inside a community circle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetType": { "type": "string", "enum": ["post", "comment", "member"] },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetPreview": { "type": "string", "maxLength": 300 },
+        "reporterId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporterName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "details": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["pending", "resolved", "dismissed"] },
+        "resolvedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "groupId", "targetType", "targetId", "targetPreview", "reporterId", "reporterName", "reason", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -242,6 +457,46 @@
     "/reports/{reportId}": {
       "schema": { "$ref": "#/entities/UserReport" },
       "description": "Moderation reports readable only by reporter or verified admin."
+    },
+    "/groups/{groupId}": {
+      "schema": { "$ref": "#/entities/CommunityGroup" },
+      "description": "Community circles directory with privacy, rules, and governance settings."
+    },
+    "/group_members/{memberDocId}": {
+      "schema": { "$ref": "#/entities/CommunityMember" },
+      "description": "Community circle memberships with roles (administrateur, moderateur, membre) and statuses."
+    },
+    "/group_posts/{postId}": {
+      "schema": { "$ref": "#/entities/GroupPost" },
+      "description": "Posts inside community circles supporting multi-media, links, documents, polls, pinning, and scheduling."
+    },
+    "/post_comments/{commentId}": {
+      "schema": { "$ref": "#/entities/PostComment" },
+      "description": "Threaded comments and mentions inside community posts."
+    },
+    "/post_reactions/{reactionId}": {
+      "schema": { "$ref": "#/entities/PostReaction" },
+      "description": "Typed user reactions on community posts."
+    },
+    "/group_events/{eventId}": {
+      "schema": { "$ref": "#/entities/GroupEvent" },
+      "description": "Community circle events and RSVPs."
+    },
+    "/group_announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/GroupAnnouncement" },
+      "description": "Official community circle announcements."
+    },
+    "/group_invitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/GroupInvitation" },
+      "description": "Member invitations and invite codes for community circles."
+    },
+    "/group_notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/GroupNotification" },
+      "description": "Owner-scoped real-time notifications for community activities."
+    },
+    "/group_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/GroupReport" },
+      "description": "Moderation reports scoped to a community circle."
     }
   }
 }

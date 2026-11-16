@@ -76,7 +76,14 @@ service firebase.storage {
       allow delete: if isAuthenticated();
     }
 
-    // 6. Fichiers par défaut
+    // 6. Médias et documents des Communautés (Cercles)
+    match /community_media/{groupId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isAllowedImage() || isAllowedVideo() || isAllowedDocument());
+      allow delete: if isAuthenticated();
+    }
+
+    // 7. Fichiers par défaut
     match /{allPaths=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isUnderMaxSize();

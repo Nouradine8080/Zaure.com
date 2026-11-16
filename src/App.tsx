@@ -49,6 +49,7 @@ import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
 import CircleGroupPage from './components/CircleGroupPage';
 import AuthPortal from './components/AuthPortal';
+import CommunitiesHub from './components/communities/CommunitiesHub';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { useTranslation } from './context/LanguageContext';
 
@@ -89,7 +90,16 @@ export default function App() {
   const { t, language, setLanguage } = useTranslation();
   
   // Navigation & View tabs
-  const [activeTab, setActiveTab] = useState<'feed' | 'chat' | 'settings'>('feed');
+  const [communityDeepLinkId, setCommunityDeepLinkId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('community')
+  );
+  const [communityInviteCode, setCommunityInviteCode] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('invite')
+  );
+  const [activeTab, setActiveTab] = useState<'feed' | 'communities' | 'chat' | 'settings'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('community') || params.get('invite') ? 'communities' : 'feed';
+  });
   const [feedSection, setFeedSection] = useState<'feed' | 'circles' | 'mentors' | 'bookmarks'>('feed');
   
   // Data state
@@ -199,6 +209,10 @@ export default function App() {
           setCircles(freshCircles);
           if (freshCircles.length > 0) {
             setNewCapsuleCircleId((prev) => prev || freshCircles[0].id);
+            const urlCircle = new URLSearchParams(window.location.search).get('circle');
+            if (urlCircle && freshCircles.some((c) => c.id === urlCircle)) {
+              setSelectedCircleId(urlCircle);
+            }
           }
         }).catch(() => {});
       } else {
@@ -543,6 +557,30 @@ export default function App() {
     }
   };
 
+  const handleUpdateCircle = async (
+    circleId: string,
+    updates: { nom: string; description: string; categorie: string; image: string }
+  ) => {
+    const updated = await zaureService.updateCircle(circleId, updates);
+    if (updated) {
+      setCircles((prev) => prev.map((c) => (c.id === circleId ? updated : c)));
+    } else {
+      const fresh = await zaureService.getCircles();
+      setCircles(fresh);
+    }
+  };
+
+  const handleDeleteCircle = async (circleId: string) => {
+    const success = await zaureService.deleteCircle(circleId);
+    if (success) {
+      setCircles((prev) => prev.filter((c) => c.id !== circleId));
+      setJoinedCircleIds((prev) => prev.filter((id) => id !== circleId));
+      if (selectedCircleId === circleId) {
+        setSelectedCircleId('all');
+      }
+    }
+  };
+
   // Create Capsule Submit
   const handleCreateCapsuleSubmit = async () => {
     if (!newCapsuleContenu || !newCapsuleCircleId) return;
@@ -787,7 +825,27 @@ export default function App() {
               )}
             </button>
 
-            {/* 2. Cercles de Savoir */}
+            {/* 2. Communautés (Module Cercles Avancés) */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('communities');
+              }}
+              className={`h-full px-3 sm:px-5 flex flex-col items-center justify-center relative transition group ${
+                activeTab === 'communities'
+                  ? 'text-blue-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+              }`}
+              title="Communautés"
+            >
+              <Compass className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Communautés</span>
+              {activeTab === 'communities' && (
+                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
+              )}
+            </button>
+
+            {/* 3. Cercles de Savoir */}
             <button
               type="button"
               onClick={() => {
@@ -795,7 +853,7 @@ export default function App() {
                 setFeedSection('circles');
                 setSelectedCircleId('all');
               }}
-              className={`h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group ${
+              className={`h-full px-3 sm:px-5 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
                   ? 'text-blue-600 font-bold'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
@@ -1053,6 +1111,26 @@ export default function App() {
               <span>Fil d'actualité</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('communities');
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                activeTab === 'communities'
+                  ? 'bg-blue-50 text-blue-900 font-bold'
+                  : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Compass className="w-4 h-4 text-blue-600" />
+                <span>Communautés</span>
+              </div>
+              <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                Cercles
+              </span>
+            </button>
+
             {currentUser && (
               <button
                 type="button"
@@ -1271,7 +1349,27 @@ export default function App() {
         {/* ======================================================== */}
         {/* COLONNE CENTRALE : FIL D'ACTUALITÉ / FEED PRINCIPAL */}
         {/* ======================================================== */}
-        <main className="flex-1 min-w-0 w-full max-w-2xl space-y-4">
+        <main className={`flex-1 min-w-0 w-full space-y-4 ${activeTab === 'communities' ? 'max-w-3xl' : 'max-w-2xl'}`}>
+
+          {/* 0. VUE SPÉCIFIQUE : MODULE COMMUNAUTÉS (CERCLES AVANCÉS) */}
+          {activeTab === 'communities' && currentUser && (
+            <CommunitiesHub
+              currentUser={currentUser}
+              allUsers={allUsers}
+              initialGroupId={communityDeepLinkId}
+              initialInviteCode={communityInviteCode}
+              onClearDeepLink={() => {
+                setCommunityDeepLinkId(null);
+                setCommunityInviteCode(null);
+                if (
+                  window.location.search.includes('community=') ||
+                  window.location.search.includes('invite=')
+                ) {
+                  window.history.replaceState({}, '', window.location.pathname);
+                }
+              }}
+            />
+          )}
 
           {/* 1. VUE SPÉCIFIQUE : PARAMÈTRES */}
           {activeTab === 'settings' && (
@@ -1318,6 +1416,8 @@ export default function App() {
                   const added = await zaureService.createCapsule(circleId, type, contenu, langue);
                   setCapsules((prev) => [added, ...prev]);
                 }}
+                onUpdateCircle={handleUpdateCircle}
+                onDeleteCircle={handleDeleteCircle}
                 t={t}
                 language={language}
               />
@@ -1454,6 +1554,8 @@ export default function App() {
                       currentUser={currentUser}
                       onToggleJoin={() => handleToggleJoinCircle(circle.id)}
                       onSelect={() => setSelectedCircleId(circle.id)}
+                      onUpdateCircle={handleUpdateCircle}
+                      onDeleteCircle={handleDeleteCircle}
                       isActive={false}
                     />
                   );
@@ -2104,6 +2206,20 @@ export default function App() {
           <span className="text-[11px] font-semibold tracking-tight mt-0.5">Fil</span>
         </button>
 
+        {/* Communautés */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('communities')}
+          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+            activeTab === 'communities'
+              ? 'text-blue-700 font-bold'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Compass className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Communautés</span>
+        </button>
+
         {/* Cercles */}
         <button
           type="button"
@@ -2119,7 +2235,7 @@ export default function App() {
           }`}
         >
           <Layers className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[11px] font-semibold tracking-tight mt-0.5">Cercles</span>
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Cercles</span>
         </button>
 
         {/* Messages */}

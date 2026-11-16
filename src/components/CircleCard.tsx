@@ -2,18 +2,33 @@ import React from 'react';
 import { Users, LogIn, Check, ArrowRight } from 'lucide-react';
 import { Circle, UserProfile } from '../types';
 import { useTranslation } from '../context/LanguageContext';
+import CircleOptionsMenu from './CircleOptionsMenu';
 
 interface CircleCardProps {
   circle: Circle;
   isJoined: boolean;
-  onToggleJoin: () => void;
+  onToggleJoin: () => Promise<void> | void;
   onSelect: () => void;
+  onUpdateCircle?: (
+    circleId: string,
+    updates: { nom: string; description: string; categorie: string; image: string }
+  ) => Promise<void>;
+  onDeleteCircle?: (circleId: string) => Promise<void>;
   isActive: boolean;
   currentUser: UserProfile | null;
   key?: React.Key;
 }
 
-export default function CircleCard({ circle, isJoined, onToggleJoin, onSelect, isActive, currentUser }: CircleCardProps) {
+export default function CircleCard({
+  circle,
+  isJoined,
+  onToggleJoin,
+  onSelect,
+  onUpdateCircle,
+  onDeleteCircle,
+  isActive,
+  currentUser
+}: CircleCardProps) {
   const { t } = useTranslation();
 
   return (
@@ -39,18 +54,30 @@ export default function CircleCard({ circle, isJoined, onToggleJoin, onSelect, i
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent" />
         
         {/* Unboxed clean metadata kicker */}
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold text-white/90 drop-shadow-sm">
+        <div className="absolute top-3 left-3 pr-24 flex items-center gap-1.5 text-[11px] font-semibold text-white/90 drop-shadow-sm truncate">
           <span>{circle.categorie}</span>
           <span aria-hidden="true" className="text-red-400">·</span>
-          <span className="text-blue-200 font-medium">Cercle de savoir</span>
+          <span className="text-blue-200 font-medium truncate">Cercle de savoir</span>
         </div>
 
-        {isJoined && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 bg-blue-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md backdrop-blur-xs shadow-xs">
-            <Check className="w-3 h-3 stroke-[3]" />
-            <span>Membre</span>
-          </div>
-        )}
+        <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
+          {isJoined && (
+            <div className="flex items-center gap-1 bg-blue-600 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg backdrop-blur-xs shadow-xs">
+              <Check className="w-3 h-3 stroke-[3]" />
+              <span>Membre</span>
+            </div>
+          )}
+          <CircleOptionsMenu
+            variant="card"
+            circle={circle}
+            isJoined={isJoined}
+            currentUser={currentUser}
+            onOpenCircle={onSelect}
+            onToggleJoin={onToggleJoin}
+            onUpdateCircle={onUpdateCircle}
+            onDeleteCircle={onDeleteCircle}
+          />
+        </div>
 
         <div className="absolute bottom-2.5 left-3 right-3">
           <h3 className="font-extrabold text-white text-base leading-tight drop-shadow-sm line-clamp-1 group-hover:text-blue-200 transition-colors">

@@ -30,6 +30,7 @@ export interface Circle {
   description: string;
   categorie: string;
   image: string;
+  created_by?: string;
   created_at?: string;
 }
 
@@ -216,3 +217,197 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   taille_texte: 'normal'
 };
 
+// ============================================================
+// MODULE DE COMMUNAUTÉS AVANCÉ (CERCLES COMMUNAUTAIRES)
+// ============================================================
+
+export type GroupPrivacy = 'public' | 'private';
+export type GroupPostPermission = 'all_members' | 'admins_only';
+export type GroupMemberRole = 'administrateur' | 'moderateur' | 'membre';
+export type GroupMemberStatus = 'active' | 'pending' | 'suspended';
+
+export interface ModeratorPermissions {
+  approvePosts: boolean;
+  manageComments: boolean;
+  manageReports: boolean;
+  approveMembers: boolean;
+}
+
+export interface CommunityGroup {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  coverPhoto?: string;
+  avatarPhoto?: string;
+  privacy: GroupPrivacy;
+  postPermission: GroupPostPermission;
+  requirePostApproval: boolean;
+  requireMemberApproval: boolean;
+  allowAnonymousPosts: boolean;
+  rules: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  memberCount: number;
+  postCount: number;
+}
+
+export interface CommunityMember {
+  id: string; // `${groupId}_${userId}`
+  groupId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  role: GroupMemberRole;
+  status: GroupMemberStatus;
+  permissions?: ModeratorPermissions;
+  inviteCode?: string;
+  joinedAt: string;
+  updatedAt: string;
+}
+
+export type GroupPostType = 'text' | 'image' | 'video' | 'link' | 'document' | 'poll';
+
+export interface GroupPostMediaItem {
+  type: 'image' | 'video' | 'document';
+  url: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+}
+
+export interface GroupPollOption {
+  id: string;
+  text: string;
+  voterIds: string[];
+}
+
+export interface GroupPoll {
+  question: string;
+  allowMultiple: boolean;
+  options: GroupPollOption[];
+  endsAt?: string;
+}
+
+export interface GroupPost {
+  id: string;
+  groupId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  isAnonymous: boolean;
+  type: GroupPostType;
+  content: string;
+  media: GroupPostMediaItem[];
+  externalLink?: string;
+  poll?: GroupPoll | null;
+  status: 'published' | 'pending' | 'scheduled';
+  scheduledFor?: string;
+  isPinned: boolean;
+  reactionCount: number;
+  commentCount: number;
+  shareCount: number;
+  savedBy?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GroupReactionType = 'like' | 'love' | 'useful' | 'celebrate' | 'insightful';
+
+export interface PostReaction {
+  id: string; // `${postId}_${userId}`
+  postId: string;
+  groupId: string;
+  userId: string;
+  userName: string;
+  type: GroupReactionType;
+  createdAt: string;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  groupId: string;
+  parentId?: string | null;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  content: string;
+  mentions?: string[];
+  likedBy?: string[];
+  isEdited?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupEvent {
+  id: string;
+  groupId: string;
+  title: string;
+  description: string;
+  location: string;
+  isOnline: boolean;
+  meetingLink?: string;
+  startDate: string;
+  endDate?: string;
+  coverPhoto?: string;
+  createdBy: string;
+  createdByName: string;
+  attendeeIds: string[];
+  interestedIds: string[];
+  createdAt: string;
+}
+
+export interface GroupAnnouncement {
+  id: string;
+  groupId: string;
+  title: string;
+  content: string;
+  priority: 'normal' | 'important' | 'urgent';
+  authorId: string;
+  authorName: string;
+  isPinned: boolean;
+  createdAt: string;
+}
+
+export interface GroupInvitation {
+  id: string;
+  groupId: string;
+  groupName: string;
+  groupAvatar?: string;
+  groupPrivacy: GroupPrivacy;
+  inviterId: string;
+  inviterName: string;
+  inviteeId: string; // userId or 'LINK'
+  inviteCode?: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+export interface GroupNotification {
+  id: string;
+  userId: string;
+  groupId: string;
+  groupName: string;
+  type: 'invitation' | 'member_approved' | 'new_post' | 'post_approved' | 'comment' | 'mention' | 'announcement' | 'event' | 'role_changed';
+  message: string;
+  actorName: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface GroupReport {
+  id: string;
+  groupId: string;
+  targetType: 'post' | 'comment' | 'member';
+  targetId: string;
+  targetPreview: string;
+  reporterId: string;
+  reporterName: string;
+  reason: string;
+  details?: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  resolvedBy?: string;
+  createdAt: string;
+}

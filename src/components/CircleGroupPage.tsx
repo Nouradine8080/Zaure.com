@@ -16,11 +16,14 @@ import {
   Globe,
   Radio,
   Clock,
-  BookOpen
+  BookOpen,
+  BellOff,
+  Bookmark
 } from 'lucide-react';
 import { Circle, Capsule, UserProfile } from '../types';
 import CapsuleCard from './CapsuleCard';
 import AudioRecorder from './AudioRecorder';
+import CircleOptionsMenu, { CircleLocalPrefs, readCirclePrefs } from './CircleOptionsMenu';
 
 interface CircleGroupPageProps {
   circle: Circle;
@@ -28,8 +31,13 @@ interface CircleGroupPageProps {
   isJoined: boolean;
   currentUser: UserProfile | null;
   onBack: () => void;
-  onToggleJoin: () => void;
+  onToggleJoin: () => Promise<void> | void;
   onCreateCapsule: (circleId: string, type: 'texte' | 'audio', contenu: string, langue: 'fr' | 'ha' | 'en') => Promise<void>;
+  onUpdateCircle?: (
+    circleId: string,
+    updates: { nom: string; description: string; categorie: string; image: string }
+  ) => Promise<void>;
+  onDeleteCircle?: (circleId: string) => Promise<void>;
   t: (key: string) => string;
   language: 'fr' | 'ha' | 'en';
 }
@@ -42,6 +50,8 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
   onBack,
   onToggleJoin,
   onCreateCapsule,
+  onUpdateCircle,
+  onDeleteCircle,
   t,
   language
 }) => {
@@ -55,6 +65,19 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
   const [postLang, setPostLang] = useState<'fr' | 'ha' | 'en'>(language);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [circlePrefs, setCirclePrefs] = useState<CircleLocalPrefs>(() => readCirclePrefs(circle.id, currentUser?.id));
+
+  React.useEffect(() => {
+    setCirclePrefs(readCirclePrefs(circle.id, currentUser?.id));
+    const syncPrefs = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (!detail || detail.circleId === circle.id) {
+        setCirclePrefs(readCirclePrefs(circle.id, currentUser?.id));
+      }
+    };
+    window.addEventListener('zaure-circle-prefs-updated', syncPrefs);
+    return () => window.removeEventListener('zaure-circle-prefs-updated', syncPrefs);
+  }, [circle.id, currentUser?.id]);
 
   // Filter capsules for this circle
   const circleCapsules = capsules.filter(c => {
@@ -107,15 +130,34 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
           <span className="font-bold text-slate-900 truncate">{circle.nom}</span>
         </div>
 
-        <button
-          type="button"
-          onClick={handleShareCircle}
-          className="min-h-[40px] px-3 py-2 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-xl border border-slate-200 transition flex items-center gap-1.5 text-xs font-semibold active:scale-95"
-          title="Partager ce cercle"
-        >
-          <Share2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-          <span className="hidden sm:inline">{shareCopied ? 'Lien copié !' : 'Partager'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {circlePrefs.muted && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold">
+              <BellOff className="w-3 h-3" />
+              <span>Sourdine</span>
+            </span>
+          )}
+          {circlePrefs.pinned && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 text-blue-700 text-[10px] font-bold">
+              <Bookmark className="w-3 h-3 fill-blue-600 text-blue-600" />
+              <span>Épinglé</span>
+            </span>
+          )}
+          <CircleOptionsMenu
+            variant="header"
+            circle={circle}
+            isJoined={isJoined}
+            currentUser={currentUser}
+            onOpenPublish={() => {
+              setShowPostBox(true);
+              setActiveSubTab('feed');
+            }}
+            onSelectTab={(tab) => setActiveSubTab(tab)}
+            onToggleJoin={onToggleJoin}
+            onUpdateCircle={onUpdateCircle}
+            onDeleteCircle={onDeleteCircle}
+          />
+        </div>
       </div>
 
       {/* 2. FACEBOOK / WHATSAPP STYLE GROUP BANNER HEADER */}
@@ -280,8 +322,8 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">
-                    {currentUser?.avatar ? (
-                      <img src={currentUser.avatar} alt="" className="w-full h-full rounded-lg object-cover" />
+                    {currentUser?.avatar_url ? (
+                      <img src={currentUser.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" />
                     ) : (
                       currentUser?.nom?.charAt(0) || 'U'
                     )}

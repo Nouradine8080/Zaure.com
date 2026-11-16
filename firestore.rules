@@ -24,6 +24,10 @@ service cloud.firestore {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isValidCompositeId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 260 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -54,6 +58,46 @@ service cloud.firestore {
 
     function isOptionalList(data, key, maxItems) {
       return !(key in data) || (data[key] is list && data[key].size() <= maxItems);
+    }
+
+    // -------------------------------------------------------------------------
+    // Community Circle RBAC Helpers
+    // -------------------------------------------------------------------------
+    function memberExists(groupId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/group_members/$(groupId + '_' + request.auth.uid));
+    }
+
+    function getMemberDoc(groupId) {
+      return get(/databases/$(database)/documents/group_members/$(groupId + '_' + request.auth.uid));
+    }
+
+    function isActiveGroupMember(groupId) {
+      return memberExists(groupId) && getMemberDoc(groupId).data.status == 'active';
+    }
+
+    function isGroupAdmin(groupId) {
+      return isActiveGroupMember(groupId) && getMemberDoc(groupId).data.role == 'administrateur';
+    }
+
+    function isGroupModerator(groupId) {
+      return isActiveGroupMember(groupId) && getMemberDoc(groupId).data.role == 'moderateur';
+    }
+
+    function isGroupModeratorWith(groupId, perm) {
+      return isGroupModerator(groupId) &&
+        ('permissions' in getMemberDoc(groupId).data) &&
+        getMemberDoc(groupId).data.permissions is map &&
+        (perm in getMemberDoc(groupId).data.permissions) &&
+        getMemberDoc(groupId).data.permissions[perm] == true;
+    }
+
+    function getGroupDoc(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId));
+    }
+
+    function isPublicGroup(groupId) {
+      return exists(/databases/$(database)/documents/groups/$(groupId)) &&
+        getGroupDoc(groupId).data.privacy == 'public';
     }
 
     // -------------------------------------------------------------------------
@@ -268,17 +312,234 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Collection Rules
+    // Community Circle Module Validators
     // -------------------------------------------------------------------------
+    function isValidCommunityGroup(data, groupId) {
+      return data.keys().hasAll([
+          'id', 'name', 'description', 'category', 'privacy', 'postPermission',
+          'requirePostApproval', 'requireMemberApproval', 'allowAnonymousPosts',
+          'rules', 'createdBy', 'createdAt', 'updatedAt', 'memberCount', 'postCount'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'description', 'category', 'coverPhoto', 'avatarPhoto',
+          'privacy', 'postPermission', 'requirePostApproval', 'requireMemberApproval',
+          'allowAnonymousPosts', 'rules', 'createdBy', 'createdAt', 'updatedAt',
+          'memberCount', 'postCount'
+        ]) &&
+        data.id == groupId &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+        isOptionalString(data, 'coverPhoto', 350000) &&
+        isOptionalString(data, 'avatarPhoto', 350000) &&
+        data.privacy is string && data.privacy in ['public', 'private'] &&
+        data.postPermission is string && data.postPermission in ['all_members', 'admins_only'] &&
+        data.requirePostApproval is bool &&
+        data.requireMemberApproval is bool &&
+        data.allowAnonymousPosts is bool &&
+        data.rules is list && data.rules.size() <= 20 &&
+        (data.rules.size() == 0 || data.rules[0] is string) &&
+        isValidId(data.createdBy) &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64 &&
+        data.memberCount is int && data.memberCount >= 0 &&
+        data.postCount is int && data.postCount >= 0;
+    }
 
-    // 1. Admin Registry (Read-only by owner/admin; managed server-side)
+    function isValidCommunityMember(data, memberDocId) {
+      return data.keys().hasAll(['id', 'groupId', 'userId', 'userName', 'role', 'status', 'joinedAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'groupId', 'userId', 'userName', 'userAvatar', 'role', 'status', 'permissions', 'inviteCode', 'joinedAt', 'updatedAt']) &&
+        data.id == memberDocId &&
+        memberDocId == data.groupId + '_' + data.userId &&
+        isValidCompositeId(data.id) &&
+        isValidId(data.groupId) &&
+        isValidId(data.userId) &&
+        data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120 &&
+        isOptionalString(data, 'userAvatar', 350000) &&
+        data.role is string && data.role in ['administrateur', 'moderateur', 'membre'] &&
+        data.status is string && data.status in ['active', 'pending', 'suspended'] &&
+        (!( 'permissions' in data ) || data.permissions == null || data.permissions is map) &&
+        isOptionalString(data, 'inviteCode', 64) &&
+        data.joinedAt is string && data.joinedAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidGroupPost(data, postId) {
+      return data.keys().hasAll([
+          'id', 'groupId', 'authorId', 'authorName', 'isAnonymous', 'type', 'content',
+          'media', 'status', 'isPinned', 'reactionCount', 'commentCount', 'shareCount',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'groupId', 'authorId', 'authorName', 'authorAvatar', 'isAnonymous',
+          'type', 'content', 'media', 'externalLink', 'poll', 'status', 'scheduledFor',
+          'isPinned', 'reactionCount', 'commentCount', 'shareCount', 'savedBy',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.id == postId &&
+        isValidId(data.id) &&
+        isValidId(data.groupId) &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 120 &&
+        isOptionalString(data, 'authorAvatar', 350000) &&
+        data.isAnonymous is bool &&
+        data.type is string && data.type in ['text', 'image', 'video', 'link', 'document', 'poll'] &&
+        data.content is string && data.content.size() <= 10000 &&
+        data.media is list && data.media.size() <= 10 &&
+        isOptionalString(data, 'externalLink', 1000) &&
+        (!( 'poll' in data ) || data.poll == null || data.poll is map) &&
+        data.status is string && data.status in ['published', 'pending', 'scheduled'] &&
+        isOptionalString(data, 'scheduledFor', 64) &&
+        data.isPinned is bool &&
+        data.reactionCount is int && data.reactionCount >= 0 &&
+        data.commentCount is int && data.commentCount >= 0 &&
+        data.shareCount is int && data.shareCount >= 0 &&
+        isOptionalList(data, 'savedBy', 200) &&
+        (!( 'savedBy' in data ) || data.savedBy.size() == 0 || data.savedBy[0] is string) &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidPostComment(data, commentId) {
+      return data.keys().hasAll(['id', 'postId', 'groupId', 'authorId', 'authorName', 'content', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'postId', 'groupId', 'parentId', 'authorId', 'authorName', 'authorAvatar', 'content', 'mentions', 'likedBy', 'isEdited', 'createdAt', 'updatedAt']) &&
+        data.id == commentId &&
+        isValidId(data.id) &&
+        isValidId(data.postId) &&
+        isValidId(data.groupId) &&
+        isOptionalString(data, 'parentId', 128) &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 120 &&
+        isOptionalString(data, 'authorAvatar', 350000) &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 3000 &&
+        isOptionalList(data, 'mentions', 20) &&
+        (!( 'mentions' in data ) || data.mentions.size() == 0 || data.mentions[0] is string) &&
+        isOptionalList(data, 'likedBy', 200) &&
+        (!( 'likedBy' in data ) || data.likedBy.size() == 0 || data.likedBy[0] is string) &&
+        (!( 'isEdited' in data ) || data.isEdited is bool) &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidPostReaction(data, reactionId) {
+      return data.keys().hasAll(['id', 'postId', 'groupId', 'userId', 'userName', 'type', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'postId', 'groupId', 'userId', 'userName', 'type', 'createdAt']) &&
+        data.id == reactionId &&
+        reactionId == data.postId + '_' + data.userId &&
+        isValidCompositeId(data.id) &&
+        isValidId(data.postId) &&
+        isValidId(data.groupId) &&
+        isValidId(data.userId) &&
+        data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120 &&
+        data.type is string && data.type in ['like', 'love', 'useful', 'celebrate', 'insightful'] &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidGroupEvent(data, eventId) {
+      return data.keys().hasAll([
+          'id', 'groupId', 'title', 'description', 'location', 'isOnline',
+          'startDate', 'createdBy', 'createdByName', 'attendeeIds', 'interestedIds', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'groupId', 'title', 'description', 'location', 'isOnline',
+          'meetingLink', 'startDate', 'endDate', 'coverPhoto', 'createdBy',
+          'createdByName', 'attendeeIds', 'interestedIds', 'createdAt'
+        ]) &&
+        data.id == eventId &&
+        isValidId(data.id) &&
+        isValidId(data.groupId) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 160 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 250 &&
+        data.isOnline is bool &&
+        isOptionalString(data, 'meetingLink', 500) &&
+        data.startDate is string && data.startDate.size() <= 64 &&
+        isOptionalString(data, 'endDate', 64) &&
+        isOptionalString(data, 'coverPhoto', 350000) &&
+        isValidId(data.createdBy) &&
+        data.createdByName is string && data.createdByName.size() >= 1 && data.createdByName.size() <= 120 &&
+        data.attendeeIds is list && data.attendeeIds.size() <= 500 &&
+        (data.attendeeIds.size() == 0 || data.attendeeIds[0] is string) &&
+        data.interestedIds is list && data.interestedIds.size() <= 500 &&
+        (data.interestedIds.size() == 0 || data.interestedIds[0] is string) &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidGroupAnnouncement(data, annId) {
+      return data.keys().hasAll(['id', 'groupId', 'title', 'content', 'priority', 'authorId', 'authorName', 'isPinned', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'groupId', 'title', 'content', 'priority', 'authorId', 'authorName', 'isPinned', 'createdAt']) &&
+        data.id == annId &&
+        isValidId(data.id) &&
+        isValidId(data.groupId) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 160 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 4000 &&
+        data.priority is string && data.priority in ['normal', 'important', 'urgent'] &&
+        isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 120 &&
+        data.isPinned is bool &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidGroupInvitation(data, invId) {
+      return data.keys().hasAll(['id', 'groupId', 'groupName', 'groupPrivacy', 'inviterId', 'inviterName', 'inviteeId', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'groupId', 'groupName', 'groupAvatar', 'groupPrivacy', 'inviterId', 'inviterName', 'inviteeId', 'inviteCode', 'status', 'createdAt']) &&
+        data.id == invId &&
+        isValidId(data.id) &&
+        isValidId(data.groupId) &&
+        data.groupName is string && data.groupName.size() >= 1 && data.groupName.size() <= 120 &&
+        isOptionalString(data, 'groupAvatar', 350000) &&
+        data.groupPrivacy is string && data.groupPrivacy in ['public', 'private'] &&
+        isValidId(data.inviterId) &&
+        data.inviterName is string && data.inviterName.size() >= 1 && data.inviterName.size() <= 120 &&
+        isValidId(data.inviteeId) &&
+        isOptionalString(data, 'inviteCode', 64) &&
+        data.status is string && data.status in ['pending', 'accepted', 'declined'] &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidGroupNotification(data, notifId) {
+      return data.keys().hasAll(['id', 'userId', 'groupId', 'groupName', 'type', 'message', 'actorName', 'isRead', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'groupId', 'groupName', 'type', 'message', 'actorName', 'isRead', 'createdAt']) &&
+        data.id == notifId &&
+        isValidId(data.id) &&
+        isValidId(data.userId) &&
+        isValidId(data.groupId) &&
+        data.groupName is string && data.groupName.size() >= 1 && data.groupName.size() <= 120 &&
+        data.type is string && data.type in ['invitation', 'member_approved', 'new_post', 'post_approved', 'comment', 'mention', 'announcement', 'event', 'role_changed'] &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
+        data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 120 &&
+        data.isRead is bool &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidGroupReport(data, reportId) {
+      return data.keys().hasAll(['id', 'groupId', 'targetType', 'targetId', 'targetPreview', 'reporterId', 'reporterName', 'reason', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'groupId', 'targetType', 'targetId', 'targetPreview', 'reporterId', 'reporterName', 'reason', 'details', 'status', 'resolvedBy', 'createdAt']) &&
+        data.id == reportId &&
+        isValidId(data.id) &&
+        isValidId(data.groupId) &&
+        data.targetType is string && data.targetType in ['post', 'comment', 'member'] &&
+        isValidId(data.targetId) &&
+        data.targetPreview is string && data.targetPreview.size() <= 300 &&
+        isValidId(data.reporterId) &&
+        data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 120 &&
+        data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 120 &&
+        isOptionalString(data, 'details', 2000) &&
+        data.status is string && data.status in ['pending', 'resolved', 'dismissed'] &&
+        isOptionalString(data, 'resolvedBy', 128) &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    // -------------------------------------------------------------------------
+    // Existing Collection Rules (Unchanged)
+    // -------------------------------------------------------------------------
     match /admins/{adminId} {
       allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
       allow list: if isAdmin();
       allow create, update, delete: if false;
     }
 
-    // 2. Private User Accounts (PII Isolated: owner or admin only)
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isAdmin();
@@ -293,7 +554,6 @@ service cloud.firestore {
       allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
-    // 3. Public Profiles (Non-PII network directory)
     match /public_profiles/{userId} {
       allow get: if isValidId(userId) && isSignedIn();
       allow list: if isSignedIn() && existing().id is string;
@@ -308,7 +568,6 @@ service cloud.firestore {
       allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
-    // 4. User Settings & Blocklist (Strictly owner-only)
     match /user_settings/{userId} {
       allow get: if isValidId(userId) && isOwner(userId);
       allow list: if false;
@@ -316,7 +575,6 @@ service cloud.firestore {
       allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
     }
 
-    // 5. Circles (Public catalog for discovery/signup, authenticated validated writes)
     match /circles/{circleId} {
       allow get: if isValidId(circleId);
       allow list: if existing().nom is string;
@@ -332,7 +590,6 @@ service cloud.firestore {
       );
     }
 
-    // 6. Circle Members (Owner-scoped membership)
     match /circle_members/{memberId} {
       allow get: if isValidId(memberId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
@@ -343,7 +600,6 @@ service cloud.firestore {
       allow delete: if isValidId(memberId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
     }
 
-    // 7. Capsules (Signed-in reads, author-enforced writes)
     match /capsules/{capsuleId} {
       allow get: if isValidId(capsuleId) && isSignedIn();
       allow list: if isSignedIn() && existing().auteur_id is string;
@@ -361,7 +617,6 @@ service cloud.firestore {
       allow delete: if isValidId(capsuleId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isAdmin());
     }
 
-    // 8. Comments (Signed-in reads, author & parent capsule enforced)
     match /comments/{commentId} {
       allow get: if isValidId(commentId) && isSignedIn();
       allow list: if isSignedIn() && existing().capsule_id is string;
@@ -380,7 +635,6 @@ service cloud.firestore {
       allow delete: if isValidId(commentId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isAdmin());
     }
 
-    // 9. Reactions (Signed-in reads, owner & parent capsule enforced)
     match /reactions/{reactionId} {
       allow get: if isValidId(reactionId) && isSignedIn();
       allow list: if isSignedIn() && existing().capsule_id is string;
@@ -391,7 +645,6 @@ service cloud.firestore {
       allow delete: if isValidId(reactionId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
     }
 
-    // 10. Conversations & Messages (Strict participant_ids RLS + Master Gate)
     match /conversations/{convId} {
       allow get: if isValidId(convId) && isSignedIn() && request.auth.uid in existing().participant_ids;
       allow list: if isSignedIn() && request.auth.uid in existing().participant_ids;
@@ -403,11 +656,9 @@ service cloud.firestore {
         incoming().id == existing().id &&
         incoming().type == existing().type &&
         incoming().created_at == existing().created_at && (
-          // Action 1: Messaging, typing, unread count, mute, archive
           incoming().diff(existing()).affectedKeys().hasOnly([
             'last_message', 'updated_at', 'unread_counts', 'typing', 'is_archived_by', 'is_muted_by'
           ]) ||
-          // Action 2: Group management by group admin or member self-leave
           (
             existing().type == 'group' &&
             (
@@ -439,19 +690,16 @@ service cloud.firestore {
           incoming().id == existing().id &&
           incoming().sender_id == existing().sender_id &&
           incoming().created_at == existing().created_at && (
-            // Action 1: Sender edit or soft-delete
             (
               existing().sender_id == request.auth.uid &&
               incoming().diff(existing()).affectedKeys().hasOnly(['content', 'attachments', 'is_edited', 'is_deleted', 'updated_at'])
             ) ||
-            // Action 2: Participant read-receipt or emoji reaction
             incoming().diff(existing()).affectedKeys().hasOnly(['read_by', 'status', 'reactions'])
           );
         allow delete: if isValidId(convId) && isValidId(messageId) && isSignedIn() && (existing().sender_id == request.auth.uid || isAdmin());
       }
     }
 
-    // 11. Moderation Reports (Reporter create/read-own; Admin manage)
     match /reports/{reportId} {
       allow get: if isValidId(reportId) && isSignedIn() && (existing().reporter_id == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().reporter_id == request.auth.uid || isAdmin());
@@ -459,6 +707,361 @@ service cloud.firestore {
         incoming().reporter_id == request.auth.uid &&
         incoming().status == 'en_attente';
       allow update, delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // Advanced Community Circles Collections
+    // -------------------------------------------------------------------------
+
+    // 12. Community Groups (Cercles)
+    match /groups/{groupId} {
+      allow get: if isValidId(groupId) && isSignedIn() && (existing().privacy == 'public' || isActiveGroupMember(groupId) || isAdmin());
+      allow list: if isSignedIn() && existing().name is string;
+      allow create: if isValidId(groupId) && isSignedIn() && isValidCommunityGroup(incoming(), groupId) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().memberCount == 1 &&
+        incoming().postCount == 0;
+      allow update: if isValidId(groupId) && isSignedIn() && isValidCommunityGroup(incoming(), groupId) &&
+        incoming().id == existing().id &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          isGroupAdmin(groupId) ||
+          (
+            (memberExists(groupId) || existsAfter(/databases/$(database)/documents/group_members/$(groupId + '_' + request.auth.uid))) &&
+            (incoming().memberCount == existing().memberCount + 1 || incoming().memberCount == existing().memberCount - 1) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt'])
+          ) ||
+          (
+            isActiveGroupMember(groupId) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['postCount', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(groupId) && isSignedIn() && (existing().createdBy == request.auth.uid || isGroupAdmin(groupId) || isAdmin());
+    }
+
+    // 13. Community Group Members
+    match /group_members/{memberDocId} {
+      allow get: if isValidCompositeId(memberDocId) && isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidCompositeId(memberDocId) && isSignedIn() && isValidCommunityMember(incoming(), memberDocId) &&
+        incoming().userId == request.auth.uid &&
+        exists(/databases/$(database)/documents/groups/$(incoming().groupId)) && (
+          (
+            getGroupDoc(incoming().groupId).data.createdBy == request.auth.uid &&
+            incoming().role == 'administrateur' &&
+            incoming().status == 'active'
+          ) ||
+          (
+            incoming().role == 'membre' && (
+              incoming().status == 'pending' ||
+              (
+                incoming().status == 'active' && (
+                  (
+                    getGroupDoc(incoming().groupId).data.privacy == 'public' &&
+                    getGroupDoc(incoming().groupId).data.requireMemberApproval == false
+                  ) ||
+                  (
+                    exists(/databases/$(database)/documents/group_invitations/$(incoming().groupId + '_' + request.auth.uid)) &&
+                    get(/databases/$(database)/documents/group_invitations/$(incoming().groupId + '_' + request.auth.uid)).data.status in ['pending', 'accepted']
+                  ) ||
+                  (
+                    ('inviteCode' in incoming()) &&
+                    incoming().inviteCode is string &&
+                    exists(/databases/$(database)/documents/group_invitations/$(incoming().groupId + '_' + incoming().inviteCode)) &&
+                    get(/databases/$(database)/documents/group_invitations/$(incoming().groupId + '_' + incoming().inviteCode)).data.status == 'pending'
+                  )
+                )
+              )
+            )
+          )
+        );
+      allow update: if isValidCompositeId(memberDocId) && isSignedIn() && isValidCommunityMember(incoming(), memberDocId) &&
+        incoming().id == existing().id &&
+        incoming().groupId == existing().groupId &&
+        incoming().userId == existing().userId &&
+        incoming().joinedAt == existing().joinedAt && (
+          isAdmin() ||
+          isGroupAdmin(existing().groupId) ||
+          (
+            isGroupModeratorWith(existing().groupId, 'approveMembers') &&
+            existing().role == 'membre' &&
+            incoming().role == 'membre' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidCompositeId(memberDocId) && isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'approveMembers') ||
+        isAdmin()
+      );
+    }
+
+    // 14. Group Posts (Strict Private Group Isolation + RBAC Moderation)
+    match /group_posts/{postId} {
+      allow get: if isValidId(postId) && isSignedIn() && (
+        existing().authorId == request.auth.uid ||
+        (existing().status == 'published' && (isPublicGroup(existing().groupId) || isActiveGroupMember(existing().groupId))) ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'approvePosts') ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().authorId == request.auth.uid ||
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidId(postId) && isSignedIn() && isValidGroupPost(incoming(), postId) &&
+        incoming().authorId == request.auth.uid &&
+        isActiveGroupMember(incoming().groupId) &&
+        (
+          getGroupDoc(incoming().groupId).data.postPermission == 'all_members' ||
+          isGroupAdmin(incoming().groupId) ||
+          isGroupModerator(incoming().groupId)
+        ) &&
+        (
+          incoming().isAnonymous == false ||
+          getGroupDoc(incoming().groupId).data.allowAnonymousPosts == true
+        ) &&
+        (
+          getGroupDoc(incoming().groupId).data.requirePostApproval == false ||
+          isGroupAdmin(incoming().groupId) ||
+          isGroupModerator(incoming().groupId) ||
+          incoming().status == 'pending'
+        );
+      allow update: if isValidId(postId) && isSignedIn() && isValidGroupPost(incoming(), postId) &&
+        incoming().id == existing().id &&
+        incoming().groupId == existing().groupId &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (
+            existing().authorId == request.auth.uid &&
+            isActiveGroupMember(existing().groupId) &&
+            incoming().status == existing().status &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['content', 'media', 'externalLink', 'poll', 'scheduledFor', 'updatedAt'])
+          ) ||
+          (
+            (isGroupAdmin(existing().groupId) || isGroupModeratorWith(existing().groupId, 'approvePosts')) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'isPinned', 'updatedAt'])
+          ) ||
+          (
+            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['poll', 'savedBy', 'reactionCount', 'commentCount', 'shareCount', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(postId) && isSignedIn() && (
+        existing().authorId == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'approvePosts') ||
+        isAdmin()
+      );
+    }
+
+    // 15. Post Comments
+    match /post_comments/{commentId} {
+      allow get: if isValidId(commentId) && isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidId(commentId) && isSignedIn() && isValidPostComment(incoming(), commentId) &&
+        incoming().authorId == request.auth.uid &&
+        exists(/databases/$(database)/documents/group_posts/$(incoming().postId)) &&
+        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId));
+      allow update: if isValidId(commentId) && isSignedIn() && isValidPostComment(incoming(), commentId) &&
+        incoming().id == existing().id &&
+        incoming().postId == existing().postId &&
+        incoming().groupId == existing().groupId &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (
+            existing().authorId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['content', 'mentions', 'isEdited', 'updatedAt'])
+          ) ||
+          (
+            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['likedBy', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(commentId) && isSignedIn() && (
+        existing().authorId == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'manageComments') ||
+        isAdmin()
+      );
+    }
+
+    // 16. Post Reactions
+    match /post_reactions/{reactionId} {
+      allow get: if isValidCompositeId(reactionId) && isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidCompositeId(reactionId) && isSignedIn() && isValidPostReaction(incoming(), reactionId) &&
+        incoming().userId == request.auth.uid &&
+        exists(/databases/$(database)/documents/group_posts/$(incoming().postId)) &&
+        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId));
+      allow update: if isValidCompositeId(reactionId) && isSignedIn() && isValidPostReaction(incoming(), reactionId) &&
+        existing().userId == request.auth.uid &&
+        incoming().userId == existing().userId &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['type', 'createdAt']);
+      allow delete: if isValidCompositeId(reactionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 17. Group Events
+    match /group_events/{eventId} {
+      allow get: if isValidId(eventId) && isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidId(eventId) && isSignedIn() && isValidGroupEvent(incoming(), eventId) &&
+        incoming().createdBy == request.auth.uid &&
+        isActiveGroupMember(incoming().groupId);
+      allow update: if isValidId(eventId) && isSignedIn() && isValidGroupEvent(incoming(), eventId) &&
+        incoming().id == existing().id &&
+        incoming().groupId == existing().groupId &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          existing().createdBy == request.auth.uid ||
+          isGroupAdmin(existing().groupId) ||
+          (
+            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['attendeeIds', 'interestedIds'])
+          )
+        );
+      allow delete: if isValidId(eventId) && isSignedIn() && (
+        existing().createdBy == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isAdmin()
+      );
+    }
+
+    // 18. Group Announcements
+    match /group_announcements/{annId} {
+      allow get: if isValidId(annId) && isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isPublicGroup(existing().groupId) ||
+        isActiveGroupMember(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidId(annId) && isSignedIn() && isValidGroupAnnouncement(incoming(), annId) &&
+        incoming().authorId == request.auth.uid &&
+        (isGroupAdmin(incoming().groupId) || isGroupModerator(incoming().groupId) || isAdmin());
+      allow update: if isValidId(annId) && isSignedIn() && isValidGroupAnnouncement(incoming(), annId) &&
+        (isGroupAdmin(existing().groupId) || isGroupModerator(existing().groupId) || isAdmin());
+      allow delete: if isValidId(annId) && isSignedIn() && (
+        isGroupAdmin(existing().groupId) ||
+        isGroupModerator(existing().groupId) ||
+        isAdmin()
+      );
+    }
+
+    // 19. Group Invitations
+    match /group_invitations/{invId} {
+      allow get: if isValidId(invId) && isSignedIn() && (
+        existing().inviteeId == request.auth.uid ||
+        existing().inviterId == request.auth.uid ||
+        existing().inviteeId == 'LINK' ||
+        isGroupAdmin(existing().groupId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().inviteeId == request.auth.uid ||
+        existing().inviterId == request.auth.uid ||
+        existing().inviteeId == 'LINK' ||
+        isGroupAdmin(existing().groupId) ||
+        isAdmin()
+      );
+      allow create: if isValidId(invId) && isSignedIn() && isValidGroupInvitation(incoming(), invId) &&
+        incoming().inviterId == request.auth.uid &&
+        isActiveGroupMember(incoming().groupId);
+      allow update: if isValidId(invId) && isSignedIn() && isValidGroupInvitation(incoming(), invId) &&
+        (existing().inviteeId == request.auth.uid || isGroupAdmin(existing().groupId) || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isValidId(invId) && isSignedIn() && (
+        existing().inviterId == request.auth.uid ||
+        existing().inviteeId == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isAdmin()
+      );
+    }
+
+    // 20. Group Notifications (Strictly Owner-Only Reads)
+    match /group_notifications/{notifId} {
+      allow get: if isValidId(notifId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(notifId) && isSignedIn() && isValidGroupNotification(incoming(), notifId) &&
+        exists(/databases/$(database)/documents/groups/$(incoming().groupId));
+      allow update: if isValidId(notifId) && isSignedIn() && isValidGroupNotification(incoming(), notifId) &&
+        existing().userId == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isValidId(notifId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 21. Group Moderation Reports
+    match /group_reports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (
+        existing().reporterId == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'manageReports') ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().reporterId == request.auth.uid ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'manageReports') ||
+        isAdmin()
+      );
+      allow create: if isValidId(reportId) && isSignedIn() && isValidGroupReport(incoming(), reportId) &&
+        incoming().reporterId == request.auth.uid &&
+        incoming().status == 'pending' &&
+        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId));
+      allow update: if isValidId(reportId) && isSignedIn() && isValidGroupReport(incoming(), reportId) && (
+        isAdmin() ||
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'manageReports')
+      );
+      allow delete: if isValidId(reportId) && isSignedIn() && (
+        isGroupAdmin(existing().groupId) ||
+        isGroupModeratorWith(existing().groupId, 'manageReports') ||
+        isAdmin()
+      );
     }
   }
 }
