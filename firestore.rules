@@ -36,12 +36,46 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.email == 'mahamadougarbamoussa8080@gmail.com' &&
-         request.auth.token.email_verified == true)
+    function isBootstrapOwner() {
+      return isSignedIn() &&
+        request.auth.token.email == 'mahamadougarbamoussa8080@gmail.com' &&
+        request.auth.token.email_verified == true;
+    }
+
+    function hasAdminDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function getAdminDoc() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function isActiveStaff() {
+      return isBootstrapOwner() || (
+        hasAdminDoc() &&
+        getAdminDoc().isActive == true &&
+        getAdminDoc().role in ['SUPER_ADMIN', 'ADMIN', 'MODERATOR']
       );
+    }
+
+    function isSuperAdmin() {
+      return isBootstrapOwner() || (
+        hasAdminDoc() &&
+        getAdminDoc().isActive == true &&
+        getAdminDoc().role == 'SUPER_ADMIN'
+      );
+    }
+
+    function isAdmin() {
+      return isBootstrapOwner() || (
+        hasAdminDoc() &&
+        getAdminDoc().isActive == true &&
+        getAdminDoc().role in ['SUPER_ADMIN', 'ADMIN']
+      );
+    }
+
+    function isModerator() {
+      return isActiveStaff();
     }
 
     function isValidRole(role) {
@@ -536,13 +570,165 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // Existing Collection Rules (Unchanged)
+    // Admin & Governance Module Validators
+    // -------------------------------------------------------------------------
+    function isValidAdminAccount(data, adminId) {
+      return data.keys().hasAll(['id', 'email', 'displayName', 'role', 'isActive', 'permissions', 'assignedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'email', 'displayName', 'role', 'isActive', 'permissions', 'assignedBy', 'createdAt', 'updatedAt']) &&
+        data.id == adminId &&
+        isValidId(data.id) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role is string && data.role in ['SUPER_ADMIN', 'ADMIN', 'MODERATOR'] &&
+        data.isActive is bool &&
+        data.permissions is map &&
+        data.assignedBy is string && data.assignedBy.size() >= 1 && data.assignedBy.size() <= 128 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidAdminAuditLog(data, logId) {
+      return data.keys().hasAll(['id', 'actorId', 'actorName', 'actorRole', 'action', 'module', 'targetType', 'targetId', 'details', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'actorId', 'actorName', 'actorEmail', 'actorRole', 'action', 'module', 'targetType', 'targetId', 'details', 'createdAt']) &&
+        data.id == logId &&
+        isValidId(data.id) &&
+        isValidId(data.actorId) &&
+        data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 120 &&
+        isOptionalString(data, 'actorEmail', 200) &&
+        data.actorRole is string && data.actorRole in ['SUPER_ADMIN', 'ADMIN', 'MODERATOR'] &&
+        data.action is string && data.action.size() >= 2 && data.action.size() <= 120 &&
+        data.module is string && data.module.size() >= 2 && data.module.size() <= 64 &&
+        data.targetType is string && data.targetType.size() >= 1 && data.targetType.size() <= 64 &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+        data.details is string && data.details.size() <= 1000 &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidPlatformNotification(data, notifId) {
+      return data.keys().hasAll(['id', 'title', 'message', 'priority', 'audience', 'isActive', 'createdBy', 'createdByName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'message', 'priority', 'audience', 'isActive', 'createdBy', 'createdByName', 'createdAt', 'updatedAt']) &&
+        data.id == notifId &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 160 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 2000 &&
+        data.priority is string && data.priority in ['info', 'warning', 'urgent'] &&
+        data.audience is string && data.audience in ['all', 'mentors', 'admins'] &&
+        data.isActive is bool &&
+        isValidId(data.createdBy) &&
+        data.createdByName is string && data.createdByName.size() >= 1 && data.createdByName.size() <= 120 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidPlatformSettings(data, settingId) {
+      return data.keys().hasAll([
+          'id', 'platformName', 'maintenanceMode', 'maintenanceMessage', 'registrationOpen',
+          'requirePostModerationByDefault', 'maxUploadSizeMb', 'forbiddenKeywords',
+          'driveRootFolderName', 'superAdminBootstrapped', 'updatedBy', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'platformName', 'maintenanceMode', 'maintenanceMessage', 'registrationOpen',
+          'requirePostModerationByDefault', 'maxUploadSizeMb', 'forbiddenKeywords',
+          'driveRootFolderName', 'superAdminBootstrapped', 'updatedBy', 'updatedAt'
+        ]) &&
+        data.id == settingId &&
+        isValidId(data.id) &&
+        data.platformName is string && data.platformName.size() >= 2 && data.platformName.size() <= 80 &&
+        data.maintenanceMode is bool &&
+        data.maintenanceMessage is string && data.maintenanceMessage.size() <= 500 &&
+        data.registrationOpen is bool &&
+        data.requirePostModerationByDefault is bool &&
+        data.maxUploadSizeMb is int && data.maxUploadSizeMb >= 1 && data.maxUploadSizeMb <= 500 &&
+        data.forbiddenKeywords is list && data.forbiddenKeywords.size() <= 100 &&
+        (data.forbiddenKeywords.size() == 0 || data.forbiddenKeywords[0] is string) &&
+        data.driveRootFolderName is string && data.driveRootFolderName.size() >= 1 && data.driveRootFolderName.size() <= 120 &&
+        data.superAdminBootstrapped is bool &&
+        data.updatedBy is string && data.updatedBy.size() <= 128 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidUserModeration(data, userId) {
+      return data.keys().hasAll(['userId', 'status', 'reason', 'updatedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'status', 'reason', 'updatedBy', 'updatedAt']) &&
+        data.userId == userId &&
+        isValidId(data.userId) &&
+        data.status is string && data.status in ['active', 'warned', 'suspended'] &&
+        data.reason is string && data.reason.size() <= 500 &&
+        isValidId(data.updatedBy) &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    // -------------------------------------------------------------------------
+    // Admin & Governance Collection Rules
     // -------------------------------------------------------------------------
     match /admins/{adminId} {
-      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
-      allow list: if isAdmin();
-      allow create, update, delete: if false;
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isActiveStaff());
+      allow list: if isActiveStaff();
+      allow create: if isValidId(adminId) && isValidAdminAccount(incoming(), adminId) && (
+        (
+          isBootstrapOwner() &&
+          adminId == request.auth.uid &&
+          incoming().role == 'SUPER_ADMIN' &&
+          incoming().isActive == true
+        ) ||
+        (
+          isSuperAdmin() &&
+          adminId != request.auth.uid
+        )
+      );
+      allow update: if isValidId(adminId) && isValidAdminAccount(incoming(), adminId) &&
+        isSuperAdmin() &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        !(adminId == request.auth.uid && (incoming().role != existing().role || incoming().isActive == false));
+      allow delete: if isValidId(adminId) && isSuperAdmin() && adminId != request.auth.uid;
     }
+
+    match /admin_audit_logs/{logId} {
+      allow get: if isValidId(logId) && isActiveStaff();
+      allow list: if isActiveStaff();
+      allow create: if isValidId(logId) && isActiveStaff() && isValidAdminAuditLog(incoming(), logId) &&
+        incoming().actorId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /platform_notifications/{notifId} {
+      allow get: if isValidId(notifId) && isSignedIn() && (existing().isActive == true || isActiveStaff());
+      allow list: if isSignedIn() && (existing().isActive == true || isActiveStaff());
+      allow create: if isValidId(notifId) && isAdmin() && isValidPlatformNotification(incoming(), notifId) &&
+        incoming().createdBy == request.auth.uid;
+      allow update: if isValidId(notifId) && isAdmin() && isValidPlatformNotification(incoming(), notifId) &&
+        incoming().id == existing().id &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(notifId) && isAdmin();
+    }
+
+    match /platform_settings/{settingId} {
+      allow get: if isValidId(settingId) && isSignedIn();
+      allow list: if isActiveStaff();
+      allow create: if isValidId(settingId) && isValidPlatformSettings(incoming(), settingId) && (
+        isAdmin() || (isBootstrapOwner() && settingId == 'global')
+      );
+      allow update: if isValidId(settingId) && isValidPlatformSettings(incoming(), settingId) &&
+        incoming().id == existing().id && (
+          isSuperAdmin() ||
+          (isAdmin() && incoming().superAdminBootstrapped == existing().superAdminBootstrapped)
+        );
+      allow delete: if false;
+    }
+
+    match /user_moderation/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isActiveStaff());
+      allow list: if isActiveStaff();
+      allow create, update: if isValidId(userId) && isAdmin() && isValidUserModeration(incoming(), userId) &&
+        incoming().updatedBy == request.auth.uid;
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // Existing Collection Rules
+    // -------------------------------------------------------------------------
 
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
@@ -614,14 +800,14 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/circles/$(incoming().circle_id))
         );
       allow update: if isValidId(capsuleId) && isSignedIn() && isValidCapsule(incoming(), capsuleId) && (
-        isAdmin() || (
+        isModerator() || (
           existing().auteur_id == request.auth.uid &&
           incoming().auteur_id == existing().auteur_id &&
           incoming().created_at == existing().created_at &&
           incoming().diff(existing()).affectedKeys().hasOnly(['contenu', 'langue_dorigine', 'type'])
         )
       );
-      allow delete: if isValidId(capsuleId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isAdmin());
+      allow delete: if isValidId(capsuleId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isModerator());
     }
 
     match /comments/{commentId} {
@@ -631,7 +817,7 @@ service cloud.firestore {
         incoming().auteur_id == request.auth.uid &&
         exists(/databases/$(database)/documents/capsules/$(incoming().capsule_id));
       allow update: if isValidId(commentId) && isSignedIn() && isValidComment(incoming(), commentId) && (
-        isAdmin() || (
+        isModerator() || (
           existing().auteur_id == request.auth.uid &&
           incoming().auteur_id == existing().auteur_id &&
           incoming().capsule_id == existing().capsule_id &&
@@ -639,7 +825,7 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasOnly(['contenu'])
         )
       );
-      allow delete: if isValidId(commentId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isAdmin());
+      allow delete: if isValidId(commentId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isModerator());
     }
 
     match /reactions/{reactionId} {
@@ -653,8 +839,8 @@ service cloud.firestore {
     }
 
     match /conversations/{convId} {
-      allow get: if isValidId(convId) && isSignedIn() && request.auth.uid in existing().participant_ids;
-      allow list: if isSignedIn() && request.auth.uid in existing().participant_ids;
+      allow get: if isValidId(convId) && isSignedIn() && (request.auth.uid in existing().participant_ids || isAdmin());
+      allow list: if isSignedIn() && (request.auth.uid in existing().participant_ids || isAdmin());
       allow create: if isValidId(convId) && isSignedIn() && isValidConversation(incoming(), convId) &&
         request.auth.uid in incoming().participant_ids &&
         (incoming().type == 'direct' || (incoming().admin_ids is list && request.auth.uid in incoming().admin_ids));
@@ -685,8 +871,8 @@ service cloud.firestore {
       allow delete: if isValidId(convId) && isAdmin();
 
       match /messages/{messageId} {
-        allow get: if isValidId(convId) && isValidId(messageId) && isSignedIn() && isConversationParticipant(convId);
-        allow list: if isValidId(convId) && isSignedIn() && isConversationParticipant(convId);
+        allow get: if isValidId(convId) && isValidId(messageId) && isSignedIn() && (isConversationParticipant(convId) || isAdmin());
+        allow list: if isValidId(convId) && isSignedIn() && (isConversationParticipant(convId) || isAdmin());
         allow create: if isValidId(convId) && isValidId(messageId) && isSignedIn() &&
           isValidMessage(incoming(), convId, messageId) &&
           incoming().sender_id == request.auth.uid &&
@@ -708,12 +894,13 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow get: if isValidId(reportId) && isSignedIn() && (existing().reporter_id == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().reporter_id == request.auth.uid || isAdmin());
+      allow get: if isValidId(reportId) && isSignedIn() && (existing().reporter_id == request.auth.uid || isModerator());
+      allow list: if isSignedIn() && (existing().reporter_id == request.auth.uid || isModerator());
       allow create: if isValidId(reportId) && isSignedIn() && isValidReport(incoming(), reportId) &&
         incoming().reporter_id == request.auth.uid &&
         incoming().status == 'en_attente';
-      allow update, delete: if isValidId(reportId) && isAdmin();
+      allow update: if isValidId(reportId) && isModerator() && isValidReport(incoming(), reportId);
+      allow delete: if isValidId(reportId) && isAdmin();
     }
 
     // -------------------------------------------------------------------------
@@ -822,14 +1009,14 @@ service cloud.firestore {
         (existing().status == 'published' && (isPublicFeed(existing().groupId) || isPublicGroup(existing().groupId) || isActiveGroupMember(existing().groupId))) ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'approvePosts') ||
-        isAdmin()
+        isModerator()
       );
       allow list: if isSignedIn() && (
         existing().authorId == request.auth.uid ||
         isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
-        isAdmin()
+        isModerator()
       );
       allow create: if isValidId(postId) && isSignedIn() && isValidGroupPost(incoming(), postId) &&
         incoming().authorId == request.auth.uid && (
@@ -866,7 +1053,7 @@ service cloud.firestore {
         incoming().groupId == existing().groupId &&
         incoming().authorId == existing().authorId &&
         incoming().createdAt == existing().createdAt && (
-          isAdmin() ||
+          isModerator() ||
           (
             existing().authorId == request.auth.uid &&
             (isActiveGroupMember(existing().groupId) || isPublicFeed(existing().groupId)) &&
@@ -886,7 +1073,7 @@ service cloud.firestore {
         existing().authorId == request.auth.uid ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'approvePosts') ||
-        isAdmin()
+        isModerator()
       );
     }
 
@@ -896,13 +1083,13 @@ service cloud.firestore {
         isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
-        isAdmin()
+        isModerator()
       );
       allow list: if isSignedIn() && (
         isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
-        isAdmin()
+        isModerator()
       );
       allow create: if isValidId(commentId) && isSignedIn() && isValidPostComment(incoming(), commentId) &&
         incoming().authorId == request.auth.uid &&
@@ -914,7 +1101,7 @@ service cloud.firestore {
         incoming().groupId == existing().groupId &&
         incoming().authorId == existing().authorId &&
         incoming().createdAt == existing().createdAt && (
-          isAdmin() ||
+          isModerator() ||
           (
             existing().authorId == request.auth.uid &&
             incoming().diff(existing()).affectedKeys().hasOnly(['content', 'mentions', 'isEdited', 'updatedAt'])
@@ -928,7 +1115,7 @@ service cloud.firestore {
         existing().authorId == request.auth.uid ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'manageComments') ||
-        isAdmin()
+        isModerator()
       );
     }
 
@@ -1064,20 +1251,20 @@ service cloud.firestore {
         existing().reporterId == request.auth.uid ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'manageReports') ||
-        isAdmin()
+        isModerator()
       );
       allow list: if isSignedIn() && (
         existing().reporterId == request.auth.uid ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'manageReports') ||
-        isAdmin()
+        isModerator()
       );
       allow create: if isValidId(reportId) && isSignedIn() && isValidGroupReport(incoming(), reportId) &&
         incoming().reporterId == request.auth.uid &&
         incoming().status == 'pending' &&
         (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId) || isPublicFeed(incoming().groupId));
       allow update: if isValidId(reportId) && isSignedIn() && isValidGroupReport(incoming(), reportId) && (
-        isAdmin() ||
+        isModerator() ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'manageReports')
       );

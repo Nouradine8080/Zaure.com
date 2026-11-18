@@ -73,6 +73,7 @@ import CommunityPostComposer from './components/communities/CommunityPostCompose
 import CommunityPostCard from './components/communities/CommunityPostCard';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { useTranslation } from './context/LanguageContext';
+import { AdminPortalRoot } from './admin/AdminPortalRoot';
 
 const AVATAR_PRESETS = [
   {
@@ -841,6 +842,17 @@ export default function App() {
     zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
     navigate('/', { replace: true });
   };
+
+  // 0. Independent Administration Console (/admin) — strictly isolated from user space
+  if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
+    return (
+      <Routes>
+        <Route path="/admin" element={<AdminPortalRoot />} />
+        <Route path="/admin/:moduleId" element={<AdminPortalRoot />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    );
+  }
 
   // 1. Initial Firebase Auth Resolution Splash
   if (isAuthResolving) {

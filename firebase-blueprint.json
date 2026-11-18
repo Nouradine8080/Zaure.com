@@ -411,6 +411,97 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "groupId", "targetType", "targetId", "targetPreview", "reporterId", "reporterName", "reason", "status", "createdAt"]
+    },
+    "AdminAccount": {
+      "title": "AdminAccount",
+      "description": "Administrative RBAC record assigning SUPER_ADMIN, ADMIN, or MODERATOR roles and module permissions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "MODERATOR"] },
+        "isActive": { "type": "boolean" },
+        "permissions": { "type": "object" },
+        "assignedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email", "displayName", "role", "isActive", "permissions", "assignedBy", "createdAt", "updatedAt"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "Immutable administrative audit log recording every moderation, RBAC, and configuration action.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actorEmail": { "type": "string", "maxLength": 200 },
+        "actorRole": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "MODERATOR"] },
+        "action": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "module": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "targetType": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "actorId", "actorName", "actorRole", "action", "module", "targetType", "targetId", "details", "createdAt"]
+    },
+    "PlatformNotification": {
+      "title": "PlatformNotification",
+      "description": "Platform-wide administrative notification or announcement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "priority": { "type": "string", "enum": ["info", "warning", "urgent"] },
+        "audience": { "type": "string", "enum": ["all", "mentors", "admins"] },
+        "isActive": { "type": "boolean" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdByName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "message", "priority", "audience", "isActive", "createdBy", "createdByName", "createdAt", "updatedAt"]
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Global platform configuration and security settings document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "platformName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "maintenanceMode": { "type": "boolean" },
+        "maintenanceMessage": { "type": "string", "maxLength": 500 },
+        "registrationOpen": { "type": "boolean" },
+        "requirePostModerationByDefault": { "type": "boolean" },
+        "maxUploadSizeMb": { "type": "integer" },
+        "forbiddenKeywords": { "type": "array" },
+        "driveRootFolderName": { "type": "string", "maxLength": 120 },
+        "superAdminBootstrapped": { "type": "boolean" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": [
+        "id", "platformName", "maintenanceMode", "maintenanceMessage", "registrationOpen",
+        "requirePostModerationByDefault", "maxUploadSizeMb", "forbiddenKeywords",
+        "driveRootFolderName", "superAdminBootstrapped", "updatedBy", "updatedAt"
+      ]
+    },
+    "UserModeration": {
+      "title": "UserModeration",
+      "description": "Administrative moderation status for a user account (active, warned, suspended).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["active", "warned", "suspended"] },
+        "reason": { "type": "string", "maxLength": 500 },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "status", "reason", "updatedBy", "updatedAt"]
     }
   },
   "firestore": {
@@ -456,7 +547,7 @@
     },
     "/reports/{reportId}": {
       "schema": { "$ref": "#/entities/UserReport" },
-      "description": "Moderation reports readable only by reporter or verified admin."
+      "description": "Moderation reports readable only by reporter or verified admin/moderator."
     },
     "/groups/{groupId}": {
       "schema": { "$ref": "#/entities/CommunityGroup" },
@@ -497,6 +588,26 @@
     "/group_reports/{reportId}": {
       "schema": { "$ref": "#/entities/GroupReport" },
       "description": "Moderation reports scoped to a community circle."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminAccount" },
+      "description": "Protected administrative staff RBAC registry (SUPER_ADMIN, ADMIN, MODERATOR)."
+    },
+    "/admin_audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminAuditLog" },
+      "description": "Immutable administrative audit logs."
+    },
+    "/platform_notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/PlatformNotification" },
+      "description": "Global platform announcements and administrative notifications."
+    },
+    "/platform_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PlatformSettings" },
+      "description": "Global platform configuration settings."
+    },
+    "/user_moderation/{userId}": {
+      "schema": { "$ref": "#/entities/UserModeration" },
+      "description": "Administrative moderation statuses (active, warned, suspended) per user."
     }
   }
 }

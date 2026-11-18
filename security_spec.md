@@ -1,24 +1,22 @@
-# Zaure Security Specification (Phase 0)
+# Zaure Admin & RBAC Security Specification (Phase 0)
 
-## 1. Data Invariants (Row-Level Security & Server-Side Validation)
-1. **Default Deny**: Any unmatched path is denied (`allow read, write: if false`).
-2. **PII Isolation**: Private accounts (`/users/{userId}`) and settings (`/user_settings/{userId}`) containing `email`, `phone`, and `utilisateurs_bloques` are readable and writable ONLY by the owning UID (`request.auth.uid == userId`) or a verified admin. Non-PII public member metadata lives in `/public_profiles/{userId}`.
-3. **Identity Integrity**: On creation of `capsules`, `comments`, `reactions`, `circle_members`, `reports`, and `messages`, the author/sender/user UID field MUST equal `request.auth.uid`.
-4. **Immutable Ownership & Anti-Escalation**: Users cannot reassign `auteur_id`, `sender_id`, `reporter_id`, `user_id`, or `created_at` on update, nor promote themselves to `'mentor'`/`'verifie'` after account creation (`role` is immutable by non-admins).
-5. **Relational Integrity**: Comments and reactions can only be created for an existing `/capsules/{capsuleId}`. Circle memberships can only reference an existing `/circles/{circleId}`.
-6. **Conversation Master Gate**: A user can ONLY read, list, update, or send/read messages inside `/conversations/{convId}` if `request.auth.uid in conversation.participant_ids`.
-7. **Strict Schema & Size Guards**: Every document enforces required keys, strict allowed key allowlists (`hasOnly` / `affectedKeys().hasOnly(...)`), data types, enum values, ID regex `^[a-zA-Z0-9_\\-]+$`, and bounded string/list lengths.
+## 1. Data Invariants
+1. **Default Least Privilege (`USER`)**: Every authenticated user has no `/admins/{uid}` record by default and can only mutate their own user profile with `role in ['utilisateur', 'mentor', 'verifie']` unchanged on self-updates.
+2. **Non-Self-Elevation**: No user (`USER`, `MODERATOR`, `ADMIN`) can create or modify their own `/admins/{uid}` record to acquire or upgrade a role (`SUPER_ADMIN`, `ADMIN`, `MODERATOR`). Only the verified bootstrap owner (`email == 'mahamadougarbamoussa8080@gmail.com' && email_verified == true`) can initialize their initial `SUPER_ADMIN` record, or an existing active `SUPER_ADMIN` can assign/update other staff accounts.
+3. **Immutable Audit Trail**: Every document in `/admin_audit_logs/{logId}` must carry `actorId == request.auth.uid`, must be created by active administrative staff (`isActiveStaff()`), and cannot be updated or deleted by anyone (including `SUPER_ADMIN`).
+4. **Tiered PII & Configuration Protection**: Only `SUPER_ADMIN` and `ADMIN` (via `isAdmin()`) can read `/users` PII lists, modify `/user_moderation`, or update `/platform_settings`. `MODERATOR` can moderate public content (`group_posts`, `capsules`, `post_comments`, `comments`, `reports`, `group_reports`) and write `/admin_audit_logs`, without accessing private PII or managing admins.
+5. **Path & Size Bounds**: Every document ID matches `^[a-zA-Z0-9_\-]+$` (`1..128`), and every payload strictly validates required keys (`hasAll`) and allowed keys (`hasOnly`).
 
-## 2. Adversarial "Dirty Dozen" Payloads (Must All Return PERMISSION_DENIED)
-1. **Unauthenticated Read of Private Messages**: `GET /conversations/c1/messages/m1` with `auth == null`.
-2. **Cross-User PII Read**: `GET /users/victimUid` as `attackerUid`.
-3. **Cross-User Settings Tampering**: `UPDATE /user_settings/victimUid` with `{ utilisateurs_bloques: [] }` as `attackerUid`.
-4. **Capsule Identity Spoofing**: `CREATE /capsules/cap1` with `{ auteur_id: "victimUid", ... }` as `attackerUid`.
-5. **Shadow / Ghost Field Injection**: `CREATE /public_profiles/attackerUid` with extra `{ isAdmin: true }`.
-6. **Self-Privilege Escalation on Update**: `UPDATE /public_profiles/attackerUid` changing `role` from `"utilisateur"` to `"mentor"`.
-7. **Orphan Comment Injection**: `CREATE /comments/com1` referencing non-existent `capsule_id: "nonexistent"`.
-8. **Eavesdropping Conversation List**: `LIST /conversations` without `participant_ids array-contains request.auth.uid` or reading another user's conversation.
-9. **Unauthorized Message Edit**: `UPDATE /conversations/c1/messages/m1` changing `content` as a non-sender participant.
-10. **Moderation Report Snooping**: `GET /reports/rep1` as a regular user who is neither the reporter nor admin.
-11. **Report Status Tampering**: `CREATE /reports/rep1` with `{ status: "traite" }` instead of `"en_attente"`.
-12. **ID Poisoning / Payload Flooding**: `CREATE /capsules/<200-char-junk>` or `contenu` exceeding maximum byte/character limit.
+## 2. The "Dirty Dozen" Payloads (All Must Return PERMISSION_DENIED)
+1. **Self-assign SUPER_ADMIN**: Standard user calls `setDoc(doc(db, 'admins', uid), { id: uid, role: 'SUPER_ADMIN', isActive: true, ... })` -> `PERMISSION_DENIED`.
+2. **Moderator promotes self to ADMIN**: `MODERATOR` calls `updateDoc(doc(db, 'admins', modUid), { role: 'ADMIN' })` -> `PERMISSION_DENIED`.
+3. **Admin promotes self to SUPER_ADMIN**: `ADMIN` calls `updateDoc(doc(db, 'admins', adminUid), { role: 'SUPER_ADMIN' })` -> `PERMISSION_DENIED`.
+4. **Admin creates another SUPER_ADMIN**: `ADMIN` calls `setDoc(doc(db, 'admins', targetUid), { role: 'SUPER_ADMIN', ... })` -> `PERMISSION_DENIED`.
+5. **Unverified admin email spoof**: User creates account with `email == 'mahamadougarbamoussa8080@gmail.com'` with `email_verified: false` -> `PERMISSION_DENIED`.
+6. **Regular user updates user profile role/shadow field**: `USER` sends `{ role: 'SUPER_ADMIN', isAdmin: true }` on `/users/{uid}` -> `PERMISSION_DENIED`.
+7. **Forged audit log actorId**: Active staff creates `/admin_audit_logs/{id}` with `actorId != request.auth.uid` -> `PERMISSION_DENIED`.
+8. **Tamper audit log**: `SUPER_ADMIN` attempts `updateDoc` or `deleteDoc` on `/admin_audit_logs/{id}` -> `PERMISSION_DENIED`.
+9. **Moderator reads `/users` PII collection**: `MODERATOR` runs `getDocs(collection(db, 'users'))` -> `PERMISSION_DENIED`.
+10. **Moderator updates `/platform_settings/global`**: `MODERATOR` attempts `setDoc(doc(db, 'platform_settings', 'global'), { maintenanceMode: true })` -> `PERMISSION_DENIED`.
+11. **User writes `/platform_notifications/{id}`**: Regular user creates global broadcast notification -> `PERMISSION_DENIED`.
+12. **ID Poisoning / Ghost Fields on `/user_moderation/{id}`**: Admin writes 2KB document ID or undeclared field `ghostFlag: true` -> `PERMISSION_DENIED`.
