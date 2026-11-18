@@ -1,103 +1,47 @@
-import React, { useState, useRef } from 'react';
-import { 
-  User, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  Sparkles, 
-  Check, 
-  ArrowRight, 
-  ArrowLeft, 
-  Stethoscope, 
-  GraduationCap, 
-  Lightbulb, 
-  Microscope, 
-  CheckCircle2, 
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  Mail,
+  Eye,
+  EyeOff,
+  Sparkles,
+  CheckCircle2,
   AlertCircle,
   KeyRound,
-  Camera
 } from 'lucide-react';
 import { zaureService } from '../firebaseClient';
 import { Circle, UserProfile } from '../types';
-import { compressImageFile } from '../utils/imageCompressor';
+import { REGISTRATION_ROUTES } from '../constants/registration';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface AuthPortalProps {
   onAuthSuccess: (user: UserProfile) => void;
-  circles: Circle[];
+  circles?: Circle[];
+  initialEmail?: string;
 }
 
-const AVATAR_PRESETS = [
-  {
-    id: 'med-student-1',
-    label: 'Étudiant Santé',
-    url: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'med-student-2',
-    label: 'Étudiante Santé',
-    url: 'https://images.unsplash.com/photo-1594824813589-9800e84b2e15?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'scholar-1',
-    label: 'Apprenant Universitaire',
-    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'mentor-1',
-    label: 'Mentor & Enseignant',
-    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'practitioner-1',
-    label: 'Praticienne Spécialiste',
-    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'tech-1',
-    label: 'Innovateur Digital',
-    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200'
-  }
-];
+export default function AuthPortal({
+  onAuthSuccess,
+  initialEmail = '',
+}: AuthPortalProps) {
+  const location = useLocation();
+  const routePrefilledEmail =
+    (location.state as { prefilledEmail?: string } | null)?.prefilledEmail || initialEmail;
 
-export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) {
-  // Mode: 'login' | 'register' | 'forgot_password'
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password'>('login');
-  
-  // Registration step (1 to 3)
-  const [signupStep, setSignupStep] = useState<number>(1);
-  
+  // Mode: 'login' | 'forgot_password'
+  const [authMode, setAuthMode] = useState<'login' | 'forgot_password'>('login');
+
   // Form fields
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(routePrefilledEmail);
   const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [nom, setNom] = useState('');
-  const [bio, setBio] = useState('');
-  const [role, setRole] = useState<'utilisateur' | 'mentor' | 'verifie'>('utilisateur');
-  const [specialty, setSpecialty] = useState<'medecine' | 'mentor' | 'etudiant' | 'chercheur'>('medecine');
-  const [langue, setLangue] = useState<'fr' | 'ha' | 'en'>('fr');
-  const [avatarUrl, setAvatarUrl] = useState<string>(AVATAR_PRESETS[0].url);
-  const [selectedCircleIds, setSelectedCircleIds] = useState<string[]>([]);
-  
-  const regAvatarFileInputRef = useRef<HTMLInputElement>(null);
-  const [isCompressingRegAvatar, setIsCompressingRegAvatar] = useState(false);
 
-  const handleRegAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsCompressingRegAvatar(true);
-      const dataUrl = await compressImageFile(file, 250, 250, 0.8);
-      setAvatarUrl(dataUrl);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors du traitement de la photo.');
-    } finally {
-      setIsCompressingRegAvatar(false);
-      if (regAvatarFileInputRef.current) regAvatarFileInputRef.current.value = '';
+  useEffect(() => {
+    if (routePrefilledEmail) {
+      setEmail(routePrefilledEmail);
+      setAuthMode('login');
+      setAuthMethod('email');
     }
-  };
+  }, [routePrefilledEmail]);
 
   // UI states
   const [showPassword, setShowPassword] = useState(false);
@@ -159,11 +103,11 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
     setIsLoading(true);
     try {
       const { user, error } = await zaureService.confirmPhoneCode(confirmationResult, smsCode.trim(), {
-        nom: nom.trim() || 'Membre Zaure',
-        role,
-        bio: bio.trim() || 'Inscrit par téléphone sur Zaure',
-        langue,
-        avatarUrl
+        nom: 'Membre Zaure',
+        role: 'utilisateur',
+        bio: 'Inscrit par téléphone sur Zaure',
+        langue: 'fr',
+        avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=200'
       });
       if (error) {
         setErrorMessage(error);
@@ -183,85 +127,6 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
     setShowPassword(false);
     setConfirmationResult(null);
     setSmsCode('');
-  };
-
-  const handleSpecialtySelect = (spec: 'medecine' | 'mentor' | 'etudiant' | 'chercheur') => {
-    setSpecialty(spec);
-    if (spec === 'medecine') {
-      setRole('verifie');
-      if (!bio || bio.startsWith('Étudiant') || bio.startsWith('Mentor') || bio.startsWith('Chercheur') || bio.startsWith('Membre') || bio.startsWith('Apprenant')) {
-        setBio('Étudiant en médecine passionné par la clinique, la pharmacologie et l\'entraide médicale.');
-      }
-    } else if (spec === 'mentor') {
-      setRole('mentor');
-      if (!bio || bio.startsWith('Étudiant') || bio.startsWith('Mentor') || bio.startsWith('Chercheur') || bio.startsWith('Membre') || bio.startsWith('Apprenant')) {
-        setBio('Enseignant & mentor guidant les apprenants dans l\'assimilation des concepts clés.');
-      }
-    } else if (spec === 'chercheur') {
-      setRole('verifie');
-      if (!bio || bio.startsWith('Étudiant') || bio.startsWith('Mentor') || bio.startsWith('Chercheur') || bio.startsWith('Membre') || bio.startsWith('Apprenant')) {
-        setBio('Chercheur et praticien partageant les avancées scientifiques et méthodologies.');
-      }
-    } else {
-      setRole('utilisateur');
-      if (!bio || bio.startsWith('Étudiant') || bio.startsWith('Mentor') || bio.startsWith('Chercheur') || bio.startsWith('Membre') || bio.startsWith('Apprenant')) {
-        setBio('Apprenant curieux explorant les savoirs et participant aux cercles thématiques.');
-      }
-    }
-  };
-
-  const toggleCircleSelect = (circleId: string) => {
-    setSelectedCircleIds(prev => 
-      prev.includes(circleId) ? prev.filter(id => id !== circleId) : [...prev, circleId]
-    );
-  };
-
-  // Step validation
-  const handleNextStep = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setErrorMessage(null);
-
-    if (signupStep === 1) {
-      if (!nom.trim()) {
-        setErrorMessage('Veuillez renseigner votre nom complet.');
-        return;
-      }
-      if (!email.trim() || !email.includes('@')) {
-        setErrorMessage('Veuillez saisir une adresse email valide.');
-        return;
-      }
-      if (!password || password.length < 6) {
-        setErrorMessage('Le mot de passe doit comporter au moins 6 caractères.');
-        return;
-      }
-      if (!phoneNumber.trim() || !phoneNumber.startsWith('+')) {
-        setErrorMessage('Veuillez entrer un numéro de téléphone valide au format international (+227..., +225..., +223..., +221..., +226...).');
-        return;
-      }
-      if (passwordConfirm && password !== passwordConfirm) {
-        setErrorMessage('Les deux mots de passe ne correspondent pas.');
-        return;
-      }
-      setSignupStep(2);
-    } else if (signupStep === 2) {
-      if (!bio.trim()) {
-        handleSpecialtySelect(specialty);
-      }
-      // Auto-select medical circles if list empty
-      if (selectedCircleIds.length === 0 && circles.length > 0) {
-        const medCircles = circles.filter(c => 
-          c.categorie === 'Médecine' || 
-          c.nom.toLowerCase().includes('santé') || 
-          c.nom.toLowerCase().includes('méd')
-        );
-        if (medCircles.length > 0) {
-          setSelectedCircleIds(medCircles.map(c => c.id));
-        } else {
-          setSelectedCircleIds(circles.slice(0, 2).map(c => c.id));
-        }
-      }
-      setSignupStep(3);
-    }
   };
 
   // Login Submit
@@ -289,57 +154,6 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Erreur lors de la connexion.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Register Submit (Final step)
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (signupStep < 3) {
-      handleNextStep();
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const finalBio = bio.trim() || (
-        specialty === 'medecine' 
-          ? 'Étudiant en médecine passionné par la clinique et l\'entraide médicale.' 
-          : 'Membre actif sur Zaure.'
-      );
-
-      const { user, error } = await zaureService.signUp(
-        nom.trim(),
-        email.trim(),
-        finalBio,
-        role,
-        langue,
-        password,
-        avatarUrl,
-        phoneNumber.trim()
-      );
-
-      if (error) {
-        setErrorMessage(error);
-        setIsLoading(false);
-        return;
-      }
-
-      if (user) {
-        // Auto-join chosen circles
-        if (selectedCircleIds.length > 0) {
-          for (const cId of selectedCircleIds) {
-            await zaureService.joinCircle(cId, user.id);
-          }
-        }
-        onAuthSuccess(user);
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de la création de votre compte.');
     } finally {
       setIsLoading(false);
     }
@@ -605,492 +419,22 @@ export default function AuthPortal({ onAuthSuccess, circles }: AuthPortalProps) 
                   <span>Continuer avec Google</span>
                 </button>
 
-                {/* Create Account High-Impact Button (Facebook green/crimson style) */}
+                {/* Create Account High-Impact Link to Page 1 (/inscription/identite) */}
                 <div className="pt-2 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetFormState();
-                      setSignupStep(1);
-                      setAuthMode('register');
-                    }}
+                  <Link
+                    to={REGISTRATION_ROUTES.IDENTITE}
+                    onClick={() => resetFormState()}
                     className="w-full sm:w-auto px-6 py-3 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-extrabold text-sm rounded-xl transition shadow-sm inline-flex items-center justify-center gap-2"
                   >
                     <Sparkles className="w-4 h-4 text-amber-200" />
                     <span>Créer un nouveau compte</span>
-                  </button>
+                  </Link>
                 </div>
               </>
             )}
 
             {/* ======================================================== */}
-            {/* VUE 2 : CRÉATION DE COMPTE À ÉTAPES                     */}
-            {/* ======================================================== */}
-            {authMode === 'register' && (
-              <form onSubmit={handleRegisterSubmit} className="space-y-4">
-                
-                {/* Stepper Header */}
-                <div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div>
-                      <h3 className="font-extrabold text-slate-900 text-base">S'inscrire sur Zaure</h3>
-                      <p className="text-xs text-slate-500">C'est rapide, gratuit et ouvert à tous.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetFormState();
-                        setAuthMode('login');
-                      }}
-                      className="text-xs font-bold text-slate-400 hover:text-slate-600"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-
-                  {/* Stepper Indicators */}
-                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mt-3 px-1">
-                    <span className={signupStep === 1 ? 'text-blue-700 font-black' : signupStep > 1 ? 'text-emerald-600' : 'text-slate-400'}>
-                      1. Identité
-                    </span>
-                    <span className="text-slate-300">›</span>
-                    <span className={signupStep === 2 ? 'text-blue-700 font-black' : signupStep > 2 ? 'text-emerald-600' : 'text-slate-400'}>
-                      2. Vocation
-                    </span>
-                    <span className="text-slate-300">›</span>
-                    <span className={signupStep === 3 ? 'text-blue-700 font-black' : 'text-slate-400'}>
-                      3. Cercles & Avatar
-                    </span>
-                  </div>
-
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1.5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-blue-600 to-red-600 transition-all duration-300 rounded-full"
-                      style={{ width: signupStep === 1 ? '33.3%' : signupStep === 2 ? '66.6%' : '100%' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Étape 1 : Identité */}
-                {signupStep === 1 && (
-                  <div className="space-y-3 animate-fadeIn">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Nom et Prénom <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Ex: Mahamadou Garba"
-                          required
-                          value={nom}
-                          onChange={(e) => setNom(e.target.value)}
-                          className="w-full text-xs pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Adresse e-mail <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                          <Mail className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="email"
-                          placeholder="Ex: mahamadou@zaure.org"
-                          required
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full text-xs pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Numéro de téléphone (SMS - Niger, CI, Mali, Sénégal, Burkina) <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex flex-wrap gap-1 mb-1.5">
-                        {[
-                          { code: '+227', label: '🇳🇪 NE' },
-                          { code: '+225', label: '🇨🇮 CI' },
-                          { code: '+223', label: '🇲🇱 ML' },
-                          { code: '+221', label: '🇸🇳 SN' },
-                          { code: '+226', label: '🇧🇫 BF' },
-                        ].map((c) => (
-                          <button
-                            key={c.code}
-                            type="button"
-                            onClick={() => {
-                              const clean = phoneNumber.replace(/^\+\d+/, '').trim();
-                              setPhoneNumber(c.code + (clean ? clean : ''));
-                            }}
-                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${
-                              phoneNumber.startsWith(c.code)
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                            }`}
-                          >
-                            {c.label} ({c.code})
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        type="tel"
-                        placeholder="+227 90 12 34 56"
-                        required
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          Mot de passe <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            placeholder="Min. 6 car."
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full text-xs pl-3.5 pr-8 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600"
-                          >
-                            {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          Confirmation
-                        </label>
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Répétez"
-                          value={passwordConfirm}
-                          onChange={(e) => setPasswordConfirm(e.target.value)}
-                          className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleNextStep()}
-                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-2"
-                      >
-                        <span>Continuer vers l'étape 2 (Profil & Vocation)</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Étape 2 : Vocation & Profil */}
-                {signupStep === 2 && (
-                  <div className="space-y-3 animate-fadeIn">
-                    <label className="block text-[11px] font-bold text-slate-700">
-                      Sélectionnez votre profil :
-                    </label>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('medecine')}
-                        className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
-                          specialty === 'medecine'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <Stethoscope className={`w-4 h-4 mt-0.5 ${specialty === 'medecine' ? 'text-blue-600' : 'text-slate-400'}`} />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Étudiant Santé</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Médecine & Soins</p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('mentor')}
-                        className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
-                          specialty === 'mentor'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <GraduationCap className={`w-4 h-4 mt-0.5 ${specialty === 'mentor' ? 'text-blue-600' : 'text-slate-400'}`} />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Enseignant</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Mentor & Cours</p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('etudiant')}
-                        className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
-                          specialty === 'etudiant'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <Lightbulb className={`w-4 h-4 mt-0.5 ${specialty === 'etudiant' ? 'text-blue-600' : 'text-slate-400'}`} />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Apprenant</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Savoirs généraux</p>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('chercheur')}
-                        className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 ${
-                          specialty === 'chercheur'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <Microscope className={`w-4 h-4 mt-0.5 ${specialty === 'chercheur' ? 'text-blue-600' : 'text-slate-400'}`} />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 leading-tight">Chercheur</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Articles & Veille</p>
-                        </div>
-                      </button>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-[11px] font-bold text-slate-700">Votre biographie</label>
-                        <button
-                          type="button"
-                          onClick={() => setBio("Étudiant en médecine passionné par la clinique, la cardiologie et l'accès universel au savoir.")}
-                          className="text-[10px] font-bold text-blue-700 hover:underline"
-                        >
-                          + Modèle médical
-                        </button>
-                      </div>
-                      <textarea
-                        rows={2}
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        placeholder="Ex: Étudiant en médecine, Dakar..."
-                        className="w-full text-xs px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Langue préférée</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setLangue('fr')}
-                          className={`py-1.5 rounded-lg border text-xs font-bold transition ${
-                            langue === 'fr' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          🇫🇷 Français
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLangue('ha')}
-                          className={`py-1.5 rounded-lg border text-xs font-bold transition ${
-                            langue === 'ha' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          🌍 Hausa
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLangue('en')}
-                          className={`py-1.5 rounded-lg border text-xs font-bold transition ${
-                            langue === 'en' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          🇬🇧 English
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setSignupStep(1)}
-                        className="px-3.5 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-bold transition"
-                      >
-                        ← Retour
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleNextStep()}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5"
-                      >
-                        <span>Étape 3 (Cercles)</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Étape 3 : Avatar & Cercles */}
-                {signupStep === 3 && (
-                  <div className="space-y-3 animate-fadeIn">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Photo de profil / Avatar
-                      </label>
-
-                      <input
-                        ref={regAvatarFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleRegAvatarFileChange}
-                        className="hidden"
-                      />
-
-                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 mb-2 flex items-center gap-3">
-                        <img
-                          src={avatarUrl}
-                          alt="Aperçu avatar"
-                          className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-600 shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => regAvatarFileInputRef.current?.click()}
-                            disabled={isCompressingRegAvatar}
-                            className="w-full px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-                          >
-                            <Camera className="w-3.5 h-3.5 text-blue-600" />
-                            <span>
-                              {isCompressingRegAvatar ? 'Traitement photo...' : '📸 Importez votre photo (Galerie)'}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Ou choisir un modèle :</span>
-                      </div>
-                      <div className="grid grid-cols-6 gap-1.5">
-                        {AVATAR_PRESETS.map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => setAvatarUrl(preset.url)}
-                            className={`relative rounded-xl overflow-hidden aspect-square border-2 transition ${
-                              avatarUrl === preset.url
-                                ? 'border-blue-600 ring-2 ring-blue-500/40 scale-105'
-                                : 'border-transparent opacity-75 hover:opacity-100'
-                            }`}
-                          >
-                            <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
-                            {avatarUrl === preset.url && (
-                              <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                                <Check className="w-3 h-3 text-white" />
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Rejoindre vos premiers cercles :
-                      </label>
-                      <div className="grid grid-cols-1 gap-1.5 max-h-32 overflow-y-auto pr-1">
-                        {circles.map((c) => {
-                          const isSelected = selectedCircleIds.includes(c.id);
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => toggleCircleSelect(c.id)}
-                              className={`p-2 rounded-xl border text-left transition flex items-center justify-between text-xs ${
-                                isSelected 
-                                  ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-bold' 
-                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <img src={c.image} alt={c.nom} className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
-                                <span className="truncate">{c.nom}</span>
-                              </div>
-                              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                                isSelected ? 'bg-blue-600 text-white' : 'border border-slate-300 text-transparent'
-                              }`}>
-                                ✓
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setSignupStep(2)}
-                        className="px-3.5 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-bold transition"
-                      >
-                        ← Retour
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {isLoading ? (
-                          <span className="flex items-center gap-2">
-                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                            Création...
-                          </span>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                            <span>Finaliser mon inscription</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Back to Login link */}
-                <div className="text-center pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetFormState();
-                      setAuthMode('login');
-                    }}
-                    className="text-xs text-blue-700 hover:underline font-bold"
-                  >
-                    Vous avez déjà un compte ? Se connecter
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ======================================================== */}
-            {/* VUE 3 : MOT DE PASSE OUBLIÉ                             */}
+            {/* VUE 2 : MOT DE PASSE OUBLIÉ                             */}
             {/* ======================================================== */}
             {authMode === 'forgot_password' && (
               <form onSubmit={handlePasswordResetSubmit} className="space-y-4 animate-fadeIn">

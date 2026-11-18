@@ -229,21 +229,24 @@ export default function CommunitiesHub({
       .slice(0, 6);
   }, [unjoinedCircles, groups, membershipByGroupId, currentUser.role]);
 
-  const popularCircles = useMemo(
-    () =>
-      [...filteredGroups]
-        .sort((a, b) => b.memberCount + b.postCount - (a.memberCount + a.postCount))
-        .slice(0, 6),
-    [filteredGroups]
-  );
+  const popularCircles = useMemo(() => {
+    const shownIds = new Set(recommendedCircles.map((g) => g.id));
+    return [...unjoinedCircles]
+      .filter((g) => !shownIds.has(g.id))
+      .sort((a, b) => b.memberCount + b.postCount - (a.memberCount + a.postCount))
+      .slice(0, 6);
+  }, [unjoinedCircles, recommendedCircles]);
 
-  const newCircles = useMemo(
-    () =>
-      [...filteredGroups]
-        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-        .slice(0, 6),
-    [filteredGroups]
-  );
+  const newCircles = useMemo(() => {
+    const shownIds = new Set([
+      ...recommendedCircles.map((g) => g.id),
+      ...popularCircles.map((g) => g.id)
+    ]);
+    return [...unjoinedCircles]
+      .filter((g) => !shownIds.has(g.id))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .slice(0, 6);
+  }, [unjoinedCircles, recommendedCircles, popularCircles]);
 
   const handleQuickJoin = async (group: CommunityGroup) => {
     try {
@@ -807,7 +810,7 @@ export default function CommunitiesHub({
 
             {popularCircles.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-3xl p-5 text-xs text-slate-500">
-                Aucun cercle trouvé.
+                Aucun autre cercle populaire à afficher pour le moment.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -827,7 +830,7 @@ export default function CommunitiesHub({
 
             {newCircles.length === 0 ? (
               <div className="bg-white border border-slate-200/80 rounded-3xl p-5 text-xs text-slate-500">
-                Aucun nouveau cercle pour le moment.
+                Aucun autre nouveau cercle à afficher pour le moment.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

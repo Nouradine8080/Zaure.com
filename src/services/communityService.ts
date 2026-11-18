@@ -55,6 +55,26 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+export const PUBLIC_FEED_GROUP: CommunityGroup = {
+  id: 'public',
+  name: 'Fil public',
+  description: 'Publications libres partagées avec toute la communauté hors cercle.',
+  category: 'Général',
+  coverPhoto: '',
+  avatarPhoto: '',
+  privacy: 'public',
+  postPermission: 'all_members',
+  requirePostApproval: false,
+  requireMemberApproval: false,
+  allowAnonymousPosts: false,
+  rules: [],
+  createdBy: 'system',
+  createdAt: '',
+  updatedAt: '',
+  memberCount: 0,
+  postCount: 0
+};
+
 export const communityService = {
   // ---------------------------------------------------------------------------
   // 1. STORAGE MEDIA UPLOAD FOR COMMUNITY POSTS, COVERS, AVATARS & DOCUMENTS
@@ -140,10 +160,12 @@ export const communityService = {
     return onSnapshot(
       collection(dbFirestore, 'groups'),
       (snap) => {
-        const list: CommunityGroup[] = [];
+        const byId = new Map<string, CommunityGroup>();
         snap.forEach((d) => {
-          list.push(d.data() as CommunityGroup);
+          const item = d.data() as CommunityGroup;
+          if (item?.id) byId.set(item.id, item);
         });
+        const list = Array.from(byId.values());
         list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         onData(list);
       },
@@ -569,13 +591,17 @@ export const communityService = {
     };
 
     try {
-      const batch = writeBatch(dbFirestore);
-      batch.set(doc(dbFirestore, 'group_posts', postId), post);
-      batch.update(doc(dbFirestore, 'groups', group.id), {
-        postCount: increment(1),
-        updatedAt: ts
-      });
-      await batch.commit();
+      if (group.id === 'public') {
+        await setDoc(doc(dbFirestore, 'group_posts', postId), post);
+      } else {
+        const batch = writeBatch(dbFirestore);
+        batch.set(doc(dbFirestore, 'group_posts', postId), post);
+        batch.update(doc(dbFirestore, 'groups', group.id), {
+          postCount: increment(1),
+          updatedAt: ts
+        });
+        await batch.commit();
+      }
       return post;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `group_posts/${postId}`);
@@ -669,13 +695,17 @@ export const communityService = {
   deleteGroupPost: async (postId: string, groupId: string): Promise<void> => {
     if (!dbFirestore || !auth?.currentUser) throw new Error('Non connecté.');
     try {
-      const batch = writeBatch(dbFirestore);
-      batch.delete(doc(dbFirestore, 'group_posts', postId));
-      batch.update(doc(dbFirestore, 'groups', groupId), {
-        postCount: increment(-1),
-        updatedAt: nowIso()
-      });
-      await batch.commit();
+      if (groupId === 'public') {
+        await deleteDoc(doc(dbFirestore, 'group_posts', postId));
+      } else {
+        const batch = writeBatch(dbFirestore);
+        batch.delete(doc(dbFirestore, 'group_posts', postId));
+        batch.update(doc(dbFirestore, 'groups', groupId), {
+          postCount: increment(-1),
+          updatedAt: nowIso()
+        });
+        await batch.commit();
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `group_posts/${postId}`);
     }

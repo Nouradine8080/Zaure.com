@@ -100,6 +100,10 @@ service cloud.firestore {
         getGroupDoc(groupId).data.privacy == 'public';
     }
 
+    function isPublicFeed(groupId) {
+      return groupId == 'public';
+    }
+
     // -------------------------------------------------------------------------
     // Validation Blueprints (Server-Side Schema & Bounds Enforcement)
     // -------------------------------------------------------------------------
@@ -578,7 +582,7 @@ service cloud.firestore {
     match /circles/{circleId} {
       allow get: if isValidId(circleId);
       allow list: if existing().nom is string;
-      allow create: if isValidId(circleId) && isSignedIn() && isValidCircle(incoming(), circleId) && (
+      allow create: if isValidId(circleId) && circleId != 'public' && isSignedIn() && isValidCircle(incoming(), circleId) && (
         !( 'created_by' in incoming() ) || incoming().created_by == request.auth.uid
       );
       allow update: if isValidId(circleId) && isSignedIn() && isValidCircle(incoming(), circleId) && (
@@ -605,7 +609,10 @@ service cloud.firestore {
       allow list: if isSignedIn() && existing().auteur_id is string;
       allow create: if isValidId(capsuleId) && isSignedIn() && isValidCapsule(incoming(), capsuleId) &&
         incoming().auteur_id == request.auth.uid &&
-        exists(/databases/$(database)/documents/circles/$(incoming().circle_id));
+        (
+          incoming().circle_id == 'public' ||
+          exists(/databases/$(database)/documents/circles/$(incoming().circle_id))
+        );
       allow update: if isValidId(capsuleId) && isSignedIn() && isValidCapsule(incoming(), capsuleId) && (
         isAdmin() || (
           existing().auteur_id == request.auth.uid &&
@@ -717,7 +724,7 @@ service cloud.firestore {
     match /groups/{groupId} {
       allow get: if isValidId(groupId) && isSignedIn() && (existing().privacy == 'public' || isActiveGroupMember(groupId) || isAdmin());
       allow list: if isSignedIn() && existing().name is string;
-      allow create: if isValidId(groupId) && isSignedIn() && isValidCommunityGroup(incoming(), groupId) &&
+      allow create: if isValidId(groupId) && groupId != 'public' && isSignedIn() && isValidCommunityGroup(incoming(), groupId) &&
         incoming().createdBy == request.auth.uid &&
         incoming().memberCount == 1 &&
         incoming().postCount == 0;
@@ -812,34 +819,47 @@ service cloud.firestore {
     match /group_posts/{postId} {
       allow get: if isValidId(postId) && isSignedIn() && (
         existing().authorId == request.auth.uid ||
-        (existing().status == 'published' && (isPublicGroup(existing().groupId) || isActiveGroupMember(existing().groupId))) ||
+        (existing().status == 'published' && (isPublicFeed(existing().groupId) || isPublicGroup(existing().groupId) || isActiveGroupMember(existing().groupId))) ||
         isGroupAdmin(existing().groupId) ||
         isGroupModeratorWith(existing().groupId, 'approvePosts') ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
         existing().authorId == request.auth.uid ||
+        isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
         isAdmin()
       );
       allow create: if isValidId(postId) && isSignedIn() && isValidGroupPost(incoming(), postId) &&
-        incoming().authorId == request.auth.uid &&
-        isActiveGroupMember(incoming().groupId) &&
-        (
-          getGroupDoc(incoming().groupId).data.postPermission == 'all_members' ||
-          isGroupAdmin(incoming().groupId) ||
-          isGroupModerator(incoming().groupId)
-        ) &&
-        (
-          incoming().isAnonymous == false ||
-          getGroupDoc(incoming().groupId).data.allowAnonymousPosts == true
-        ) &&
-        (
-          getGroupDoc(incoming().groupId).data.requirePostApproval == false ||
-          isGroupAdmin(incoming().groupId) ||
-          isGroupModerator(incoming().groupId) ||
-          incoming().status == 'pending'
+        incoming().authorId == request.auth.uid && (
+          (
+            isPublicFeed(incoming().groupId) &&
+            incoming().isAnonymous == false &&
+            incoming().isPinned == false &&
+            incoming().status in ['published', 'scheduled'] &&
+            incoming().reactionCount == 0 &&
+            incoming().commentCount == 0 &&
+            incoming().shareCount == 0
+          ) ||
+          (
+            isActiveGroupMember(incoming().groupId) &&
+            (
+              getGroupDoc(incoming().groupId).data.postPermission == 'all_members' ||
+              isGroupAdmin(incoming().groupId) ||
+              isGroupModerator(incoming().groupId)
+            ) &&
+            (
+              incoming().isAnonymous == false ||
+              getGroupDoc(incoming().groupId).data.allowAnonymousPosts == true
+            ) &&
+            (
+              getGroupDoc(incoming().groupId).data.requirePostApproval == false ||
+              isGroupAdmin(incoming().groupId) ||
+              isGroupModerator(incoming().groupId) ||
+              incoming().status == 'pending'
+            )
+          )
         );
       allow update: if isValidId(postId) && isSignedIn() && isValidGroupPost(incoming(), postId) &&
         incoming().id == existing().id &&
@@ -849,7 +869,7 @@ service cloud.firestore {
           isAdmin() ||
           (
             existing().authorId == request.auth.uid &&
-            isActiveGroupMember(existing().groupId) &&
+            (isActiveGroupMember(existing().groupId) || isPublicFeed(existing().groupId)) &&
             incoming().status == existing().status &&
             incoming().diff(existing()).affectedKeys().hasOnly(['content', 'media', 'externalLink', 'poll', 'scheduledFor', 'updatedAt'])
           ) ||
@@ -858,7 +878,7 @@ service cloud.firestore {
             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'isPinned', 'updatedAt'])
           ) ||
           (
-            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId)) &&
+            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId) || isPublicFeed(existing().groupId)) &&
             incoming().diff(existing()).affectedKeys().hasOnly(['poll', 'savedBy', 'reactionCount', 'commentCount', 'shareCount', 'updatedAt'])
           )
         );
@@ -873,11 +893,13 @@ service cloud.firestore {
     // 15. Post Comments
     match /post_comments/{commentId} {
       allow get: if isValidId(commentId) && isSignedIn() && (
+        isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
+        isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
         isAdmin()
@@ -885,7 +907,7 @@ service cloud.firestore {
       allow create: if isValidId(commentId) && isSignedIn() && isValidPostComment(incoming(), commentId) &&
         incoming().authorId == request.auth.uid &&
         exists(/databases/$(database)/documents/group_posts/$(incoming().postId)) &&
-        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId));
+        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId) || isPublicFeed(incoming().groupId));
       allow update: if isValidId(commentId) && isSignedIn() && isValidPostComment(incoming(), commentId) &&
         incoming().id == existing().id &&
         incoming().postId == existing().postId &&
@@ -898,7 +920,7 @@ service cloud.firestore {
             incoming().diff(existing()).affectedKeys().hasOnly(['content', 'mentions', 'isEdited', 'updatedAt'])
           ) ||
           (
-            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId)) &&
+            (isActiveGroupMember(existing().groupId) || isPublicGroup(existing().groupId) || isPublicFeed(existing().groupId)) &&
             incoming().diff(existing()).affectedKeys().hasOnly(['likedBy', 'updatedAt'])
           )
         );
@@ -913,11 +935,13 @@ service cloud.firestore {
     // 16. Post Reactions
     match /post_reactions/{reactionId} {
       allow get: if isValidCompositeId(reactionId) && isSignedIn() && (
+        isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
+        isPublicFeed(existing().groupId) ||
         isPublicGroup(existing().groupId) ||
         isActiveGroupMember(existing().groupId) ||
         isAdmin()
@@ -925,7 +949,7 @@ service cloud.firestore {
       allow create: if isValidCompositeId(reactionId) && isSignedIn() && isValidPostReaction(incoming(), reactionId) &&
         incoming().userId == request.auth.uid &&
         exists(/databases/$(database)/documents/group_posts/$(incoming().postId)) &&
-        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId));
+        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId) || isPublicFeed(incoming().groupId));
       allow update: if isValidCompositeId(reactionId) && isSignedIn() && isValidPostReaction(incoming(), reactionId) &&
         existing().userId == request.auth.uid &&
         incoming().userId == existing().userId &&
@@ -1027,7 +1051,7 @@ service cloud.firestore {
       allow get: if isValidId(notifId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow create: if isValidId(notifId) && isSignedIn() && isValidGroupNotification(incoming(), notifId) &&
-        exists(/databases/$(database)/documents/groups/$(incoming().groupId));
+        (isPublicFeed(incoming().groupId) || exists(/databases/$(database)/documents/groups/$(incoming().groupId)));
       allow update: if isValidId(notifId) && isSignedIn() && isValidGroupNotification(incoming(), notifId) &&
         existing().userId == request.auth.uid &&
         incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
@@ -1051,7 +1075,7 @@ service cloud.firestore {
       allow create: if isValidId(reportId) && isSignedIn() && isValidGroupReport(incoming(), reportId) &&
         incoming().reporterId == request.auth.uid &&
         incoming().status == 'pending' &&
-        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId));
+        (isActiveGroupMember(incoming().groupId) || isPublicGroup(incoming().groupId) || isPublicFeed(incoming().groupId));
       allow update: if isValidId(reportId) && isSignedIn() && isValidGroupReport(incoming(), reportId) && (
         isAdmin() ||
         isGroupAdmin(existing().groupId) ||

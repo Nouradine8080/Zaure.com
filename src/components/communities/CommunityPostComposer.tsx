@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image as ImageIcon,
   Video,
@@ -11,11 +11,13 @@ import {
   Trash2,
   EyeOff,
   Clock,
-  ShieldAlert
+  ShieldAlert,
+  Globe
 } from 'lucide-react';
 import {
   CommunityGroup,
   CommunityMember,
+  GroupMemberRole,
   GroupPoll,
   GroupPostMediaItem,
   GroupPostType,
@@ -27,17 +29,21 @@ import { formatFileSize, validateFileForChat } from '../../utils/fileValidation'
 interface CommunityPostComposerProps {
   group: CommunityGroup;
   currentUser: UserProfile;
-  currentMember: CommunityMember;
+  currentMember?: CommunityMember;
+  initialType?: GroupPostType;
   onPublished?: () => void;
+  onCancel?: () => void;
 }
 
 export default function CommunityPostComposer({
   group,
   currentUser,
   currentMember,
-  onPublished
+  initialType = 'text',
+  onPublished,
+  onCancel
 }: CommunityPostComposerProps) {
-  const [postType, setPostType] = useState<GroupPostType>('text');
+  const [postType, setPostType] = useState<GroupPostType>(initialType);
   const [content, setContent] = useState('');
   const [media, setMedia] = useState<GroupPostMediaItem[]>([]);
   const [externalLink, setExternalLink] = useState('');
@@ -59,8 +65,14 @@ export default function CommunityPostComposer({
   const videoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
-  const isStaff = currentMember.role === 'administrateur' || currentMember.role === 'moderateur';
-  const canPost = group.postPermission === 'all_members' || isStaff;
+  useEffect(() => {
+    setPostType(initialType);
+  }, [initialType]);
+
+  const isPublicFeed = group.id === 'public';
+  const effectiveRole: GroupMemberRole = currentMember?.role || 'membre';
+  const isStaff = effectiveRole === 'administrateur' || effectiveRole === 'moderateur';
+  const canPost = isPublicFeed || group.postPermission === 'all_members' || isStaff;
 
   if (!canPost) {
     return (
@@ -152,7 +164,7 @@ export default function CommunityPostComposer({
       const created = await communityService.createGroupPost(
         group,
         currentUser,
-        currentMember.role,
+        effectiveRole,
         {
           type: postType,
           content: content.trim() || pollPayload?.question || externalLink.trim() || media[0]?.name || '',
@@ -179,7 +191,7 @@ export default function CommunityPostComposer({
       } else if (created.status === 'scheduled') {
         setNotice('Publication programmée avec succès.');
       } else {
-        setNotice('Publication ajoutée au cercle.');
+        setNotice(isPublicFeed ? 'Publication partagée sur le fil public.' : 'Publication ajoutée au cercle.');
       }
       setTimeout(() => setNotice(null), 4000);
       if (onPublished) onPublished();
@@ -215,10 +227,28 @@ export default function CommunityPostComposer({
           <p className="text-xs font-extrabold text-slate-900 truncate">
             {isAnonymous ? 'Publication anonyme' : currentUser.nom}
           </p>
-          <p className="text-[11px] text-slate-500">
-            Publier dans <span className="font-semibold text-slate-700">{group.name}</span>
-          </p>
+          {isPublicFeed ? (
+            <p className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
+              <Globe className="w-3 h-3" />
+              <span>Fil public · Visible hors cercle</span>
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              Publier dans <span className="font-semibold text-slate-700">{group.name}</span>
+            </p>
+          )}
         </div>
+
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition shrink-0"
+            title="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {error && (
@@ -238,7 +268,11 @@ export default function CommunityPostComposer({
           rows={3}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Partagez une réflexion, une ressource, une question ou une annonce avec le cercle..."
+          placeholder={
+            isPublicFeed
+              ? `Quoi de neuf, ${currentUser.nom.split(' ')[0]} ? Publiez un texte, des photos, une vidéo, un lien, un document ou un sondage...`
+              : 'Partagez une réflexion, une ressource, une question ou une annonce avec le cercle...'
+          }
           className="w-full text-xs sm:text-sm p-3.5 rounded-2xl bg-[#F0F2F5] focus:bg-white border border-transparent focus:border-blue-500 focus:outline-none text-slate-900 resize-none leading-relaxed"
         />
 

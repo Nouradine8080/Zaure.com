@@ -95,12 +95,12 @@
     },
     "Capsule": {
       "title": "Capsule",
-      "description": "Educational text or audio capsule shared inside a circle.",
+      "description": "Educational text or audio capsule shared on the public feed or inside a circle.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "auteur_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Target circle ID or 'public' when published outside any circle." },
         "circleId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "type": { "type": "string", "enum": ["texte", "audio", "video", "image"] },
         "contenu": { "type": "string", "minLength": 1, "maxLength": 650000 },
@@ -247,7 +247,7 @@
     },
     "GroupPost": {
       "title": "GroupPost",
-      "description": "Community circle post supporting text, media, links, documents, interactive polls, pinning, anonymous mode, and scheduling.",
+      "description": "Community circle post or public home-feed post (when groupId is 'public') supporting text, media, links, documents, interactive polls, pinning, anonymous mode, and scheduling.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },

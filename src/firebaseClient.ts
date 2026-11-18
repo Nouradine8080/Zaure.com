@@ -14,7 +14,8 @@ import {
   sendEmailVerification,
   updateProfile,
   RecaptchaVerifier,
-  signInWithPhoneNumber
+  signInWithPhoneNumber,
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { 
   initializeFirestore,
@@ -330,6 +331,30 @@ export const zaureService = {
       return { user: null, error: 'L\'inscription a échoué.' };
     } catch (err: any) {
       return { user: null, error: formatFirebaseAuthError(err) };
+    }
+  },
+
+  checkEmailAvailable: async (email: string): Promise<{ available: boolean; error: string | null }> => {
+    const normalized = email.trim().toLowerCase();
+    if (!auth) {
+      return { available: true, error: null };
+    }
+    try {
+      const methods = await fetchSignInMethodsForEmail(auth, normalized);
+      if (Array.isArray(methods) && methods.length > 0) {
+        return {
+          available: false,
+          error: "Cette adresse e-mail est déjà associée à un compte Zaure. Veuillez vous connecter ou utiliser une autre adresse."
+        };
+      }
+      return { available: true, error: null };
+    } catch (err: any) {
+      if (err?.code === 'auth/invalid-email') {
+        return { available: false, error: formatFirebaseAuthError(err) };
+      }
+      // If email enumeration protection or network check doesn't reveal methods, allow step progression;
+      // Firebase createUserWithEmailAndPassword enforces uniqueness cleanly on finalization.
+      return { available: true, error: null };
     }
   },
 
@@ -848,14 +873,17 @@ export const zaureService = {
           // ignore profile fetch error
         }
 
-        const cid = c.circle_id || (c as any).circleId;
+        const cid = c.circle_id || (c as any).circleId || 'public';
         finalCapsules.push({
           ...c,
           circle_id: cid,
           auteur_nom: auteurNom,
           auteur_role: auteurRole,
           auteur_avatar: auteurAvatar,
-          circle_nom: circlesData.find(circ => circ.id === cid)?.nom || c.circle_nom || 'Cercle'
+          circle_nom:
+            cid === 'public'
+              ? 'Fil public'
+              : circlesData.find(circ => circ.id === cid)?.nom || c.circle_nom || 'Cercle'
         });
       }
 
@@ -877,13 +905,17 @@ export const zaureService = {
     const safeContenu = (contenu || '').trim().slice(0, 650000);
     if (!safeContenu) throw new Error('Le contenu de la capsule ne peut pas être vide.');
 
-    const circlesData = await zaureService.getCircles();
-    const circleNom = circlesData.find(c => c.id === circleId)?.nom || 'Cercle';
+    const targetCircleId = (circleId || '').trim() || 'public';
+    let circleNom = 'Fil public';
+    if (targetCircleId !== 'public') {
+      const circlesData = await zaureService.getCircles();
+      circleNom = circlesData.find(c => c.id === targetCircleId)?.nom || 'Cercle';
+    }
 
     const newCapsule: Capsule = {
       id: `capsule-${Date.now()}`,
       auteur_id: currentUser.id,
-      circle_id: circleId,
+      circle_id: targetCircleId,
       type,
       contenu: safeContenu,
       langue_dorigine: langue,

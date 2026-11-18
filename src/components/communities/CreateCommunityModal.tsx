@@ -58,6 +58,7 @@ export default function CreateCommunityModal({
 
   const coverInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
 
   const handleCategoryChange = (cat: string) => {
     setCategory(cat);
@@ -124,6 +125,7 @@ export default function CreateCommunityModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || isSubmitting) return;
     setError(null);
 
     if (name.trim().length < 2) {
@@ -135,6 +137,7 @@ export default function CreateCommunityModal({
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       const created = await communityService.createGroup(
@@ -155,6 +158,7 @@ export default function CreateCommunityModal({
       );
       onCreated(created);
     } catch (err: any) {
+      submittingRef.current = false;
       setError(err?.message || 'Erreur lors de la création du cercle.');
     } finally {
       setIsSubmitting(false);

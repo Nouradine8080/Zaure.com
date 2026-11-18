@@ -37,11 +37,24 @@ import {
   Lightbulb,
   Microscope,
   UserCheck,
-  Camera
+  Camera,
+  Image as ImageIcon,
+  BarChart2,
+  Globe
 } from 'lucide-react';
 import { compressImageFile } from './utils/imageCompressor';
 import { zaureService } from './firebaseClient';
-import { Circle, Capsule, UserProfile } from './types';
+import { communityService, PUBLIC_FEED_GROUP } from './services/communityService';
+import {
+  Circle,
+  Capsule,
+  UserProfile,
+  CommunityMember,
+  GroupPost,
+  GroupPostType,
+  PostComment,
+  PostReaction
+} from './types';
 import CircleCard from './components/CircleCard';
 import CapsuleCard from './components/CapsuleCard';
 import AudioRecorder from './components/AudioRecorder';
@@ -49,7 +62,15 @@ import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
 import CircleGroupPage from './components/CircleGroupPage';
 import AuthPortal from './components/AuthPortal';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { RegistrationProvider } from './context/RegistrationContext';
+import { RegistrationIdentityPage } from './components/registration/RegistrationIdentityPage';
+import { RegistrationVocationPage } from './components/registration/RegistrationVocationPage';
+import { RegistrationCirclesAvatarPage } from './components/registration/RegistrationCirclesAvatarPage';
+import { REGISTRATION_ROUTES } from './constants/registration';
 import CommunitiesHub from './components/communities/CommunitiesHub';
+import CommunityPostComposer from './components/communities/CommunityPostComposer';
+import CommunityPostCard from './components/communities/CommunityPostCard';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { useTranslation } from './context/LanguageContext';
 
@@ -88,7 +109,9 @@ const AVATAR_PRESETS = [
 
 export default function App() {
   const { t, language, setLanguage } = useTranslation();
-  
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Navigation & View tabs
   const [communityDeepLinkId, setCommunityDeepLinkId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('community')
@@ -111,10 +134,17 @@ export default function App() {
   const [selectedCircleId, setSelectedCircleId] = useState<string>('all');
   
   // Feed filters & Search
-  const [feedFilter, setFeedFilter] = useState<'all' | 'joined' | 'audio' | 'questions'>('all');
+  const [feedFilter, setFeedFilter] = useState<'all' | 'public' | 'joined' | 'audio' | 'questions'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+  // Public Facebook-style out-of-circle posts
+  const [publicPosts, setPublicPosts] = useState<GroupPost[]>([]);
+  const [publicPostComments, setPublicPostComments] = useState<PostComment[]>([]);
+  const [publicPostReactions, setPublicPostReactions] = useState<PostReaction[]>([]);
+  const [composerMode, setComposerMode] = useState<'none' | 'post' | 'capsule'>('none');
+  const [composerPostInitialType, setComposerPostInitialType] = useState<GroupPostType>('text');
   
   // Bookmarks (saved locally for quick access)
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
@@ -178,10 +208,12 @@ export default function App() {
   const [newCircleImg, setNewCircleImg] = useState('');
 
   // Capsule form states
-  const [newCapsuleCircleId, setNewCapsuleCircleId] = useState('');
+  const [newCapsuleCircleId, setNewCapsuleCircleId] = useState('public');
   const [newCapsuleType, setNewCapsuleType] = useState<'texte' | 'audio'>('texte');
   const [newCapsuleContenu, setNewCapsuleContenu] = useState('');
   const [newCapsuleLangue, setNewCapsuleLangue] = useState<'fr' | 'ha' | 'en'>('fr');
+  const [isPublishingCapsule, setIsPublishingCapsule] = useState(false);
+  const [capsulePublishError, setCapsulePublishError] = useState<string | null>(null);
 
   const [isAuthResolving, setIsAuthResolving] = useState<boolean>(true);
 
@@ -249,13 +281,31 @@ export default function App() {
     }
   }, [currentUser, joinedCircleIds, selectedCircleId, feedFilter]);
 
+  // Real-time subscription to Facebook-style public feed posts (groupId === 'public')
+  useEffect(() => {
+    if (!currentUser) {
+      setPublicPosts([]);
+      setPublicPostComments([]);
+      setPublicPostReactions([]);
+      return;
+    }
+    const unsubPosts = communityService.subscribeGroupPosts('public', setPublicPosts);
+    const unsubReactions = communityService.subscribeGroupReactions('public', setPublicPostReactions);
+    const unsubComments = communityService.subscribeGroupComments('public', setPublicPostComments);
+    return () => {
+      unsubPosts();
+      unsubReactions();
+      unsubComments();
+    };
+  }, [currentUser]);
+
   const loadInitialData = async () => {
     try {
       const allCircles = await zaureService.getCircles();
       setCircles(allCircles);
 
       if (allCircles.length > 0) {
-        setNewCapsuleCircleId(allCircles[0].id);
+        setNewCapsuleCircleId((prev) => prev || 'public');
       }
 
       const user = zaureService.getCurrentUser();
@@ -581,13 +631,16 @@ export default function App() {
     }
   };
 
-  // Create Capsule Submit
+  // Create Capsule Submit (supports publishing outside any circle via 'public')
   const handleCreateCapsuleSubmit = async () => {
-    if (!newCapsuleContenu || !newCapsuleCircleId) return;
+    if (!newCapsuleContenu.trim() || isPublishingCapsule) return;
+    setCapsulePublishError(null);
+    const targetCircleId = newCapsuleCircleId || 'public';
 
     try {
+      setIsPublishingCapsule(true);
       const added = await zaureService.createCapsule(
-        newCapsuleCircleId,
+        targetCircleId,
         newCapsuleType,
         newCapsuleContenu,
         newCapsuleLangue
@@ -595,8 +648,14 @@ export default function App() {
       setCapsules((prev) => [added, ...prev]);
       setNewCapsuleContenu('');
       setShowCreateCapsule(false);
-    } catch (err) {
+      setComposerMode('none');
+    } catch (err: any) {
       console.error(err);
+      setCapsulePublishError(
+        err?.message || 'Impossible de publier cette capsule. Veuillez réessayer.'
+      );
+    } finally {
+      setIsPublishingCapsule(false);
     }
   };
 
@@ -608,6 +667,21 @@ export default function App() {
     { name: 'Technologies', url: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=400' }
   ];
 
+  // Members list for @mentions on public out-of-circle posts
+  const publicMentionMembers = useMemo<CommunityMember[]>(() => {
+    return allUsers.map((u) => ({
+      id: `public_${u.id}`,
+      groupId: 'public',
+      userId: u.id,
+      userName: u.nom,
+      userAvatar: u.avatar_url || '',
+      role: 'membre',
+      status: 'active',
+      joinedAt: u.created_at || '',
+      updatedAt: u.created_at || ''
+    }));
+  }, [allUsers]);
+
   // Filtered Capsules based on search and feedFilter/feedSection
   const displayedCapsules = useMemo(() => {
     let result = capsules;
@@ -618,7 +692,9 @@ export default function App() {
     }
 
     // Filter by type or criteria
-    if (feedFilter === 'audio') {
+    if (feedFilter === 'public') {
+      result = result.filter((c) => c.circle_id === 'public');
+    } else if (feedFilter === 'audio') {
       result = result.filter((c) => c.type === 'audio');
     } else if (feedFilter === 'questions') {
       result = result.filter((c) => c.contenu.includes('?') || c.contenu.toLowerCase().includes('question'));
@@ -636,6 +712,80 @@ export default function App() {
 
     return result;
   }, [capsules, feedSection, feedFilter, searchQuery, bookmarkedIds]);
+
+  // Merged Home Feed (Facebook-style public posts outside circles + capsules)
+  const displayedFeedItems = useMemo(() => {
+    type UnifiedFeedItem =
+      | { kind: 'capsule'; id: string; createdAt: string; data: Capsule }
+      | { kind: 'post'; id: string; createdAt: string; data: GroupPost };
+
+    const items: UnifiedFeedItem[] = displayedCapsules.map((c) => ({
+      kind: 'capsule',
+      id: c.id,
+      createdAt: c.created_at || '',
+      data: c
+    }));
+
+    const shouldIncludePublicPosts =
+      selectedCircleId === 'all' &&
+      feedFilter !== 'joined' &&
+      feedFilter !== 'audio';
+
+    if (shouldIncludePublicPosts && currentUser) {
+      const nowMs = Date.now();
+      let filteredPosts = publicPosts.filter((p) => {
+        if (p.status === 'published') return true;
+        if (p.status === 'scheduled') {
+          const due = p.scheduledFor ? new Date(p.scheduledFor).getTime() <= nowMs : false;
+          return due || p.authorId === currentUser.id;
+        }
+        return p.authorId === currentUser.id;
+      });
+
+      if (feedSection === 'bookmarks') {
+        filteredPosts = filteredPosts.filter((p) => (p.savedBy || []).includes(currentUser.id));
+      }
+
+      if (feedFilter === 'questions') {
+        filteredPosts = filteredPosts.filter(
+          (p) =>
+            p.type === 'poll' ||
+            p.content.includes('?') ||
+            p.content.toLowerCase().includes('question')
+        );
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        filteredPosts = filteredPosts.filter(
+          (p) =>
+            p.content.toLowerCase().includes(q) ||
+            p.authorName.toLowerCase().includes(q) ||
+            (p.poll?.question && p.poll.question.toLowerCase().includes(q))
+        );
+      }
+
+      filteredPosts.forEach((p) => {
+        items.push({
+          kind: 'post',
+          id: p.id,
+          createdAt: p.createdAt || '',
+          data: p
+        });
+      });
+    }
+
+    items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    return items;
+  }, [
+    displayedCapsules,
+    publicPosts,
+    selectedCircleId,
+    feedFilter,
+    feedSection,
+    searchQuery,
+    currentUser
+  ]);
 
   // Filtered Circles based on search & category
   const displayedCircles = useMemo(() => {
@@ -680,6 +830,18 @@ export default function App() {
     setActiveTab('chat');
   };
 
+  useEffect(() => {
+    if (currentUser && location.pathname.startsWith(REGISTRATION_ROUTES.BASE)) {
+      navigate('/', { replace: true });
+    }
+  }, [currentUser, location.pathname, navigate]);
+
+  const handleAuthSuccess = (user: UserProfile) => {
+    setCurrentUser(user);
+    zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
+    navigate('/', { replace: true });
+  };
+
   // 1. Initial Firebase Auth Resolution Splash
   if (isAuthResolving) {
     return (
@@ -695,16 +857,44 @@ export default function App() {
     );
   }
 
-  // 2. Page protection: non-authenticated users land on Facebook-inspired AuthPortal
+  // 2. Page protection & Independent Multi-Page Registration Routes
   if (!currentUser) {
     return (
-      <AuthPortal
-        circles={circles}
-        onAuthSuccess={(user) => {
-          setCurrentUser(user);
-          zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds);
-        }}
-      />
+      <RegistrationProvider>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <AuthPortal
+                circles={circles}
+                onAuthSuccess={handleAuthSuccess}
+              />
+            }
+          />
+          <Route
+            path={REGISTRATION_ROUTES.BASE}
+            element={<Navigate to={REGISTRATION_ROUTES.IDENTITE} replace />}
+          />
+          <Route
+            path={REGISTRATION_ROUTES.IDENTITE}
+            element={<RegistrationIdentityPage />}
+          />
+          <Route
+            path={REGISTRATION_ROUTES.VOCATION}
+            element={<RegistrationVocationPage circles={circles} />}
+          />
+          <Route
+            path={REGISTRATION_ROUTES.CERCLES_AVATAR}
+            element={
+              <RegistrationCirclesAvatarPage
+                circles={circles}
+                onRegistrationSuccess={handleAuthSuccess}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </RegistrationProvider>
     );
   }
 
@@ -825,44 +1015,22 @@ export default function App() {
               )}
             </button>
 
-            {/* 2. Communautés (Module Cercles Avancés) */}
+            {/* 2. Communautés (Cercles) */}
             <button
               type="button"
               onClick={() => {
                 setActiveTab('communities');
               }}
-              className={`h-full px-3 sm:px-5 flex flex-col items-center justify-center relative transition group ${
+              className={`h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'communities'
                   ? 'text-blue-600 font-bold'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
               }`}
-              title="Communautés"
+              title="Communautés (Cercles)"
             >
               <Compass className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
               <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Communautés</span>
               {activeTab === 'communities' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
-            </button>
-
-            {/* 3. Cercles de Savoir */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('circles');
-                setSelectedCircleId('all');
-              }}
-              className={`h-full px-3 sm:px-5 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
-              }`}
-              title="Cercles de Savoir"
-            >
-              <Layers className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Cercles</span>
-              {activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
@@ -1155,28 +1323,6 @@ export default function App() {
                 </span>
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('circles');
-                setSelectedCircleId('all');
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'feed' && feedSection === 'circles'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Compass className="w-4 h-4 text-blue-600" />
-                <span>Explorer les Cercles</span>
-              </div>
-              <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
-                {circles.length}
-              </span>
-            </button>
 
             <button
               type="button"
@@ -1648,199 +1794,228 @@ export default function App() {
 
               {/* B. BOÎTE DE CRÉATION DE PUBLICATION (STYLE FACEBOOK COMPOSER) */}
               {currentUser ? (
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs">
-                  
-                  {/* Top trigger row */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center shrink-0">
-                      {currentUser.avatar_url ? (
-                        <img src={currentUser.avatar_url} alt={currentUser.nom} className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        currentUser.nom.charAt(0).toUpperCase()
-                      )}
-                    </div>
-                    
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateCapsule(true)}
-                      className="flex-1 text-left px-4 py-2.5 bg-[#F0F2F5] hover:bg-slate-200/70 border border-transparent rounded-full text-xs text-slate-500 font-medium transition"
-                    >
-                      Que souhaitez-vous transmettre aujourd'hui, {currentUser.nom.split(' ')[0]} ?
-                    </button>
-                  </div>
-
-                  {/* Horizontal direct action pills (Facebook style) */}
-                  {!showCreateCapsule && (
-                    <div className="grid grid-cols-3 gap-1 pt-3 mt-3 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewCapsuleType('texte');
-                          setShowCreateCapsule(true);
-                        }}
-                        className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
-                      >
-                        <BookOpen className="w-4 h-4 text-blue-600" />
-                        <span>Article / Savoir</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewCapsuleType('audio');
-                          setShowCreateCapsule(true);
-                        }}
-                        className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
-                      >
-                        <Volume2 className="w-4 h-4 text-blue-600" />
-                        <span>Note Vocale 🎙️</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewCapsuleType('texte');
-                          setNewCapsuleContenu('❓ Question : ');
-                          setShowCreateCapsule(true);
-                        }}
-                        className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
-                      >
-                        <HelpCircle className="w-4 h-4 text-amber-500" />
-                        <span>Poser question</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Expanded Capsule Creator */}
-                  {showCreateCapsule && (
-                    <div className="space-y-4 pt-4 mt-3 border-t border-slate-100 animate-fadeIn">
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {/* 1. Circle Selector */}
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            Cercle de Savoir
-                          </label>
-                          <select
-                            value={newCapsuleCircleId}
-                            onChange={(e) => setNewCapsuleCircleId(e.target.value)}
-                            className="w-full text-xs bg-[#F0F2F5] border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 font-medium"
-                          >
-                            {circles.map((c) => (
-                              <option key={c.id} value={c.id}>{c.nom}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* 2. Format Selector */}
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            Format
-                          </label>
-                          <div className="flex bg-[#F0F2F5] p-1 rounded-xl">
-                            <button
-                              type="button"
-                              onClick={() => setNewCapsuleType('texte')}
-                              className={`flex-1 text-center py-1.5 rounded-lg text-xs font-bold transition ${
-                                newCapsuleType === 'texte'
-                                  ? 'bg-white shadow-xs text-blue-700'
-                                  : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                            >
-                              Texte
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setNewCapsuleType('audio')}
-                              className={`flex-1 text-center py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 ${
-                                newCapsuleType === 'audio'
-                                  ? 'bg-white shadow-xs text-blue-700'
-                                  : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                            >
-                              <Volume2 className="w-3.5 h-3.5 text-blue-600" />
-                              <span>Vocal</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 3. Language Selector */}
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            Langue
-                          </label>
-                          <select
-                            value={newCapsuleLangue}
-                            onChange={(e) => setNewCapsuleLangue(e.target.value as any)}
-                            className="w-full text-xs bg-[#F0F2F5] border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 font-medium"
-                          >
-                            <option value="fr">Français (FR)</option>
-                            <option value="ha">Hausa (HA)</option>
-                            <option value="en">English (EN)</option>
-                          </select>
-                        </div>
+                composerMode === 'post' ? (
+                  <CommunityPostComposer
+                    group={PUBLIC_FEED_GROUP}
+                    currentUser={currentUser}
+                    initialType={composerPostInitialType}
+                    onPublished={() => setComposerMode('none')}
+                    onCancel={() => setComposerMode('none')}
+                  />
+                ) : (
+                  <div className="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs">
+                    {/* Top trigger row */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center shrink-0">
+                        {currentUser.avatar_url ? (
+                          <img src={currentUser.avatar_url} alt={currentUser.nom} className="w-full h-full rounded-full object-cover" />
+                        ) : (
+                          currentUser.nom.charAt(0).toUpperCase()
+                        )}
                       </div>
 
-                      {/* Content editor based on format selection */}
-                      {newCapsuleType === 'texte' ? (
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            Contenu de votre publication
-                          </label>
-                          <textarea
-                            placeholder="Partagez un diagnostic préventif, un remède traditionnel validé, un proverbe ou une technique agricole..."
-                            value={newCapsuleContenu}
-                            onChange={(e) => setNewCapsuleContenu(e.target.value)}
-                            rows={4}
-                            className="w-full text-xs bg-[#F0F2F5] focus:bg-white border border-slate-200 p-3.5 rounded-2xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 leading-relaxed resize-none transition"
-                          />
-                        </div>
-                      ) : (
-                        <div className="py-2">
-                          <AudioRecorder
-                            onAudioReady={(base64) => {
-                              setNewCapsuleContenu(base64);
-                            }}
-                            onCancel={() => {
-                              setNewCapsuleType('texte');
-                            }}
-                          />
-                          {newCapsuleContenu.startsWith('data:audio') && (
-                            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 flex items-center justify-between">
-                              <span className="font-semibold flex items-center gap-1.5">
-                                <Check className="w-4 h-4 text-blue-600" />
-                                Note vocale enregistrée avec succès
-                              </span>
-                              <span className="font-mono text-[10px] text-blue-700">Capsule prête</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateCapsule(false);
+                          setComposerPostInitialType('text');
+                          setComposerMode('post');
+                        }}
+                        className="flex-1 text-left px-4 py-2.5 bg-[#F0F2F5] hover:bg-slate-200/70 border border-transparent rounded-full text-xs sm:text-sm text-slate-500 font-medium transition truncate"
+                      >
+                        Quoi de neuf, {currentUser.nom.split(' ')[0]} ? Publiez hors cercle...
+                      </button>
+                    </div>
 
-                      {/* Action buttons */}
-                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                    {/* Horizontal direct action pills (Facebook style) */}
+                    {composerMode === 'none' && !showCreateCapsule && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-3 mt-3 border-t border-slate-100">
                         <button
                           type="button"
                           onClick={() => {
-                            setShowCreateCapsule(false);
-                            setNewCapsuleContenu('');
+                            setComposerPostInitialType('image');
+                            setComposerMode('post');
                           }}
-                          className="min-h-[38px] px-4 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-semibold transition"
+                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
                         >
-                          Annuler
+                          <ImageIcon className="w-4 h-4 text-emerald-600" />
+                          <span>Photo / Vidéo</span>
                         </button>
+
                         <button
                           type="button"
-                          onClick={handleCreateCapsuleSubmit}
-                          disabled={!newCapsuleContenu}
-                          className="min-h-[38px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs disabled:opacity-50"
+                          onClick={() => {
+                            setComposerPostInitialType('text');
+                            setComposerMode('post');
+                          }}
+                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
                         >
-                          Publier la capsule
+                          <BookOpen className="w-4 h-4 text-blue-600" />
+                          <span>Texte / Lien / Doc</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setComposerPostInitialType('poll');
+                            setComposerMode('post');
+                          }}
+                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
+                        >
+                          <BarChart2 className="w-4 h-4 text-amber-600" />
+                          <span>Sondage</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewCapsuleCircleId('public');
+                            setNewCapsuleType('audio');
+                            setShowCreateCapsule(true);
+                            setComposerMode('capsule');
+                          }}
+                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
+                        >
+                          <Volume2 className="w-4 h-4 text-red-600" />
+                          <span>Note Vocale</span>
                         </button>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+
+                    {/* Expanded Capsule Creator (for voice capsules or circle-targeted capsules) */}
+                    {(composerMode === 'capsule' || showCreateCapsule) && (
+                      <div className="space-y-4 pt-4 mt-3 border-t border-slate-100 animate-fadeIn">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                              Destination
+                            </label>
+                            <select
+                              value={newCapsuleCircleId || 'public'}
+                              onChange={(e) => setNewCapsuleCircleId(e.target.value)}
+                              className="w-full text-xs bg-[#F0F2F5] border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 font-medium"
+                            >
+                              <option value="public">Fil public (Hors cercle)</option>
+                              {circles.map((c) => (
+                                <option key={c.id} value={c.id}>{c.nom}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                              Format
+                            </label>
+                            <div className="flex bg-[#F0F2F5] p-1 rounded-xl">
+                              <button
+                                type="button"
+                                onClick={() => setNewCapsuleType('texte')}
+                                className={`flex-1 text-center py-1.5 rounded-lg text-xs font-bold transition ${
+                                  newCapsuleType === 'texte'
+                                    ? 'bg-white shadow-xs text-blue-700'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                Texte
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewCapsuleType('audio')}
+                                className={`flex-1 text-center py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 ${
+                                  newCapsuleType === 'audio'
+                                    ? 'bg-white shadow-xs text-blue-700'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                <Volume2 className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Vocal</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                              Langue
+                            </label>
+                            <select
+                              value={newCapsuleLangue}
+                              onChange={(e) => setNewCapsuleLangue(e.target.value as any)}
+                              className="w-full text-xs bg-[#F0F2F5] border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 font-medium"
+                            >
+                              <option value="fr">Français (FR)</option>
+                              <option value="ha">Hausa (HA)</option>
+                              <option value="en">English (EN)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {newCapsuleType === 'texte' ? (
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                              Contenu de votre publication
+                            </label>
+                            <textarea
+                              placeholder="Partagez un diagnostic préventif, un remède traditionnel validé, un proverbe ou une technique agricole..."
+                              value={newCapsuleContenu}
+                              onChange={(e) => setNewCapsuleContenu(e.target.value)}
+                              rows={4}
+                              className="w-full text-xs bg-[#F0F2F5] focus:bg-white border border-slate-200 p-3.5 rounded-2xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 leading-relaxed resize-none transition"
+                            />
+                          </div>
+                        ) : (
+                          <div className="py-2">
+                            <AudioRecorder
+                              onAudioReady={(base64) => {
+                                setNewCapsuleContenu(base64);
+                              }}
+                              onCancel={() => {
+                                setNewCapsuleType('texte');
+                              }}
+                            />
+                            {newCapsuleContenu.startsWith('data:audio') && (
+                              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 flex items-center justify-between">
+                                <span className="font-semibold flex items-center gap-1.5">
+                                  <Check className="w-4 h-4 text-blue-600" />
+                                  Note vocale enregistrée avec succès
+                                </span>
+                                <span className="font-mono text-[10px] text-blue-700">Capsule prête</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {capsulePublishError && (
+                          <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
+                            {capsulePublishError}
+                          </div>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCreateCapsule(false);
+                              setComposerMode('none');
+                              setNewCapsuleContenu('');
+                              setCapsulePublishError(null);
+                            }}
+                            className="min-h-[38px] px-4 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-semibold transition"
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCreateCapsuleSubmit}
+                            disabled={!newCapsuleContenu.trim() || isPublishingCapsule}
+                            className="min-h-[38px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs disabled:opacity-50"
+                          >
+                            {isPublishingCapsule ? 'Publication...' : 'Publier la capsule'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
               ) : (
                 <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-slate-900 text-white rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
                   <div>
@@ -1884,7 +2059,24 @@ export default function App() {
                         : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <span>Tous les savoirs</span>
+                    <span>Tout le fil</span>
+                  </button>
+
+                  {/* Tab : Fil public (Hors cercle) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFeedFilter('public');
+                      setFeedSection('feed');
+                    }}
+                    className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                      feedFilter === 'public' && feedSection === 'feed'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>Hors cercle</span>
                   </button>
 
                   {/* Tab : Mes Cercles */}
@@ -1924,7 +2116,7 @@ export default function App() {
                     <span>Audios</span>
                   </button>
 
-                  {/* Tab : Questions */}
+                  {/* Tab : Questions & Sondages */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1944,7 +2136,7 @@ export default function App() {
 
                 {/* Total count badge */}
                 <div className="text-[11px] font-medium text-slate-400 px-2 shrink-0">
-                  <span className="font-bold text-slate-700">{displayedCapsules.length}</span> publications
+                  <span className="font-bold text-slate-700">{displayedFeedItems.length}</span> publications
                 </div>
               </div>
 
@@ -1954,7 +2146,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <Search className="w-4 h-4 text-blue-700" />
                     <span>
-                      Résultats pour <strong>« {searchQuery} »</strong> ({displayedCapsules.length} trouvés)
+                      Résultats pour <strong>« {searchQuery} »</strong> ({displayedFeedItems.length} trouvés)
                     </span>
                   </div>
                   <button
@@ -1968,9 +2160,9 @@ export default function App() {
                 </div>
               )}
 
-              {/* E. LISTE DES PUBLICATIONS (CAPSULE CARDS FEED) */}
+              {/* E. LISTE DES PUBLICATIONS (FIL PUBLIC + CAPSULES) */}
               <div className="space-y-4" id="capsules-stream-list">
-                {displayedCapsules.length === 0 ? (
+                {displayedFeedItems.length === 0 ? (
                   <div className="bg-white border border-slate-200/80 rounded-3xl p-8 sm:p-12 text-center shadow-xs">
                     <BookOpen className="w-12 h-12 text-slate-300 mx-auto stroke-1 mb-3" />
                     <h4 className="font-bold text-slate-900 text-base">Aucune publication dans ce flux</h4>
@@ -1993,23 +2185,35 @@ export default function App() {
                     ) : feedSection === 'bookmarks' ? (
                       <div className="max-w-md mx-auto mt-2">
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Vous n'avez encore enregistré aucune capsule. Cliquez sur l'icône de signet d'une publication pour la retrouver ici !
+                          Vous n'avez encore enregistré aucune publication. Cliquez sur l'icône de signet d'une publication pour la retrouver ici !
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 mt-2">Soyez le premier à partager une capsule dans ce domaine !</p>
+                      <p className="text-xs text-slate-400 mt-2">Soyez le premier à partager une publication libre ou dans un cercle !</p>
                     )}
                   </div>
                 ) : (
-                  displayedCapsules.map((capsule) => (
-                    <CapsuleCard
-                      key={capsule.id}
-                      capsule={capsule}
-                      currentUser={currentUser}
-                      isBookmarked={bookmarkedIds.includes(capsule.id)}
-                      onToggleBookmark={() => toggleBookmark(capsule.id)}
-                    />
-                  ))
+                  displayedFeedItems.map((item) =>
+                    item.kind === 'post' && currentUser ? (
+                      <CommunityPostCard
+                        key={`pub_${item.id}`}
+                        group={PUBLIC_FEED_GROUP}
+                        post={item.data}
+                        comments={publicPostComments.filter((c) => c.postId === item.id)}
+                        reactions={publicPostReactions.filter((r) => r.postId === item.id)}
+                        members={publicMentionMembers}
+                        currentUser={currentUser}
+                      />
+                    ) : item.kind === 'capsule' ? (
+                      <CapsuleCard
+                        key={`cap_${item.id}`}
+                        capsule={item.data}
+                        currentUser={currentUser}
+                        isBookmarked={bookmarkedIds.includes(item.id)}
+                        onToggleBookmark={() => toggleBookmark(item.id)}
+                      />
+                    ) : null
+                  )
                 )}
               </div>
 
@@ -2218,24 +2422,6 @@ export default function App() {
         >
           <Compass className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
           <span className="text-[10px] font-semibold tracking-tight mt-0.5">Communautés</span>
-        </button>
-
-        {/* Cercles */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('feed');
-            setFeedSection('circles');
-            setSelectedCircleId('all');
-          }}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
-            activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
-              ? 'text-blue-700 font-bold'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Layers className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Cercles</span>
         </button>
 
         {/* Messages */}

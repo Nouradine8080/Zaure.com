@@ -1,6 +1,7 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
-import {registerSW} from 'virtual:pwa-register';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { LanguageProvider } from './context/LanguageContext';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -10,10 +11,11 @@ registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LanguageProvider>
-      <App />
-      <OfflineIndicator />
-    </LanguageProvider>
-  </StrictMode>,
+    <BrowserRouter>
+      <LanguageProvider>
+        <App />
+        <OfflineIndicator />
+      </LanguageProvider>
+    </BrowserRouter>
+  </StrictMode>
 );
-

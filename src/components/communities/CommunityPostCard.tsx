@@ -20,7 +20,8 @@ import {
   EyeOff,
   Clock,
   AlertTriangle,
-  X
+  X,
+  Globe
 } from 'lucide-react';
 import {
   CommunityGroup,
@@ -121,8 +122,12 @@ export default function CommunityPostCard({
   const isSaved = (post.savedBy || []).includes(currentUser.id);
   const authorMember = members.find((m) => m.userId === post.authorId);
 
+  const isPublicFeed = group.id === 'public';
+
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/?community=${encodeURIComponent(group.id)}&post=${encodeURIComponent(post.id)}`;
+    const shareUrl = isPublicFeed
+      ? `${window.location.origin}/?post=${encodeURIComponent(post.id)}`
+      : `${window.location.origin}/?community=${encodeURIComponent(group.id)}&post=${encodeURIComponent(post.id)}`;
     try {
       await navigator.clipboard?.writeText?.(shareUrl);
     } catch {
@@ -257,9 +262,18 @@ export default function CommunityPostCard({
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-500">
-              {formatDateTime(post.createdAt)}
-            </p>
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500">
+              <span>{formatDateTime(post.createdAt)}</span>
+              {isPublicFeed && (
+                <>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1 text-blue-700 font-semibold">
+                    <Globe className="w-3 h-3" />
+                    <span>Public · Hors cercle</span>
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -288,7 +302,7 @@ export default function CommunityPostCard({
                 <span>{isSaved ? 'Retirer des favoris' : 'Enregistrer'}</span>
               </button>
 
-              {canModeratePosts && (
+              {canModeratePosts && !isPublicFeed && (
                 <button
                   type="button"
                   onClick={() => {
