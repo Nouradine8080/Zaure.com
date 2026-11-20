@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -105,8 +105,17 @@ export const AdminPortalRoot: React.FC = () => {
     ? (moduleId as AdminModuleId)
     : 'dashboard';
 
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [session, setSession] = useState<AdminSessionContext | null>(null);
+  const cachedAdminSession = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('zaure_admin_session_cache');
+      return raw ? (JSON.parse(raw) as AdminSessionContext) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!cachedAdminSession);
+  const [session, setSession] = useState<AdminSessionContext | null>(cachedAdminSession);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -139,6 +148,7 @@ export const AdminPortalRoot: React.FC = () => {
   const refreshSession = useCallback(async () => {
     if (!auth) {
       setSession(null);
+      localStorage.removeItem('zaure_admin_session_cache');
       setIsCheckingAuth(false);
       return;
     }
@@ -152,6 +162,11 @@ export const AdminPortalRoot: React.FC = () => {
     }
     const resolved = await adminService.resolveAdminSession(auth.currentUser);
     setSession(resolved);
+    if (resolved?.isAuthorized) {
+      localStorage.setItem('zaure_admin_session_cache', JSON.stringify(resolved));
+    } else {
+      localStorage.removeItem('zaure_admin_session_cache');
+    }
     setIsCheckingAuth(false);
   }, []);
 
@@ -163,6 +178,11 @@ export const AdminPortalRoot: React.FC = () => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       const resolved = await adminService.resolveAdminSession(user);
       setSession(resolved);
+      if (resolved?.isAuthorized) {
+        localStorage.setItem('zaure_admin_session_cache', JSON.stringify(resolved));
+      } else {
+        localStorage.removeItem('zaure_admin_session_cache');
+      }
       setIsCheckingAuth(false);
     });
     return () => unsub();
@@ -357,6 +377,7 @@ export const AdminPortalRoot: React.FC = () => {
           <button
             type="button"
             onClick={async () => {
+              localStorage.removeItem('zaure_admin_session_cache');
               await adminService.signOutAdmin();
               await refreshSession();
             }}

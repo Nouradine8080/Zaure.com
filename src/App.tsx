@@ -40,7 +40,12 @@ import {
   Camera,
   Image as ImageIcon,
   BarChart2,
-  Globe
+  Globe,
+  Newspaper,
+  UsersRound,
+  Bell,
+  CircleUserRound,
+  MessageCircle
 } from 'lucide-react';
 import { compressImageFile } from './utils/imageCompressor';
 import { zaureService } from './firebaseClient';
@@ -127,13 +132,31 @@ export default function App() {
   const [feedSection, setFeedSection] = useState<'feed' | 'circles' | 'mentors' | 'bookmarks'>('feed');
   
   // Data state
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const cachedUserSession = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('zaure_user_session_cache');
+      return raw ? (JSON.parse(raw) as UserProfile) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(cachedUserSession);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [capsules, setCapsules] = useState<Capsule[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
   const [selectedCircleId, setSelectedCircleId] = useState<string>('all');
   
+  // Notifications state
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { id: '1', title: 'Nouveau message dans le Cercle Médical du Sahel', time: 'Il y a 10 min', unread: true },
+    { id: '2', title: 'Votre publication a reçu une mention Utile 💡', time: 'Il y a 1 heure', unread: true },
+    { id: '3', title: 'Bienvenue sur la plateforme académique Zaure', time: "Aujourd'hui", unread: false }
+  ]);
+  const unreadNotificationsCount = notifications.filter(n => n.unread).length;
+
   // Feed filters & Search
   const [feedFilter, setFeedFilter] = useState<'all' | 'public' | 'joined' | 'audio' | 'questions'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -216,7 +239,7 @@ export default function App() {
   const [isPublishingCapsule, setIsPublishingCapsule] = useState(false);
   const [capsulePublishError, setCapsulePublishError] = useState<string | null>(null);
 
-  const [isAuthResolving, setIsAuthResolving] = useState<boolean>(true);
+  const [isAuthResolving, setIsAuthResolving] = useState<boolean>(!cachedUserSession);
 
   // Persistence of bookmarks
   const toggleBookmark = (id: string) => {
@@ -236,6 +259,7 @@ export default function App() {
       setCurrentUser(user);
       setIsAuthResolving(false);
       if (user) {
+        localStorage.setItem('zaure_user_session_cache', JSON.stringify(user));
         zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
         zaureService.getAvailableUsers().then(setAllUsers).catch(() => {});
         zaureService.getCircles().then((freshCircles) => {
@@ -249,6 +273,7 @@ export default function App() {
           }
         }).catch(() => {});
       } else {
+        localStorage.removeItem('zaure_user_session_cache');
         setJoinedCircleIds([]);
         setAllUsers([]);
         setCapsules([]);
@@ -565,6 +590,7 @@ export default function App() {
   const executeSignOut = async () => {
     setIsLoggingOut(true);
     try {
+      localStorage.removeItem('zaure_user_session_cache');
       await zaureService.signOut();
       setCurrentUser(null);
       setJoinedCircleIds([]);
@@ -1004,8 +1030,8 @@ export default function App() {
           </div>
 
           {/* ZONE CENTRALE : Onglets de Navigation Principaux (Desktop & Tablette) */}
-          <nav className="hidden md:flex items-center justify-center gap-1 sm:gap-2 flex-1 max-w-md h-full">
-            {/* 1. Fil d'actualité */}
+          <nav className="hidden md:flex items-center justify-center gap-1 sm:gap-2 flex-1 max-w-lg h-full">
+            {/* 1. Actualité */}
             <button
               type="button"
               onClick={() => {
@@ -1013,41 +1039,63 @@ export default function App() {
                 setFeedSection('feed');
                 setSelectedCircleId('all');
               }}
-              className={`h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group ${
+              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all'
                   ? 'text-blue-600 font-bold'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
               }`}
               title="Fil d'actualité"
             >
-              <BookOpen className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Accueil</span>
+              <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Actualité</span>
               {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
 
-            {/* 2. Communautés (Cercles) */}
+            {/* 2. Découverte (Cercles) */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('feed');
+                setFeedSection('circles');
+                setSelectedCircleId('all');
+              }}
+              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
+                activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all'
+                  ? 'text-blue-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+              }`}
+              title="Découvrir les Cercles"
+            >
+              <Compass className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Découverte</span>
+              {activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all' && (
+                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
+              )}
+            </button>
+
+            {/* 3. Communautés */}
             <button
               type="button"
               onClick={() => {
                 setActiveTab('communities');
               }}
-              className={`h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group ${
+              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'communities'
                   ? 'text-blue-600 font-bold'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
               }`}
-              title="Communautés (Cercles)"
+              title="Communautés"
             >
-              <Compass className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Communautés</span>
+              <UsersRound className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Communautés</span>
               {activeTab === 'communities' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
 
-            {/* 3. Messagerie Directe */}
+            {/* 4. Messagerie */}
             <button
               type="button"
               onClick={() => {
@@ -1055,28 +1103,53 @@ export default function App() {
                 setChatMobileView('list');
                 setActiveTab('chat');
               }}
-              className="h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl"
+              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
+                activeTab === 'chat'
+                  ? 'text-blue-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+              }`}
               title="Messagerie"
             >
-              <MessageSquare className="w-5 h-5 stroke-2" />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Messages</span>
+              <MessageCircle className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Messages</span>
+              {activeTab === 'chat' && (
+                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
+              )}
             </button>
 
-            {/* 4. Paramètres */}
+            {/* 5. Notifications */}
+            <button
+              type="button"
+              onClick={() => setShowNotificationsModal(true)}
+              className="h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl"
+              title="Notifications"
+            >
+              <div className="relative">
+                <Bell className="w-5 h-5 stroke-2" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Alertes</span>
+            </button>
+
+            {/* 6. Profil Utilisateur */}
             <button
               type="button"
               onClick={() => {
                 setActiveTab('settings');
               }}
-              className={`h-full px-4 sm:px-6 flex flex-col items-center justify-center relative transition group ${
+              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'settings'
                   ? 'text-blue-600 font-bold'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
               }`}
-              title="Paramètres"
+              title="Profil & Paramètres"
             >
-              <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden lg:inline">Réglages</span>
+              <CircleUserRound className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Profil</span>
               {activeTab === 'settings' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
@@ -2402,9 +2475,9 @@ export default function App() {
       {/* ============================================================ */}
       {/* 3. FIXED MOBILE BOTTOM NAVIGATION BAR (< 768px) */}
       {/* ============================================================ */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-2 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-1 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
         
-        {/* Fil */}
+        {/* Actualité */}
         <button
           type="button"
           onClick={() => {
@@ -2417,9 +2490,29 @@ export default function App() {
               ? 'text-blue-700 font-bold'
               : 'text-slate-500 hover:text-slate-800'
           }`}
+          title="Actualité"
         >
-          <BookOpen className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[11px] font-semibold tracking-tight mt-0.5">Fil</span>
+          <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Fil</span>
+        </button>
+
+        {/* Découverte */}
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('feed');
+            setFeedSection('circles');
+            setSelectedCircleId('all');
+          }}
+          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+            activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all'
+              ? 'text-blue-700 font-bold'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+          title="Découverte"
+        >
+          <Compass className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Explorer</span>
         </button>
 
         {/* Communautés */}
@@ -2431,9 +2524,10 @@ export default function App() {
               ? 'text-blue-700 font-bold'
               : 'text-slate-500 hover:text-slate-800'
           }`}
+          title="Communautés"
         >
-          <Compass className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Communautés</span>
+          <UsersRound className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Groupes</span>
         </button>
 
         {/* Messages */}
@@ -2444,13 +2538,34 @@ export default function App() {
             setChatMobileView('list');
             setActiveTab('chat');
           }}
-          className="min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 text-slate-500 hover:text-slate-800"
+          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+            activeTab === 'chat' ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+          title="Messages"
         >
-          <MessageSquare className="w-5 h-5 stroke-2" />
-          <span className="text-[11px] font-semibold tracking-tight mt-0.5">Messages</span>
+          <MessageCircle className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Messages</span>
         </button>
 
-        {/* Paramètres */}
+        {/* Notifications */}
+        <button
+          type="button"
+          onClick={() => setShowNotificationsModal(true)}
+          className="min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 text-slate-500 hover:text-slate-800 relative"
+          title="Notifications"
+        >
+          <div className="relative">
+            <Bell className="w-5 h-5 stroke-2" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                {unreadNotificationsCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Alertes</span>
+        </button>
+
+        {/* Profil */}
         <button
           type="button"
           onClick={() => setActiveTab('settings')}
@@ -2459,9 +2574,10 @@ export default function App() {
               ? 'text-blue-700 font-bold'
               : 'text-slate-500 hover:text-slate-800'
           }`}
+          title="Profil"
         >
-          <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[11px] font-semibold tracking-tight mt-0.5">Profil</span>
+          <CircleUserRound className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Profil</span>
         </button>
       </nav>
 
@@ -3438,6 +3554,83 @@ export default function App() {
                     <span>Se déconnecter</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 8. MODAL : CENTRE DE NOTIFICATIONS (ZAURE) */}
+      {/* ============================================================ */}
+      {showNotificationsModal && (
+        <div
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn"
+          onClick={() => setShowNotificationsModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200/90 animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-950">Centre d'Alertes</h3>
+                  <p className="text-xs text-slate-500">Notifications de la communauté Zaure</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNotificationsModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+              {notifications.map((notif) => (
+                <div
+                  key={notif.id}
+                  onClick={() => {
+                    setNotifications(notifications.map(n => n.id === notif.id ? { ...n, unread: false } : n));
+                  }}
+                  className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-start gap-3 ${
+                    notif.unread
+                      ? 'bg-blue-50/60 border-blue-200/80 hover:bg-blue-50'
+                      : 'bg-[#F0F2F5]/60 border-slate-200/60 hover:bg-[#F0F2F5]'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${notif.unread ? 'bg-blue-600' : 'bg-transparent'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-xs ${notif.unread ? 'font-extrabold text-slate-900' : 'font-semibold text-slate-700'}`}>
+                      {notif.title}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{notif.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifications(notifications.map(n => ({ ...n, unread: false })));
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                Tout marquer comme lu
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNotificationsModal(false)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition shadow-xs"
+              >
+                Fermer
               </button>
             </div>
           </div>

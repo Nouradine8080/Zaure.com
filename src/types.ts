@@ -267,10 +267,10 @@ export interface CommunityMember {
   updatedAt: string;
 }
 
-export type GroupPostType = 'text' | 'image' | 'video' | 'link' | 'document' | 'poll';
+export type GroupPostType = 'text' | 'image' | 'video' | 'link' | 'document' | 'poll' | 'audio';
 
 export interface GroupPostMediaItem {
-  type: 'image' | 'video' | 'document';
+  type: 'image' | 'video' | 'document' | 'audio';
   url: string;
   name: string;
   size?: number;

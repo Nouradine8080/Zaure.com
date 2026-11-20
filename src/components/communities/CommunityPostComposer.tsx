@@ -12,8 +12,10 @@ import {
   EyeOff,
   Clock,
   ShieldAlert,
-  Globe
+  Globe,
+  Mic
 } from 'lucide-react';
+import AudioRecorder from '../AudioRecorder';
 import {
   CommunityGroup,
   CommunityMember,
@@ -58,6 +60,7 @@ export default function CommunityPostComposer({
 
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -351,6 +354,19 @@ export default function CommunityPostComposer({
             <BarChart2 className="w-4 h-4 text-emerald-600" />
             <span>Sondage</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAudioRecorder(true)}
+            className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              postType === 'audio'
+                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
+            }`}
+          >
+            <Mic className="w-4 h-4 text-purple-600" />
+            <span>Note vocale</span>
+          </button>
         </div>
 
         {/* Hidden File Inputs */}
@@ -570,6 +586,26 @@ export default function CommunityPostComposer({
           </div>
         )}
       </form>
+
+      {showAudioRecorder && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <AudioRecorder
+            onAudioReady={(base64Audio) => {
+              setMedia((prev) => [
+                ...prev,
+                {
+                  type: 'audio',
+                  url: base64Audio,
+                  name: `Note_vocale_${Date.now()}.webm`
+                }
+              ]);
+              setPostType('audio');
+              setShowAudioRecorder(false);
+            }}
+            onCancel={() => setShowAudioRecorder(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

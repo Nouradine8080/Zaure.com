@@ -147,6 +147,7 @@ export const adminService = {
   },
 
   signOutAdmin: async (): Promise<void> => {
+    localStorage.removeItem('zaure_admin_session_cache');
     if (!auth) return;
     await firebaseSignOut(auth);
   },
