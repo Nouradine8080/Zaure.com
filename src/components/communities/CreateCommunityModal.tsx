@@ -1,17 +1,18 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { motion } from 'motion/react';
 import {
-  X,
   Camera,
+  Check,
+  EyeOff,
   Globe,
   Lock,
-  ShieldCheck,
+  MessageSquare,
   Plus,
+  ShieldCheck,
   Trash2,
   Users,
-  MessageSquare,
-  EyeOff,
-  Check
+  X
 } from 'lucide-react';
 import { CommunityGroup, UserProfile } from '../../types';
 import { communityService } from '../../services/communityService';
@@ -129,11 +130,11 @@ export default function CreateCommunityModal({
     setError(null);
 
     if (name.trim().length < 2) {
-      setError('Le nom du cercle doit contenir au moins 2 caractères.');
+      setError('Le nom de la communauté doit contenir au moins 2 caractères.');
       return;
     }
     if (description.trim().length < 5) {
-      setError('Veuillez rédiger une courte description du cercle.');
+      setError('Veuillez rédiger une courte description de la communauté.');
       return;
     }
 
@@ -159,36 +160,48 @@ export default function CreateCommunityModal({
       onCreated(created);
     } catch (err: any) {
       submittingRef.current = false;
-      setError(err?.message || 'Erreur lors de la création du cercle.');
+      setError(err?.message || 'Erreur lors de la création de la communauté.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return createPortal(
-    <div
-      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 z-50"
       onClick={() => !isSubmitting && onClose()}
     >
-      <div
-        className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden"
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag handle on mobile */}
+        <div className="sm:hidden pt-2.5 pb-1 flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold text-slate-950">
-              Créer un nouveau cercle
+              Créer une communauté
             </h2>
             <p className="text-xs text-slate-500">
-              Configurez votre communauté et devenez automatiquement administrateur principal.
+              Vous serez automatiquement désigné créateur et administrateur principal.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            aria-label="Fermer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -210,17 +223,17 @@ export default function CreateCommunityModal({
             <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 h-36 sm:h-44">
               <img
                 src={coverPhoto}
-                alt="Couverture du cercle"
+                alt="Couverture de la communauté"
                 className="w-full h-full object-cover opacity-90"
                 referrerPolicy="no-referrer"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/15 to-transparent" />
 
               <button
                 type="button"
                 onClick={() => coverInputRef.current?.click()}
                 disabled={uploadingCover}
-                className="absolute top-3 right-3 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-900 text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition"
+                className="min-h-[36px] absolute top-3 right-3 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-900 text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition"
               >
                 <Camera className="w-3.5 h-3.5 text-blue-600" />
                 <span>{uploadingCover ? 'Chargement...' : 'Couverture'}</span>
@@ -238,7 +251,7 @@ export default function CreateCommunityModal({
                 <div className="relative">
                   <img
                     src={avatarPhoto}
-                    alt="Profil du cercle"
+                    alt="Profil de la communauté"
                     className="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-md bg-white"
                     referrerPolicy="no-referrer"
                   />
@@ -246,7 +259,7 @@ export default function CreateCommunityModal({
                     type="button"
                     onClick={() => avatarInputRef.current?.click()}
                     disabled={uploadingAvatar}
-                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-700 text-white border-2 border-white flex items-center justify-center shadow-sm transition"
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white border-2 border-white flex items-center justify-center shadow-sm transition"
                     title="Changer la photo de profil"
                   >
                     <Camera className="w-3.5 h-3.5" />
@@ -261,46 +274,51 @@ export default function CreateCommunityModal({
                 </div>
                 <div className="text-white drop-shadow-sm pb-1">
                   <p className="font-extrabold text-sm leading-tight">
-                    {name.trim() || 'Nom de votre cercle'}
+                    {name.trim() || 'Nom de votre communauté'}
                   </p>
                   <p className="text-[11px] text-slate-200">
-                    {category} · {privacy === 'public' ? 'Cercle public' : 'Cercle privé'}
+                    {category} · {privacy === 'public' ? 'Publique' : 'Privée'}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Presets */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-semibold text-slate-500">Thèmes :</span>
-              {COMMUNITY_COVER_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => setCoverPhoto(preset.url)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
-                    coverPhoto === preset.url
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-              {COMMUNITY_AVATAR_PRESETS.slice(0, 1).map((av) => (
-                <button
-                  key={av.id}
-                  type="button"
-                  onClick={() => setAvatarPhoto(av.url)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
-                    avatarPhoto === av.url
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Logo Zaure
-                </button>
-              ))}
+            {/* Cover & Avatar Presets */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-slate-500 mr-1">Couvertures :</span>
+                {COMMUNITY_COVER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setCoverPhoto(preset.url)}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
+                      coverPhoto === preset.url
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-slate-500 mr-1">Avatars :</span>
+                {COMMUNITY_AVATAR_PRESETS.map((av) => (
+                  <button
+                    key={av.id}
+                    type="button"
+                    onClick={() => setAvatarPhoto(av.url)}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition ${
+                      avatarPhoto === av.url
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {av.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -308,7 +326,7 @@ export default function CreateCommunityModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Nom du cercle *
+                Nom de la communauté *
               </label>
               <input
                 type="text"
@@ -318,7 +336,7 @@ export default function CreateCommunityModal({
                 placeholder="Ex : Club Médecine Niamey"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#F0F2F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 text-slate-900"
+                className="w-full min-h-[44px] text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 text-slate-900"
               />
             </div>
 
@@ -329,7 +347,7 @@ export default function CreateCommunityModal({
               <select
                 value={category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#F0F2F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 text-slate-900 font-medium"
+                className="w-full min-h-[44px] text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 text-slate-900 font-medium"
               >
                 {COMMUNITY_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -348,17 +366,17 @@ export default function CreateCommunityModal({
               required
               rows={3}
               maxLength={2000}
-              placeholder="Décrivez la mission du cercle, les sujets abordés et ce que les membres peuvent partager..."
+              placeholder="Décrivez la mission, les thématiques et les règles d'échange..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#F0F2F5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 text-slate-900 resize-none"
+              className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100/80 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-600 text-slate-900 resize-none"
             />
           </div>
 
           {/* Privacy Choice */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">
-              Confidentialité du cercle
+              Type de confidentialité
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
@@ -372,9 +390,9 @@ export default function CreateCommunityModal({
               >
                 <Globe className={`w-5 h-5 mt-0.5 shrink-0 ${privacy === 'public' ? 'text-blue-600' : 'text-slate-400'}`} />
                 <div>
-                  <p className="text-xs font-extrabold text-slate-900">Cercle public</p>
+                  <p className="text-xs font-extrabold text-slate-900">Communauté publique</p>
                   <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                    Tout utilisateur connecté peut découvrir le cercle et consulter les publications.
+                    Tout utilisateur connecté peut découvrir l'espace et consulter les publications.
                   </p>
                 </div>
               </button>
@@ -393,31 +411,31 @@ export default function CreateCommunityModal({
               >
                 <Lock className={`w-5 h-5 mt-0.5 shrink-0 ${privacy === 'private' ? 'text-blue-600' : 'text-slate-400'}`} />
                 <div>
-                  <p className="text-xs font-extrabold text-slate-900">Cercle privé</p>
+                  <p className="text-xs font-extrabold text-slate-900">Communauté privée</p>
                   <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                    Seuls les membres approuvés voient les discussions, médias, fichiers et membres.
+                    Seuls les membres approuvés voient les publications, médias, membres et événements.
                   </p>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Governance & Moderation Controls */}
-          <div className="bg-[#F0F2F5] rounded-2xl p-4 space-y-3.5">
+          {/* Membership & Governance Controls */}
+          <div className="bg-slate-100/80 rounded-2xl p-4 space-y-3">
             <p className="text-xs font-extrabold text-slate-900 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span>Autorisations et modération</span>
+              <span>Paramètres d'adhésion & de publication</span>
             </p>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
-                Qui peut publier dans ce cercle ?
+                Qui peut publier dans cette communauté ?
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setPostPermission('all_members')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                  className={`min-h-[42px] py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
                     postPermission === 'all_members'
                       ? 'bg-white border-blue-600 text-blue-700 shadow-2xs'
                       : 'bg-transparent border-slate-300 text-slate-600'
@@ -429,7 +447,7 @@ export default function CreateCommunityModal({
                 <button
                   type="button"
                   onClick={() => setPostPermission('admins_only')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                  className={`min-h-[42px] py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
                     postPermission === 'admins_only'
                       ? 'bg-white border-blue-600 text-blue-700 shadow-2xs'
                       : 'bg-transparent border-slate-300 text-slate-600'
@@ -445,9 +463,9 @@ export default function CreateCommunityModal({
               <div className="flex items-center gap-2.5 min-w-0">
                 <MessageSquare className="w-4 h-4 text-blue-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-bold text-slate-900">Approbation obligatoire des publications</p>
+                  <p className="text-xs font-bold text-slate-900">Validation préalable des publications</p>
                   <p className="text-[11px] text-slate-500">
-                    Les posts des membres passent en file d'attente avant diffusion.
+                    Les publications des membres attendent l'approbation d'un modérateur.
                   </p>
                 </div>
               </div>
@@ -465,7 +483,7 @@ export default function CreateCommunityModal({
                 <div>
                   <p className="text-xs font-bold text-slate-900">Approbation des nouveaux membres</p>
                   <p className="text-[11px] text-slate-500">
-                    Un administrateur ou modérateur doit valider chaque adhésion.
+                    Un administrateur ou modérateur autorisé valide chaque adhésion.
                   </p>
                 </div>
               </div>
@@ -484,7 +502,7 @@ export default function CreateCommunityModal({
                 <div>
                   <p className="text-xs font-bold text-slate-900">Autoriser les publications anonymes</p>
                   <p className="text-[11px] text-slate-500">
-                    Permet aux membres de poser des questions sensibles sans afficher leur nom.
+                    Permet de poser des questions sensibles sans afficher son identité.
                   </p>
                 </div>
               </div>
@@ -497,10 +515,10 @@ export default function CreateCommunityModal({
             </label>
           </div>
 
-          {/* Group Rules Builder */}
+          {/* Community Rules Builder */}
           <div className="space-y-2.5">
             <label className="block text-xs font-bold text-slate-700">
-              Règles du cercle ({rules.length}/20)
+              Règles de la communauté ({rules.length}/20)
             </label>
             <div className="flex gap-2">
               <input
@@ -514,12 +532,12 @@ export default function CreateCommunityModal({
                   }
                 }}
                 placeholder="Ajouter une règle (ex : Pas de publicité non sollicitée)"
-                className="flex-1 text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-[#F0F2F5] focus:bg-white focus:outline-none focus:border-blue-600 text-slate-900"
+                className="flex-1 min-h-[42px] text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-100/80 focus:bg-white focus:outline-none focus:border-blue-600 text-slate-900"
               />
               <button
                 type="button"
                 onClick={handleAddRule}
-                className="min-h-[38px] px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1 transition shrink-0"
+                className="min-h-[42px] px-3.5 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1 transition shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Ajouter</span>
@@ -534,13 +552,13 @@ export default function CreateCommunityModal({
                     className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-700"
                   >
                     <span className="flex items-center gap-2 min-w-0">
-                      <span className="font-bold text-blue-600 shrink-0">{idx + 1}.</span>
+                      <span className="font-bold text-blue-600 shrink-0 tabular-nums">{idx + 1}.</span>
                       <span className="truncate">{rule}</span>
                     </span>
                     <button
                       type="button"
                       onClick={() => handleRemoveRule(idx)}
-                      className="p-1 text-slate-400 hover:text-red-600 rounded-lg transition shrink-0"
+                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition shrink-0"
                       title="Retirer cette règle"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -567,12 +585,12 @@ export default function CreateCommunityModal({
               className="min-h-[44px] px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-extrabold rounded-xl transition shadow-sm flex items-center gap-1.5"
             >
               <Check className="w-4 h-4" />
-              <span>{isSubmitting ? 'Création en cours...' : 'Créer le cercle'}</span>
+              <span>{isSubmitting ? 'Création en cours...' : 'Créer la communauté'}</span>
             </button>
           </div>
         </form>
-      </div>
-    </div>,
+      </motion.div>
+    </motion.div>,
     document.body
   );
 }

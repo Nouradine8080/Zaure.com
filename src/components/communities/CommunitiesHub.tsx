@@ -1,18 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Bell,
+  BookOpen,
+  Briefcase,
   Check,
   CheckCheck,
   Compass,
+  Cpu,
   Flame,
   Globe,
+  GraduationCap,
   KeyRound,
   Lock,
   MailCheck,
   Plus,
   Search,
   Sparkles,
+  Sprout,
+  Stethoscope,
   Users,
+  UsersRound,
   X
 } from 'lucide-react';
 import {
@@ -37,7 +45,18 @@ interface CommunitiesHubProps {
   initialGroupId?: string | null;
   initialInviteCode?: string | null;
   onClearDeepLink?: () => void;
+  onOpenUserProfile?: (userId: string) => void;
 }
+
+const CATEGORY_META: Record<string, { icon: React.ElementType; tone: string }> = {
+  'Médecine & Santé': { icon: Stethoscope, tone: 'text-rose-600 bg-rose-50' },
+  'Sciences & Tech': { icon: Cpu, tone: 'text-blue-600 bg-blue-50' },
+  'Langues & Culture': { icon: BookOpen, tone: 'text-amber-600 bg-amber-50' },
+  'Éducation & Études': { icon: GraduationCap, tone: 'text-indigo-600 bg-indigo-50' },
+  'Agriculture & Écologie': { icon: Sprout, tone: 'text-emerald-600 bg-emerald-50' },
+  Entrepreneuriat: { icon: Briefcase, tone: 'text-slate-700 bg-slate-100' },
+  'Vie communautaire': { icon: UsersRound, tone: 'text-cyan-600 bg-cyan-50' }
+};
 
 function formatRelative(iso?: string): string {
   if (!iso) return '';
@@ -53,12 +72,20 @@ function formatRelative(iso?: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 }
 
+function getMemberRoleLabel(member: CommunityMember, creatorId: string): string {
+  if (member.userId === creatorId) return 'Créateur';
+  if (member.role === 'administrateur') return 'Administrateur';
+  if (member.role === 'moderateur') return 'Modérateur';
+  return 'Membre';
+}
+
 export default function CommunitiesHub({
   currentUser,
   allUsers,
   initialGroupId,
   initialInviteCode,
-  onClearDeepLink
+  onClearDeepLink,
+  onOpenUserProfile
 }: CommunitiesHubProps) {
   const [groups, setGroups] = useState<CommunityGroup[]>([]);
   const [memberships, setMemberships] = useState<CommunityMember[]>([]);
@@ -70,6 +97,7 @@ export default function CommunitiesHub({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroupId || null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [showInviteCodeBox, setShowInviteCodeBox] = useState(false);
 
   // Filters & search
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +112,8 @@ export default function CommunitiesHub({
 
   const handledInviteRef = useRef<string | null>(null);
   const lastNotifCountRef = useRef<number>(0);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const resultsAnchorRef = useRef<HTMLDivElement>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -91,6 +121,17 @@ export default function CommunitiesHub({
       setToast((prev) => (prev?.text === text ? null : prev));
     }, 4500);
   };
+
+  useEffect(() => {
+    if (!showNotifPanel) return;
+    const onOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [showNotifPanel]);
 
   useEffect(() => {
     setLoading(true);
@@ -177,6 +218,14 @@ export default function CommunitiesHub({
     [notifications]
   );
 
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    groups.forEach((g) => {
+      counts[g.category] = (counts[g.category] || 0) + 1;
+    });
+    return counts;
+  }, [groups]);
+
   const filteredGroups = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return groups.filter((g) => {
@@ -190,8 +239,7 @@ export default function CommunitiesHub({
     });
   }, [groups, searchQuery, selectedCategory, privacyFilter]);
 
-  // 5 Required Sections
-  const myCircles = useMemo(
+  const myCommunities = useMemo(
     () =>
       filteredGroups.filter((g) => {
         const m = membershipByGroupId.get(g.id);
@@ -200,7 +248,7 @@ export default function CommunitiesHub({
     [filteredGroups, membershipByGroupId]
   );
 
-  const unjoinedCircles = useMemo(
+  const unjoinedCommunities = useMemo(
     () =>
       filteredGroups.filter((g) => {
         const m = membershipByGroupId.get(g.id);
@@ -209,13 +257,19 @@ export default function CommunitiesHub({
     [filteredGroups, membershipByGroupId]
   );
 
-  const recommendedCircles = useMemo(() => {
+  const popularCommunities = useMemo(() => {
+    return [...filteredGroups]
+      .sort((a, b) => b.memberCount * 2 + b.postCount - (a.memberCount * 2 + a.postCount))
+      .slice(0, 6);
+  }, [filteredGroups]);
+
+  const recommendedCommunities = useMemo(() => {
     const joinedCategories = new Set(
       groups
         .filter((g) => membershipByGroupId.get(g.id)?.status === 'active')
         .map((g) => g.category)
     );
-    return [...unjoinedCircles]
+    return [...unjoinedCommunities]
       .sort((a, b) => {
         const aAffinity =
           (joinedCategories.has(a.category) ? 10 : 0) +
@@ -227,26 +281,7 @@ export default function CommunitiesHub({
         return b.memberCount + b.postCount - (a.memberCount + a.postCount);
       })
       .slice(0, 6);
-  }, [unjoinedCircles, groups, membershipByGroupId, currentUser.role]);
-
-  const popularCircles = useMemo(() => {
-    const shownIds = new Set(recommendedCircles.map((g) => g.id));
-    return [...unjoinedCircles]
-      .filter((g) => !shownIds.has(g.id))
-      .sort((a, b) => b.memberCount + b.postCount - (a.memberCount + a.postCount))
-      .slice(0, 6);
-  }, [unjoinedCircles, recommendedCircles]);
-
-  const newCircles = useMemo(() => {
-    const shownIds = new Set([
-      ...recommendedCircles.map((g) => g.id),
-      ...popularCircles.map((g) => g.id)
-    ]);
-    return [...unjoinedCircles]
-      .filter((g) => !shownIds.has(g.id))
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      .slice(0, 6);
-  }, [unjoinedCircles, recommendedCircles, popularCircles]);
+  }, [unjoinedCommunities, groups, membershipByGroupId, currentUser.role]);
 
   const handleQuickJoin = async (group: CommunityGroup) => {
     try {
@@ -255,10 +290,10 @@ export default function CommunitiesHub({
       if (res.status === 'pending') {
         showToast('success', `Demande envoyée pour « ${group.name} ».`);
       } else {
-        showToast('success', `Vous avez rejoint le cercle « ${group.name} ».`);
+        showToast('success', `Vous avez rejoint la communauté « ${group.name} ».`);
       }
     } catch (err: any) {
-      showToast('error', err?.message || 'Impossible de rejoindre ce cercle.');
+      showToast('error', err?.message || 'Impossible de rejoindre cette communauté.');
     } finally {
       setBusyActionId(null);
     }
@@ -296,8 +331,9 @@ export default function CommunitiesHub({
       setRedeemingCode(true);
       const joined = await communityService.redeemInviteCode(inviteCodeInput, currentUser);
       setInviteCodeInput('');
+      setShowInviteCodeBox(false);
       if (joined) {
-        showToast('success', `Bienvenue dans le cercle « ${joined.name} » !`);
+        showToast('success', `Bienvenue dans la communauté « ${joined.name} » !`);
         setSelectedGroupId(joined.id);
       }
     } catch (err: any) {
@@ -307,12 +343,19 @@ export default function CommunitiesHub({
     }
   };
 
+  const handleSelectCategory = (cat: string) => {
+    setSelectedCategory(cat);
+    if (cat !== 'Toutes' && resultsAnchorRef.current) {
+      resultsAnchorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const selectedGroup = useMemo(
     () => (selectedGroupId ? groups.find((g) => g.id === selectedGroupId) || null : null),
     [groups, selectedGroupId]
   );
 
-  // Render Interior Circle Page when a circle is selected
+  // Render Interior Community Page when selected
   if (selectedGroup) {
     return (
       <CommunityGroupPage
@@ -320,6 +363,7 @@ export default function CommunitiesHub({
         currentUser={currentUser}
         allUsers={allUsers}
         currentMember={membershipByGroupId.get(selectedGroup.id)}
+        onOpenUserProfile={onOpenUserProfile}
         onBack={() => {
           setSelectedGroupId(null);
           onClearDeepLink?.();
@@ -327,172 +371,218 @@ export default function CommunitiesHub({
         onGroupDeleted={() => {
           setSelectedGroupId(null);
           onClearDeepLink?.();
-          showToast('success', 'Le cercle a été supprimé.');
+          showToast('success', 'La communauté a été supprimée.');
         }}
       />
     );
   }
 
-  const renderGroupCard = (group: CommunityGroup) => {
+  const renderGroupCard = (group: CommunityGroup, index = 0) => {
     const member = membershipByGroupId.get(group.id);
     const isActive = member?.status === 'active';
     const isPending = member?.status === 'pending';
+    const isSuspended = member?.status === 'suspended';
     const cover = group.coverPhoto || getDefaultCoverByCategory(group.category);
     const avatar = group.avatarPhoto || getDefaultAvatar();
+    const roleLabel = member ? getMemberRoleLabel(member, group.createdBy) : null;
 
     return (
-      <article
+      <motion.article
         key={group.id}
-        className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.18), ease: [0.16, 1, 0.3, 1] }}
+        whileHover={{ y: -2 }}
+        className="bg-white border border-slate-200/85 rounded-3xl overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_28px_-10px_rgba(15,23,42,0.12)] transition-shadow duration-200 flex flex-col justify-between"
       >
         <div>
           {/* Cover Photo */}
           <div
             onClick={() => setSelectedGroupId(group.id)}
-            className="relative h-28 bg-slate-200 cursor-pointer overflow-hidden group"
+            className="relative h-32 sm:h-36 bg-slate-100 cursor-pointer overflow-hidden group"
           >
             <img
               src={cover}
               alt={group.name}
+              referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-transparent" />
-            <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-xl bg-slate-950/75 backdrop-blur-md text-white text-[10px] font-bold flex items-center gap-1">
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-slate-950/15 to-transparent" />
+
+            {/* Top-right privacy indicator */}
+            <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-xl bg-slate-950/75 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1.5">
               {group.privacy === 'private' ? (
                 <>
                   <Lock className="w-3 h-3 text-amber-400" />
-                  <span>Privé</span>
+                  <span>Privée</span>
                 </>
               ) : (
                 <>
                   <Globe className="w-3 h-3 text-emerald-400" />
-                  <span>Public</span>
+                  <span>Publique</span>
                 </>
               )}
-            </span>
+            </div>
           </div>
 
-          {/* Avatar + Meta */}
-          <div className="px-4 pb-3">
-            <div className="flex items-end justify-between gap-2 -mt-7 relative z-10 mb-2">
+          {/* Avatar + Identity */}
+          <div className="px-4 pb-3.5">
+            <div className="flex items-end justify-between gap-2 -mt-7 relative z-10 mb-2.5">
               <img
                 src={avatar}
                 alt={group.name}
+                referrerPolicy="no-referrer"
                 onClick={() => setSelectedGroupId(group.id)}
                 className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white shadow-sm bg-white cursor-pointer"
               />
-              {isActive && member && (
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 capitalize">
-                  {member.role}
+
+              {isActive && roleLabel && (
+                <span
+                  className={`text-[11px] font-bold ${
+                    roleLabel === 'Créateur'
+                      ? 'text-indigo-700'
+                      : roleLabel === 'Administrateur'
+                        ? 'text-blue-700'
+                        : roleLabel === 'Modérateur'
+                          ? 'text-emerald-700'
+                          : 'text-slate-600'
+                  }`}
+                >
+                  {roleLabel}
                 </span>
               )}
               {isPending && (
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800">
-                  En attente
+                <span className="text-[11px] font-bold text-amber-700">
+                  Demande en attente
+                </span>
+              )}
+              {isSuspended && (
+                <span className="text-[11px] font-bold text-red-600">
+                  Accès suspendu
                 </span>
               )}
             </div>
 
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
-              {group.category}
-            </span>
+            {/* Zero-pill unboxed metadata */}
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium truncate">
+              <span className="text-blue-700 font-semibold truncate">{group.category}</span>
+              <span aria-hidden="true" className="text-slate-300">·</span>
+              <span className="tabular-nums shrink-0">
+                {group.memberCount} {group.memberCount > 1 ? 'membres' : 'membre'}
+              </span>
+            </div>
+
             <h3
               onClick={() => setSelectedGroupId(group.id)}
-              className="text-sm font-extrabold text-slate-900 mt-0.5 truncate cursor-pointer hover:text-blue-700 transition-colors"
+              className="text-[15px] font-extrabold text-slate-950 mt-1 truncate cursor-pointer hover:text-blue-700 transition-colors"
             >
               {group.name}
             </h3>
-            <p className="text-xs text-slate-500 mt-1 line-clamp-2 min-h-[2rem] leading-relaxed">
-              {group.description || 'Cercle communautaire Zaure.'}
+
+            <p className="text-xs text-slate-600 mt-1 line-clamp-2 min-h-[2.25rem] leading-relaxed">
+              {group.description || 'Espace communautaire Zaure dédié au partage et à l’entraide.'}
             </p>
           </div>
         </div>
 
-        {/* Footer stats + CTA */}
-        <div className="px-4 pb-4 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 tabular-nums">
-            <Users className="w-3.5 h-3.5 text-blue-600" />
-            <span>{group.memberCount} membre(s)</span>
+        {/* Footer CTA */}
+        <div className="px-4 pb-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 tabular-nums">
+            <Users className="w-3.5 h-3.5 text-slate-400" />
+            <span>
+              {group.postCount} {group.postCount > 1 ? 'publications' : 'publication'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {isActive ? (
-              <button
+          <div className="flex items-center gap-2 shrink-0">
+            {isActive || isPending || isSuspended ? (
+              <motion.button
                 type="button"
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setSelectedGroupId(group.id)}
-                className="min-h-[36px] px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition"
+                className="min-h-[40px] px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition whitespace-nowrap"
               >
-                Consulter
-              </button>
-            ) : isPending ? (
-              <button
-                type="button"
-                onClick={() => setSelectedGroupId(group.id)}
-                className="min-h-[36px] px-3 py-1.5 bg-amber-50 text-amber-800 text-xs font-bold rounded-xl transition"
-              >
-                Consulter
-              </button>
+                Voir la communauté
+              </motion.button>
             ) : (
               <>
-                <button
+                <motion.button
                   type="button"
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => setSelectedGroupId(group.id)}
-                  className="min-h-[36px] px-2.5 py-1.5 bg-[#F0F2F5] hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+                  className="min-h-[40px] px-3 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-bold rounded-xl transition whitespace-nowrap"
                 >
-                  Consulter
-                </button>
-                <button
+                  Voir
+                </motion.button>
+                <motion.button
                   type="button"
+                  whileTap={{ scale: 0.97 }}
                   disabled={busyActionId === group.id}
                   onClick={() => handleQuickJoin(group)}
-                  className="min-h-[36px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50"
+                  className="min-h-[40px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 whitespace-nowrap shadow-xs"
                 >
                   {busyActionId === group.id
-                    ? '...'
+                    ? 'Envoi...'
                     : group.privacy === 'private' || group.requireMemberApproval
                       ? 'Demander'
                       : 'Rejoindre'}
-                </button>
+                </motion.button>
               </>
             )}
           </div>
         </div>
-      </article>
+      </motion.article>
     );
   };
 
   return (
-    <div className="space-y-5 animate-fadeIn">
+    <div className="space-y-5 pb-6">
       {/* ============================================================ */}
-      {/* TOP HUB HEADER : TITRE « COMMUNAUTÉS », NOTIFS, CRÉER        */}
+      {/* 1. EN-TÊTE « COMMUNAUTÉS », RECHERCHE & CRÉATION             */}
       {/* ============================================================ */}
-      <section className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
-              <Compass className="w-5 h-5" />
+      <section className="bg-white border border-slate-200/85 rounded-3xl p-4 sm:p-6 shadow-[0_1px_3px_rgba(15,23,42,0.04)] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shadow-sm shrink-0">
+              <UsersRound className="w-6 h-6" />
             </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight truncate">
                 Communautés
               </h1>
-              <p className="text-xs text-slate-500">
-                Découvrez, créez et animez vos cercles communautaires sur Zaure
+              <p className="text-xs sm:text-[13px] text-slate-500 mt-0.5">
+                {groups.length} {groups.length > 1 ? 'communautés actives' : 'communauté active'} ·{' '}
+                {memberships.filter((m) => m.status === 'active').length} rejointe(s)
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+            {/* Code d'invitation toggle */}
+            <button
+              type="button"
+              onClick={() => setShowInviteCodeBox((v) => !v)}
+              className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap ${
+                showInviteCodeBox
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
+              }`}
+              title="Utiliser un code d'invitation"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>Code</span>
+            </button>
+
             {/* Notifications Bell */}
-            <div className="relative">
+            <div ref={notifRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowNotifPanel((v) => !v)}
-                className="min-h-[42px] px-3 py-2 bg-[#F0F2F5] hover:bg-slate-200/80 text-slate-800 rounded-xl flex items-center gap-1.5 text-xs font-bold relative transition"
-                title="Notifications des cercles"
+                className="min-h-[44px] px-3 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-800 rounded-xl flex items-center gap-1.5 text-xs font-bold relative transition whitespace-nowrap"
+                title="Notifications des communautés"
               >
                 <Bell className="w-4 h-4 text-blue-600" />
-                <span className="hidden sm:inline">Notifications</span>
+                <span className="hidden sm:inline">Alertes</span>
                 {unreadNotifCount > 0 && (
                   <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center tabular-nums">
                     {unreadNotifCount}
@@ -500,164 +590,181 @@ export default function CommunitiesHub({
                 )}
               </button>
 
-              {showNotifPanel && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-3xl shadow-xl p-4 z-40 space-y-3 animate-fadeIn">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                    <p className="text-xs font-extrabold text-slate-900">
-                      Notifications des cercles
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {unreadNotifCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            communityService.markAllNotificationsRead(
-                              notifications.filter((n) => !n.isRead).map((n) => n.id)
-                            )
-                          }
-                          className="text-[11px] font-bold text-blue-700 hover:underline flex items-center gap-1"
-                        >
-                          <CheckCheck className="w-3.5 h-3.5" />
-                          <span>Tout lire</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setShowNotifPanel(false)}
-                        className="p-1 text-slate-400 hover:text-slate-700"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="max-h-72 overflow-y-auto space-y-2">
-                    {notifications.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-6">
-                        Aucune notification pour le moment.
+              <AnimatePresence>
+                {showNotifPanel && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-3xl shadow-xl p-4 z-40 space-y-3 origin-top-right"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <p className="text-xs font-extrabold text-slate-900">
+                        Notifications communautaires
                       </p>
-                    ) : (
-                      notifications.slice(0, 20).map((n) => (
+                      <div className="flex items-center gap-2">
+                        {unreadNotifCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              communityService.markAllNotificationsRead(
+                                notifications.filter((n) => !n.isRead).map((n) => n.id)
+                              )
+                            }
+                            className="text-[11px] font-bold text-blue-700 hover:underline flex items-center gap-1"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                            <span>Tout lire</span>
+                          </button>
+                        )}
                         <button
-                          key={n.id}
                           type="button"
-                          onClick={() => {
-                            if (!n.isRead) communityService.markNotificationRead(n.id);
-                            setShowNotifPanel(false);
-                            setSelectedGroupId(n.groupId);
-                          }}
-                          className={`w-full text-left p-2.5 rounded-2xl transition flex items-start gap-2.5 ${
-                            n.isRead ? 'bg-white hover:bg-slate-50' : 'bg-blue-50/80 hover:bg-blue-50'
-                          }`}
+                          onClick={() => setShowNotifPanel(false)}
+                          className="p-1 text-slate-400 hover:text-slate-700"
                         >
-                          <span
-                            className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                              n.isRead ? 'bg-slate-300' : 'bg-blue-600'
-                            }`}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-slate-800 leading-snug">
-                              {n.message}
-                            </p>
-                            <p className="text-[10px] text-slate-400 mt-1">
-                              {n.groupName} · {formatRelative(n.createdAt)}
-                            </p>
-                          </div>
+                          <X className="w-4 h-4" />
                         </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+                      </div>
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto space-y-1.5">
+                      {notifications.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-6">
+                          Aucune notification pour le moment.
+                        </p>
+                      ) : (
+                        notifications.slice(0, 20).map((n) => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => {
+                              if (!n.isRead) communityService.markNotificationRead(n.id);
+                              setShowNotifPanel(false);
+                              setSelectedGroupId(n.groupId);
+                            }}
+                            className={`w-full text-left p-2.5 rounded-2xl transition flex items-start gap-2.5 ${
+                              n.isRead ? 'bg-white hover:bg-slate-50' : 'bg-blue-50/80 hover:bg-blue-50'
+                            }`}
+                          >
+                            <span
+                              className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                                n.isRead ? 'bg-slate-300' : 'bg-blue-600'
+                              }`}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-slate-800 leading-snug">
+                                {n.message}
+                              </p>
+                              <p className="text-[11px] text-slate-400 mt-1">
+                                {n.groupName} · {formatRelative(n.createdAt)}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Primary Create Circle CTA */}
-            <button
+            {/* Primary CTA: Créer une communauté */}
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.97 }}
               onClick={() => setShowCreateModal(true)}
-              className="min-h-[42px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition"
+              className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition whitespace-nowrap flex-1 sm:flex-initial justify-center"
             >
               <Plus className="w-4 h-4" />
-              <span>Créer un cercle</span>
-            </button>
+              <span>Créer une communauté</span>
+            </motion.button>
           </div>
         </div>
 
-        {/* Search + Privacy Filter + Redeem Invite Code */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
-          <div className="lg:col-span-6 relative">
+        {/* Search & Privacy Segmented Filter */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+          <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher un cercle par nom, thème ou description..."
-              className="w-full min-h-[42px] bg-[#F0F2F5] focus:bg-white text-xs pl-10 pr-8 py-2 rounded-2xl border border-transparent focus:border-blue-500 focus:outline-none transition"
+              placeholder="Rechercher une communauté par nom, sujet ou description..."
+              className="w-full min-h-[44px] bg-slate-100/90 focus:bg-white text-xs sm:text-sm pl-10 pr-9 py-2 rounded-2xl border border-transparent focus:border-blue-500 focus:outline-none transition"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1"
+                aria-label="Effacer la recherche"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          <div className="lg:col-span-2">
-            <select
-              value={privacyFilter}
-              onChange={(e) =>
-                setPrivacyFilter(e.target.value as 'all' | 'public' | 'private')
-              }
-              className="w-full min-h-[42px] bg-[#F0F2F5] text-xs font-bold text-slate-700 px-3 py-2 rounded-2xl focus:outline-none"
-              aria-label="Filtrer par confidentialité"
-            >
-              <option value="all">Tous (Public & Privé)</option>
-              <option value="public">Cercles publics</option>
-              <option value="private">Cercles privés</option>
-            </select>
+          <div
+            className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl shrink-0"
+            role="group"
+            aria-label="Filtrer par confidentialité"
+          >
+            {(
+              [
+                { id: 'all', label: 'Toutes' },
+                { id: 'public', label: 'Publiques' },
+                { id: 'private', label: 'Privées' }
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setPrivacyFilter(opt.id)}
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap flex-1 md:flex-initial ${
+                  privacyFilter === opt.id
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
-
-          <form onSubmit={handleRedeemCodeSubmit} className="lg:col-span-4 flex gap-2">
-            <div className="relative flex-1">
-              <KeyRound className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={inviteCodeInput}
-                onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
-                placeholder="Code d'invitation..."
-                className="w-full min-h-[42px] bg-[#F0F2F5] focus:bg-white text-xs font-mono pl-8 pr-3 py-2 rounded-2xl border border-transparent focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={redeemingCode || !inviteCodeInput.trim()}
-              className="min-h-[42px] px-3.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl disabled:opacity-40 transition shrink-0"
-            >
-              {redeemingCode ? '...' : 'Valider'}
-            </button>
-          </form>
         </div>
 
-        {/* Category Filter Strip */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-          {['Toutes', ...COMMUNITY_CATEGORIES].map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition ${
-                selectedCategory === cat
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-[#F0F2F5] text-slate-600 hover:bg-slate-200/80'
-              }`}
+        {/* Collapsible Invite Code Redemption */}
+        <AnimatePresence>
+          {showInviteCodeBox && (
+            <motion.form
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              onSubmit={handleRedeemCodeSubmit}
+              className="overflow-hidden"
             >
-              {cat}
-            </button>
-          ))}
-        </div>
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={inviteCodeInput}
+                    onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+                    placeholder="Saisissez un code d'invitation (ex : A7K2M9)..."
+                    className="w-full min-h-[44px] bg-slate-100 focus:bg-white text-xs font-mono pl-10 pr-3 py-2 rounded-2xl border border-transparent focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={redeemingCode || !inviteCodeInput.trim()}
+                  className="min-h-[44px] px-5 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl disabled:opacity-40 transition shrink-0"
+                >
+                  {redeemingCode ? 'Vérification...' : 'Rejoindre avec le code'}
+                </button>
+              </div>
+            </motion.form>
+          )}
+        </AnimatePresence>
 
         {toast && (
           <div
@@ -668,180 +775,249 @@ export default function CommunitiesHub({
             }`}
           >
             <span>{toast.text}</span>
-            <button type="button" onClick={() => setToast(null)}>
+            <button type="button" onClick={() => setToast(null)} className="p-1">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
       </section>
 
+      {/* ============================================================ */}
+      {/* 2. INVITATIONS EN ATTENTE (SI PRÉSENTES)                     */}
+      {/* ============================================================ */}
+      {pendingInvitations.length > 0 && (
+        <section className="bg-white border border-blue-200/80 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold text-slate-950 flex items-center gap-2">
+              <MailCheck className="w-4 h-4 text-blue-600" />
+              <span>Invitations en attente ({pendingInvitations.length})</span>
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {pendingInvitations.map((inv) => (
+              <div
+                key={inv.id}
+                className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <img
+                    src={inv.groupAvatar || getDefaultAvatar()}
+                    alt={inv.groupName}
+                    referrerPolicy="no-referrer"
+                    className="w-11 h-11 rounded-2xl object-cover shrink-0 bg-white border border-slate-200"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold text-slate-900 truncate">
+                      {inv.groupName}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      Par {inv.inviterName} · {inv.groupPrivacy === 'private' ? 'Privée' : 'Publique'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={busyActionId === inv.id}
+                    onClick={() => handleAcceptInvitation(inv)}
+                    className="min-h-[38px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 transition"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Accepter</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyActionId === inv.id}
+                    onClick={() => handleDeclineInvitation(inv)}
+                    className="min-h-[38px] px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-slate-200 text-xs font-bold rounded-xl transition"
+                    title="Refuser"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ============================================================ */}
+      {/* 3. DÉCOUVERTE PAR CATÉGORIES                                 */}
+      {/* ============================================================ */}
+      <section className="bg-white border border-slate-200/85 rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Compass className="w-4 h-4 text-blue-600" />
+            <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+              Découvrir par catégories
+            </h2>
+          </div>
+
+          {selectedCategory !== 'Toutes' && (
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('Toutes')}
+              className="text-xs font-bold text-blue-700 hover:underline whitespace-nowrap"
+            >
+              Tout afficher ({groups.length})
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          <button
+            type="button"
+            onClick={() => handleSelectCategory('Toutes')}
+            className={`min-h-[56px] p-2.5 rounded-2xl border text-left transition flex items-center gap-2.5 ${
+              selectedCategory === 'Toutes'
+                ? 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-2xs'
+                : 'border-slate-200/80 bg-slate-50/60 hover:bg-slate-100/70 text-slate-800'
+            }`}
+          >
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <Compass className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold truncate">Toutes</p>
+              <p className="text-[11px] text-slate-500 tabular-nums">{groups.length} au total</p>
+            </div>
+          </button>
+
+          {COMMUNITY_CATEGORIES.map((cat) => {
+            const meta = CATEGORY_META[cat] || { icon: Compass, tone: 'text-slate-600 bg-slate-100' };
+            const CatIcon = meta.icon;
+            const count = categoryCounts[cat] || 0;
+            const isSelected = selectedCategory === cat;
+
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => handleSelectCategory(cat)}
+                className={`min-h-[56px] p-2.5 rounded-2xl border text-left transition flex items-center gap-2.5 ${
+                  isSelected
+                    ? 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-2xs'
+                    : 'border-slate-200/80 bg-slate-50/60 hover:bg-slate-100/70 text-slate-800'
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl ${meta.tone} flex items-center justify-center shrink-0`}>
+                  <CatIcon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold truncate">{cat}</p>
+                  <p className="text-[11px] text-slate-500 tabular-nums">
+                    {count} {count > 1 ? 'cercles' : 'cercle'}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div ref={resultsAnchorRef} />
+
+      {/* ============================================================ */}
+      {/* 4. CONTENU PRINCIPAL : MES COMMUNAUTÉS, POPULAIRES, RECOMMANDÉES */}
+      {/* ============================================================ */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="bg-white border border-slate-200/80 rounded-3xl h-64 animate-pulse"
+              className="bg-white border border-slate-200/80 rounded-3xl h-72 animate-pulse"
             />
           ))}
         </div>
       ) : (
         <div className="space-y-6">
-          {/* 1. INVITATIONS REÇUES */}
-          <section className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <MailCheck className="w-4 h-4 text-blue-600" />
-                <span>Invitations reçues ({pendingInvitations.length})</span>
-              </h2>
-            </div>
-
-            {pendingInvitations.length === 0 ? (
-              <p className="text-xs text-slate-400">
-                Aucune invitation en attente. Utilisez un code d'invitation ci-dessus si un membre vous a partagé un lien privé.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {pendingInvitations.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="p-3.5 rounded-2xl bg-[#F0F2F5] flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={inv.groupAvatar || getDefaultAvatar()}
-                        alt={inv.groupName}
-                        className="w-11 h-11 rounded-2xl object-cover shrink-0 bg-white"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-extrabold text-slate-900 truncate">
-                          {inv.groupName}
-                        </p>
-                        <p className="text-[11px] text-slate-500 truncate">
-                          Invité(e) par {inv.inviterName} ·{' '}
-                          {inv.groupPrivacy === 'private' ? 'Privé' : 'Public'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        disabled={busyActionId === inv.id}
-                        onClick={() => handleAcceptInvitation(inv)}
-                        className="min-h-[36px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Accepter</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busyActionId === inv.id}
-                        onClick={() => handleDeclineInvitation(inv)}
-                        className="min-h-[36px] px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-slate-200 text-xs font-bold rounded-xl"
-                        title="Refuser"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* 2. MES CERCLES */}
+          {/* A. COMMUNAUTÉS AUXQUELLES L'UTILISATEUR APPARTIENT */}
           <section className="space-y-3">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-blue-600" />
-                <span>Mes cercles ({myCircles.length})</span>
-              </h2>
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+                  Mes communautés
+                </h2>
+                <span className="text-xs font-semibold text-slate-400 tabular-nums">
+                  ({myCommunities.length})
+                </span>
+              </div>
             </div>
 
-            {myCircles.length === 0 ? (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-6 text-center shadow-xs">
-                <p className="text-xs text-slate-500">
-                  Vous n'avez encore rejoint aucun cercle correspondant à ces filtres.
+            {myCommunities.length === 0 ? (
+              <div className="bg-white border border-slate-200/85 rounded-3xl p-6 text-center shadow-xs">
+                <p className="text-xs sm:text-sm text-slate-600">
+                  Vous n'êtes encore membre d'aucune communauté correspondant aux filtres actifs.
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(true)}
-                  className="mt-3 min-h-[38px] px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5"
+                  className="mt-3 min-h-[42px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5 transition"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Créer mon premier cercle</span>
+                  <Plus className="w-4 h-4" />
+                  <span>Créer une communauté</span>
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {myCircles.map(renderGroupCard)}
+                {myCommunities.map((g, i) => renderGroupCard(g, i))}
               </div>
             )}
           </section>
 
-          {/* 3. CERCLES RECOMMANDÉS */}
+          {/* B. COMMUNAUTÉS POPULAIRES */}
           <section className="space-y-3">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>Cercles recommandés</span>
-              </h2>
-            </div>
-
-            {recommendedCircles.length === 0 ? (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 text-xs text-slate-500">
-                Vous faites déjà partie de tous les cercles disponibles dans cette catégorie, ou aucun nouveau cercle ne correspond à votre recherche.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {recommendedCircles.map(renderGroupCard)}
-              </div>
-            )}
-          </section>
-
-          {/* 4. CERCLES POPULAIRES */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Flame className="w-4 h-4 text-red-500" />
-                <span>Cercles populaires</span>
-              </h2>
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+                  Communautés populaires
+                </h2>
+              </div>
+              <span className="text-[11px] font-medium text-slate-400">
+                Les plus actives sur Zaure
+              </span>
             </div>
 
-            {popularCircles.length === 0 ? (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 text-xs text-slate-500">
-                Aucun autre cercle populaire à afficher pour le moment.
+            {popularCommunities.length === 0 ? (
+              <div className="bg-white border border-slate-200/85 rounded-3xl p-5 text-xs text-slate-500">
+                Aucune communauté populaire ne correspond à votre recherche.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {popularCircles.map(renderGroupCard)}
+                {popularCommunities.map((g, i) => renderGroupCard(g, i))}
               </div>
             )}
           </section>
 
-          {/* 5. NOUVEAUX CERCLES */}
+          {/* C. COMMUNAUTÉS RECOMMANDÉES */}
           <section className="space-y-3">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Compass className="w-4 h-4 text-emerald-600" />
-                <span>Nouveaux cercles</span>
-              </h2>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+                  Communautés recommandées pour vous
+                </h2>
+              </div>
             </div>
 
-            {newCircles.length === 0 ? (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 text-xs text-slate-500">
-                Aucun autre nouveau cercle à afficher pour le moment.
+            {recommendedCommunities.length === 0 ? (
+              <div className="bg-white border border-slate-200/85 rounded-3xl p-5 text-xs text-slate-500">
+                Vous faites déjà partie de toutes les communautés disponibles dans cette sélection.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {newCircles.map(renderGroupCard)}
+                {recommendedCommunities.map((g, i) => renderGroupCard(g, i))}
               </div>
             )}
           </section>
         </div>
       )}
 
-      {/* Create Community Circle Modal */}
+      {/* Create Community Modal */}
       {showCreateModal && (
         <CreateCommunityModal
           currentUser={currentUser}
@@ -849,7 +1025,7 @@ export default function CommunitiesHub({
           onCreated={(created) => {
             setShowCreateModal(false);
             setSelectedGroupId(created.id);
-            showToast('success', `Cercle « ${created.name} » créé !`);
+            showToast('success', `Communauté « ${created.name} » créée !`);
           }}
         />
       )}

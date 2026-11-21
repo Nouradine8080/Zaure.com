@@ -141,21 +141,57 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     // Validation Blueprints (Server-Side Schema & Bounds Enforcement)
     // -------------------------------------------------------------------------
+    function isValidPrivacyAudience(val) {
+      return val is string && val in ['public', 'followers', 'cercles', 'private'];
+    }
+
+    function isValidMessageAudience(val) {
+      return val is string && val in ['tous', 'followers', 'cercles', 'mentors', 'personne'];
+    }
+
+    function isValidPrivacySettings(data) {
+      return !( 'privacy_settings' in data ) || (
+        data.privacy_settings == null || (
+          data.privacy_settings is map &&
+          data.privacy_settings.keys().hasOnly([
+            'profileMode', 'infoVisibility', 'postsVisibility',
+            'followersVisibility', 'followingVisibility', 'communitiesVisibility', 'allowMessages'
+          ]) &&
+          (!( 'profileMode' in data.privacy_settings ) || (data.privacy_settings.profileMode is string && data.privacy_settings.profileMode in ['public', 'private'])) &&
+          (!( 'infoVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.infoVisibility)) &&
+          (!( 'postsVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.postsVisibility)) &&
+          (!( 'followersVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.followersVisibility)) &&
+          (!( 'followingVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.followingVisibility)) &&
+          (!( 'communitiesVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.communitiesVisibility)) &&
+          (!( 'allowMessages' in data.privacy_settings ) || isValidMessageAudience(data.privacy_settings.allowMessages))
+        )
+      );
+    }
+
     function isValidUserPrivate(data, userId) {
       return data.keys().hasAll(['id', 'nom', 'role', 'langue_preferee']) &&
         data.keys().hasOnly([
-          'id', 'nom', 'email', 'phone', 'bio', 'avatar_url', 'role',
-          'langue_preferee', 'created_at', 'availability', 'status_message', 'last_active'
+          'id', 'nom', 'username', 'email', 'phone', 'bio', 'avatar_url', 'cover_url',
+          'profession', 'formation', 'localisation', 'site_web', 'infos_complementaires', 'privacy_settings',
+          'role', 'langue_preferee', 'created_at', 'availability', 'status_message', 'last_active'
         ]) &&
         data.id == userId &&
         isValidId(data.id) &&
         data.nom is string && data.nom.size() >= 1 && data.nom.size() <= 120 &&
         isValidRole(data.role) &&
         isValidLang(data.langue_preferee) &&
+        isOptionalString(data, 'username', 40) &&
         isOptionalString(data, 'email', 200) &&
         isOptionalString(data, 'phone', 32) &&
         isOptionalString(data, 'bio', 1000) &&
         isOptionalString(data, 'avatar_url', 350000) &&
+        isOptionalString(data, 'cover_url', 350000) &&
+        isOptionalString(data, 'profession', 120) &&
+        isOptionalString(data, 'formation', 160) &&
+        isOptionalString(data, 'localisation', 120) &&
+        isOptionalString(data, 'site_web', 300) &&
+        isOptionalString(data, 'infos_complementaires', 1000) &&
+        isValidPrivacySettings(data) &&
         isOptionalString(data, 'created_at', 64) &&
         (!( 'availability' in data ) || (data.availability is string && data.availability in ['online', 'busy', 'offline'])) &&
         isOptionalString(data, 'status_message', 160) &&
@@ -165,27 +201,51 @@ service cloud.firestore {
     function isValidPublicProfile(data, userId) {
       return data.keys().hasAll(['id', 'nom', 'role', 'langue_preferee']) &&
         data.keys().hasOnly([
-          'id', 'nom', 'bio', 'avatar_url', 'role',
-          'langue_preferee', 'availability', 'status_message', 'last_active', 'created_at'
+          'id', 'nom', 'username', 'bio', 'avatar_url', 'cover_url',
+          'profession', 'formation', 'localisation', 'site_web', 'infos_complementaires', 'privacy_settings',
+          'role', 'langue_preferee', 'availability', 'status_message', 'last_active', 'created_at'
         ]) &&
         data.id == userId &&
         isValidId(data.id) &&
         data.nom is string && data.nom.size() >= 1 && data.nom.size() <= 120 &&
         isValidRole(data.role) &&
         isValidLang(data.langue_preferee) &&
+        isOptionalString(data, 'username', 40) &&
         isOptionalString(data, 'bio', 1000) &&
         isOptionalString(data, 'avatar_url', 350000) &&
+        isOptionalString(data, 'cover_url', 350000) &&
+        isOptionalString(data, 'profession', 120) &&
+        isOptionalString(data, 'formation', 160) &&
+        isOptionalString(data, 'localisation', 120) &&
+        isOptionalString(data, 'site_web', 300) &&
+        isOptionalString(data, 'infos_complementaires', 1000) &&
+        isValidPrivacySettings(data) &&
         (!( 'availability' in data ) || (data.availability is string && data.availability in ['online', 'busy', 'offline'])) &&
         isOptionalString(data, 'status_message', 160) &&
         isOptionalString(data, 'last_active', 64) &&
         isOptionalString(data, 'created_at', 64);
     }
 
+    function isValidUserFollow(data, followId) {
+      return data.keys().hasAll(['id', 'followerId', 'followingId', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'followerId', 'followingId', 'createdAt']) &&
+        data.id == followId &&
+        isValidCompositeId(data.id) &&
+        isValidId(data.followerId) &&
+        isValidId(data.followingId) &&
+        data.followerId != data.followingId &&
+        data.id == (data.followerId + '_' + data.followingId) &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
     function isValidUserSettings(data) {
       return data.keys().hasOnly([
         'nom', 'bio', 'avatar_url', 'langue_preferee', 'email',
         'profil_visibilite', 'capsules_visibilite', 'messages_autorises', 'mentorat_autorise',
-        'utilisateurs_bloques', 'notif_capsule', 'notif_message', 'notif_mentorat', 'notif_reaction',
+        'utilisateurs_bloques', 'privacy_settings',
+        'notif_capsule', 'notif_message', 'notif_mentorat', 'notif_reaction',
+        'notif_comment', 'notif_follower', 'notif_community', 'notif_mention', 'notif_system', 'notif_push_enabled',
+        'read_platform_notification_ids', 'dismissed_platform_notification_ids',
         'canal_notif', 'langue_interface', 'traduction_auto', 'telechargement_hors_ligne',
         'masquer_suggestions', 'mode_faible_consommation', 'taille_texte'
       ]) &&
@@ -200,10 +260,21 @@ service cloud.firestore {
       (!( 'mentorat_autorise' in data ) || (data.mentorat_autorise is string && data.mentorat_autorise in ['tous', 'verifies', 'aucun'])) &&
       isOptionalList(data, 'utilisateurs_bloques', 200) &&
       (!( 'utilisateurs_bloques' in data ) || data.utilisateurs_bloques.size() == 0 || data.utilisateurs_bloques[0] is string) &&
+      isValidPrivacySettings(data) &&
       (!( 'notif_capsule' in data ) || data.notif_capsule is bool) &&
       (!( 'notif_message' in data ) || data.notif_message is bool) &&
       (!( 'notif_mentorat' in data ) || data.notif_mentorat is bool) &&
       (!( 'notif_reaction' in data ) || data.notif_reaction is bool) &&
+      (!( 'notif_comment' in data ) || data.notif_comment is bool) &&
+      (!( 'notif_follower' in data ) || data.notif_follower is bool) &&
+      (!( 'notif_community' in data ) || data.notif_community is bool) &&
+      (!( 'notif_mention' in data ) || data.notif_mention is bool) &&
+      (!( 'notif_system' in data ) || data.notif_system is bool) &&
+      (!( 'notif_push_enabled' in data ) || data.notif_push_enabled is bool) &&
+      isOptionalList(data, 'read_platform_notification_ids', 200) &&
+      (!( 'read_platform_notification_ids' in data ) || data.read_platform_notification_ids.size() == 0 || data.read_platform_notification_ids[0] is string) &&
+      isOptionalList(data, 'dismissed_platform_notification_ids', 200) &&
+      (!( 'dismissed_platform_notification_ids' in data ) || data.dismissed_platform_notification_ids.size() == 0 || data.dismissed_platform_notification_ids[0] is string) &&
       (!( 'canal_notif' in data ) || (data.canal_notif is string && data.canal_notif in ['inapp', 'email', 'les_deux'])) &&
       (!( 'langue_interface' in data ) || isValidLang(data.langue_interface)) &&
       (!( 'traduction_auto' in data ) || data.traduction_auto is bool) &&
@@ -282,7 +353,8 @@ service cloud.firestore {
         data.keys().hasOnly([
           'id', 'type', 'participant_ids', 'participants', 'group_name', 'group_photo',
           'group_description', 'admin_ids', 'last_message', 'unread_counts', 'typing',
-          'created_at', 'updated_at', 'is_archived_by', 'is_muted_by'
+          'created_at', 'updated_at', 'is_archived_by', 'is_muted_by',
+          'is_favorite_by', 'deleted_by', 'cleared_at'
         ]) &&
         data.id == convId &&
         isValidId(data.id) &&
@@ -300,7 +372,10 @@ service cloud.firestore {
         (!( 'unread_counts' in data ) || data.unread_counts is map) &&
         (!( 'typing' in data ) || data.typing is map) &&
         isOptionalList(data, 'is_archived_by', 50) &&
-        isOptionalList(data, 'is_muted_by', 50);
+        isOptionalList(data, 'is_muted_by', 50) &&
+        isOptionalList(data, 'is_favorite_by', 50) &&
+        isOptionalList(data, 'deleted_by', 50) &&
+        (!( 'cleared_at' in data ) || data.cleared_at is map);
     }
 
     function isValidMessage(data, convId, msgId) {
@@ -308,7 +383,7 @@ service cloud.firestore {
         data.keys().hasOnly([
           'id', 'conversation_id', 'sender_id', 'receiver_id', 'content', 'created_at', 'updated_at',
           'sender_nom', 'sender_avatar', 'type', 'attachments', 'reply_to', 'reactions',
-          'read_by', 'status', 'is_edited', 'is_deleted'
+          'read_by', 'status', 'is_edited', 'is_deleted', 'is_pinned', 'pinned_by', 'pinned_at'
         ]) &&
         data.id == msgId &&
         isValidId(data.id) &&
@@ -327,7 +402,10 @@ service cloud.firestore {
         isOptionalList(data, 'read_by', 50) &&
         (!( 'status' in data ) || (data.status is string && data.status in ['sending', 'sent', 'delivered', 'read'])) &&
         (!( 'is_edited' in data ) || data.is_edited is bool) &&
-        (!( 'is_deleted' in data ) || data.is_deleted is bool);
+        (!( 'is_deleted' in data ) || data.is_deleted is bool) &&
+        (!( 'is_pinned' in data ) || data.is_pinned is bool) &&
+        isOptionalString(data, 'pinned_by', 128) &&
+        isOptionalString(data, 'pinned_at', 64);
     }
 
     function isValidReport(data, reportId) {
@@ -544,9 +622,41 @@ service cloud.firestore {
         isValidId(data.userId) &&
         isValidId(data.groupId) &&
         data.groupName is string && data.groupName.size() >= 1 && data.groupName.size() <= 120 &&
-        data.type is string && data.type in ['invitation', 'member_approved', 'new_post', 'post_approved', 'comment', 'mention', 'announcement', 'event', 'role_changed'] &&
+        data.type is string && data.type in ['invitation', 'member_approved', 'new_post', 'post_approved', 'comment', 'mention', 'announcement', 'event', 'role_changed', 'rules_updated'] &&
         data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
         data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 120 &&
+        data.isRead is bool &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidUserNotification(data, notifId) {
+      return data.keys().hasAll(['id', 'userId', 'actorId', 'actorName', 'type', 'category', 'title', 'message', 'isRead', 'createdAt']) &&
+        data.keys().hasOnly([
+          'id', 'userId', 'actorId', 'actorName', 'actorAvatar',
+          'type', 'category', 'title', 'message', 'previewText',
+          'targetType', 'targetId', 'groupId', 'groupName', 'isRead', 'createdAt'
+        ]) &&
+        data.id == notifId &&
+        isValidCompositeId(data.id) &&
+        isValidId(data.userId) &&
+        isValidId(data.actorId) &&
+        data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 120 &&
+        isOptionalString(data, 'actorAvatar', 350000) &&
+        data.type is string && data.type in [
+          'like', 'reaction', 'comment', 'comment_reply', 'share',
+          'new_follower', 'mention', 'new_message', 'group_mention',
+          'community_invitation', 'community_approved', 'community_post',
+          'community_announcement', 'community_rules', 'community_role',
+          'security_alert', 'system'
+        ] &&
+        data.category is string && data.category in ['interactions', 'mentions', 'communities', 'system'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 500 &&
+        isOptionalString(data, 'previewText', 300) &&
+        (!( 'targetType' in data ) || data.targetType == null || (data.targetType is string && data.targetType in ['post', 'capsule', 'comment', 'community', 'conversation', 'profile', 'settings', 'system'])) &&
+        isOptionalString(data, 'targetId', 260) &&
+        isOptionalString(data, 'groupId', 128) &&
+        isOptionalString(data, 'groupName', 120) &&
         data.isRead is bool &&
         data.createdAt is string && data.createdAt.size() <= 64;
     }
@@ -850,7 +960,8 @@ service cloud.firestore {
         incoming().type == existing().type &&
         incoming().created_at == existing().created_at && (
           incoming().diff(existing()).affectedKeys().hasOnly([
-            'last_message', 'updated_at', 'unread_counts', 'typing', 'is_archived_by', 'is_muted_by'
+            'last_message', 'updated_at', 'unread_counts', 'typing',
+            'is_archived_by', 'is_muted_by', 'is_favorite_by', 'deleted_by', 'cleared_at'
           ]) ||
           (
             existing().type == 'group' &&
@@ -868,7 +979,10 @@ service cloud.firestore {
             ])
           )
         );
-      allow delete: if isValidId(convId) && isAdmin();
+      allow delete: if isValidId(convId) && isSignedIn() && (
+        isAdmin() ||
+        (existing().type == 'group' && existing().admin_ids is list && request.auth.uid in existing().admin_ids)
+      );
 
       match /messages/{messageId} {
         allow get: if isValidId(convId) && isValidId(messageId) && isSignedIn() && (isConversationParticipant(convId) || isAdmin());
@@ -887,7 +1001,8 @@ service cloud.firestore {
               existing().sender_id == request.auth.uid &&
               incoming().diff(existing()).affectedKeys().hasOnly(['content', 'attachments', 'is_edited', 'is_deleted', 'updated_at'])
             ) ||
-            incoming().diff(existing()).affectedKeys().hasOnly(['read_by', 'status', 'reactions'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['read_by', 'status', 'reactions']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['is_pinned', 'pinned_by', 'pinned_at'])
           );
         allow delete: if isValidId(convId) && isValidId(messageId) && isSignedIn() && (existing().sender_id == request.auth.uid || isAdmin());
       }
@@ -1273,6 +1388,33 @@ service cloud.firestore {
         isGroupModeratorWith(existing().groupId, 'manageReports') ||
         isAdmin()
       );
+    }
+
+    // 22. User Follows (Social Graph)
+    match /user_follows/{followId} {
+      allow get: if isValidCompositeId(followId) && isSignedIn();
+      allow list: if isSignedIn() && existing().followerId is string;
+      allow create: if isValidCompositeId(followId) && isSignedIn() &&
+        isValidUserFollow(incoming(), followId) &&
+        incoming().followerId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isValidCompositeId(followId) && isSignedIn() && (
+        existing().followerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // 23. Unified User Notifications (Strictly Owner-Only Reads, Verified Actor Writes)
+    match /notifications/{notifId} {
+      allow get: if isValidCompositeId(notifId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidCompositeId(notifId) && isSignedIn() && isValidUserNotification(incoming(), notifId) &&
+        incoming().isRead == false &&
+        (incoming().actorId == request.auth.uid || isAdmin());
+      allow update: if isValidCompositeId(notifId) && isSignedIn() && isValidUserNotification(incoming(), notifId) &&
+        existing().userId == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isValidCompositeId(notifId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }
   }
 }

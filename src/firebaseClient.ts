@@ -58,7 +58,9 @@ import {
   ConversationParticipant,
   MessageAttachment,
   MessageReplyInfo,
-  UserReport
+  UserReport,
+  UserPrivacySettings,
+  DEFAULT_PRIVACY_SETTINGS
 } from './types';
 
 // Firebase Project Config
@@ -164,12 +166,89 @@ async function testConnection() {
 }
 testConnection();
 
-function buildPublicProfilePayload(profile: UserProfile) {
+export function sanitizeUsername(raw: string | undefined | null, fallbackName?: string): string {
+  const source = (raw && raw.trim()) ? raw.trim() : (fallbackName || 'membre_zaure');
+  const clean = source
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/[^a-z0-9._]+/g, '_')
+    .replace(/^[._]+|[._]+$/g, '')
+    .slice(0, 32);
+  return clean || 'membre_zaure';
+}
+
+export function sanitizeWebsiteUrl(raw: string | undefined | null): string {
+  const val = (raw || '').trim();
+  if (!val) return '';
+  const withProto = /^https?:\/\//i.test(val) ? val : `https://${val}`;
+  try {
+    const parsed = new URL(withProto);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString().slice(0, 300);
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+export function normalizePrivacySettings(raw: any): UserPrivacySettings {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_PRIVACY_SETTINGS };
+  }
+  const validAud = new Set(['public', 'followers', 'cercles', 'private']);
+  const validMsg = new Set(['tous', 'followers', 'cercles', 'mentors', 'personne']);
   return {
+    profileMode: raw.profileMode === 'private' ? 'private' : 'public',
+    infoVisibility: validAud.has(raw.infoVisibility) ? raw.infoVisibility : 'public',
+    postsVisibility: validAud.has(raw.postsVisibility) ? raw.postsVisibility : 'public',
+    followersVisibility: validAud.has(raw.followersVisibility) ? raw.followersVisibility : 'public',
+    followingVisibility: validAud.has(raw.followingVisibility) ? raw.followingVisibility : 'public',
+    communitiesVisibility: validAud.has(raw.communitiesVisibility) ? raw.communitiesVisibility : 'public',
+    allowMessages: validMsg.has(raw.allowMessages) ? raw.allowMessages : 'tous'
+  };
+}
+
+function mapPublicProfileData(id: string, data: any): UserProfile {
+  return {
+    id: data?.id || id,
+    nom: data?.nom || 'Membre Zaure',
+    username: data?.username || sanitizeUsername(undefined, data?.nom),
+    email: '',
+    bio: data?.bio || null,
+    avatar_url: data?.avatar_url || null,
+    cover_url: data?.cover_url || null,
+    profession: data?.profession || '',
+    formation: data?.formation || '',
+    localisation: data?.localisation || '',
+    site_web: data?.site_web || '',
+    infos_complementaires: data?.infos_complementaires || '',
+    privacy_settings: normalizePrivacySettings(data?.privacy_settings),
+    role: data?.role || 'utilisateur',
+    langue_preferee: data?.langue_preferee || 'fr',
+    availability: data?.availability || 'online',
+    status_message: data?.status_message || '',
+    last_active: data?.last_active,
+    created_at: data?.created_at
+  };
+}
+
+function buildPublicProfilePayload(profile: UserProfile) {
+  const payload: Record<string, any> = {
     id: profile.id,
     nom: (profile.nom || 'Membre Zaure').slice(0, 120),
+    username: sanitizeUsername(profile.username, profile.nom).slice(0, 40),
     bio: profile.bio ? profile.bio.slice(0, 1000) : null,
     avatar_url: profile.avatar_url || null,
+    cover_url: profile.cover_url || null,
+    profession: (profile.profession || '').slice(0, 120),
+    formation: (profile.formation || '').slice(0, 160),
+    localisation: (profile.localisation || '').slice(0, 120),
+    site_web: sanitizeWebsiteUrl(profile.site_web).slice(0, 300),
+    infos_complementaires: (profile.infos_complementaires || '').slice(0, 1000),
+    privacy_settings: normalizePrivacySettings(profile.privacy_settings),
     role: profile.role || 'utilisateur',
     langue_preferee: profile.langue_preferee || 'fr',
     availability: profile.availability || 'online',
@@ -177,6 +256,7 @@ function buildPublicProfilePayload(profile: UserProfile) {
     last_active: profile.last_active || new Date().toISOString(),
     created_at: profile.created_at || new Date().toISOString()
   };
+  return payload;
 }
 
 async function syncPublicProfile(profile: UserProfile): Promise<void> {
@@ -538,19 +618,7 @@ export const zaureService = {
       const list: UserProfile[] = [];
       snap.forEach(d => {
         const data = d.data();
-        list.push({
-          id: data.id || d.id,
-          nom: data.nom || 'Membre Zaure',
-          email: '',
-          bio: data.bio || null,
-          avatar_url: data.avatar_url || null,
-          role: data.role || 'utilisateur',
-          langue_preferee: data.langue_preferee || 'fr',
-          availability: data.availability || 'online',
-          status_message: data.status_message || '',
-          last_active: data.last_active,
-          created_at: data.created_at
-        });
+        list.push(mapPublicProfileData(d.id, data));
       });
       if (currentUser && !list.some(u => u.id === currentUser!.id)) {
         list.push({ ...currentUser, email: '' });
@@ -559,6 +627,30 @@ export const zaureService = {
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, 'public_profiles');
     }
+  },
+
+  subscribePublicProfilesPresence: (callback: (users: UserProfile[]) => void): (() => void) => {
+    if (!dbFirestore || !auth?.currentUser) {
+      callback([]);
+      return () => {};
+    }
+    const q = collection(dbFirestore, 'public_profiles');
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list: UserProfile[] = [];
+        snap.forEach((d) => {
+          list.push(mapPublicProfileData(d.id, d.data()));
+        });
+        if (currentUser && !list.some((u) => u.id === currentUser!.id)) {
+          list.push({ ...currentUser, email: '' });
+        }
+        callback(list);
+      },
+      (error) => {
+        console.warn('Info - listener public_profiles:', error);
+      }
+    );
   },
 
   // --- CIRCLES ---
@@ -984,6 +1076,37 @@ export const zaureService = {
       } else {
         const react: Reaction = { capsule_id: capsuleId, user_id: currentUser.id, type };
         await setDoc(docRef, react);
+
+        try {
+          const capSnap = await getDoc(doc(dbFirestore, 'capsules', capsuleId));
+          if (capSnap.exists()) {
+            const cap = capSnap.data() as Capsule;
+            if (cap.auteur_id && cap.auteur_id !== currentUser.id) {
+              const { notificationService, buildDeterministicNotificationId } = await import('./services/notificationService');
+              const typeLabels: Record<'utile' | 'merci' | 'question', string> = {
+                utile: 'a trouvé votre capsule utile 💡',
+                merci: 'vous remercie pour votre capsule 🙏',
+                question: 'a posé une question sur votre capsule ❓'
+              };
+              await notificationService.createAppNotification({
+                id: buildDeterministicNotificationId(['capreact', capsuleId, currentUser.id, type]),
+                userId: cap.auteur_id,
+                actorId: currentUser.id,
+                actorName: currentUser.nom,
+                actorAvatar: currentUser.avatar_url || undefined,
+                type: 'reaction',
+                category: 'interactions',
+                title: 'Nouvelle réaction sur capsule',
+                message: `${currentUser.nom} ${typeLabels[type]}.`,
+                previewText: cap.type === 'texte' ? cap.contenu.slice(0, 140) : 'Capsule audio / média',
+                targetType: 'capsule',
+                targetId: capsuleId
+              });
+            }
+          }
+        } catch {
+          // Non-fatal
+        }
       }
 
       return await zaureService.getReactions(capsuleId);
@@ -1058,6 +1181,61 @@ export const zaureService = {
         contenu: newComment.contenu,
         created_at: newComment.created_at
       });
+
+      try {
+        const capSnap = await getDoc(doc(dbFirestore, 'capsules', capsuleId));
+        const { notificationService, buildDeterministicNotificationId, extractMentionedUserIds } = await import('./services/notificationService');
+        const cap = capSnap.exists() ? (capSnap.data() as Capsule) : null;
+        if (cap && cap.auteur_id && cap.auteur_id !== currentUser.id) {
+          await notificationService.createAppNotification({
+            id: buildDeterministicNotificationId(['capcom', newComment.id, cap.auteur_id]),
+            userId: cap.auteur_id,
+            actorId: currentUser.id,
+            actorName: currentUser.nom,
+            actorAvatar: currentUser.avatar_url || undefined,
+            type: 'comment',
+            category: 'interactions',
+            title: 'Nouveau commentaire',
+            message: `${currentUser.nom} a commenté votre capsule.`,
+            previewText: safeContenu.slice(0, 140),
+            targetType: 'capsule',
+            targetId: capsuleId
+          });
+        }
+
+        if (safeContenu.includes('@')) {
+          const usersSnap = await getDocs(collection(dbFirestore, 'public_profiles'));
+          const candidates: Array<{ id: string; nom: string; username?: string }> = [];
+          usersSnap.forEach((u) => {
+            const ud = u.data() as UserProfile;
+            candidates.push({ id: ud.id, nom: ud.nom, username: ud.username });
+          });
+          const mentionedIds = extractMentionedUserIds(safeContenu, candidates);
+          await Promise.all(
+            mentionedIds
+              .filter((uid) => uid !== currentUser?.id && uid !== cap?.auteur_id)
+              .slice(0, 10)
+              .map((uid) =>
+                notificationService.createAppNotification({
+                  id: buildDeterministicNotificationId(['capmention', newComment.id, uid]),
+                  userId: uid,
+                  actorId: currentUser!.id,
+                  actorName: currentUser!.nom,
+                  actorAvatar: currentUser!.avatar_url || undefined,
+                  type: 'mention',
+                  category: 'mentions',
+                  title: 'Mention dans un commentaire',
+                  message: `${currentUser!.nom} vous a mentionné(e) dans un commentaire.`,
+                  previewText: safeContenu.slice(0, 140),
+                  targetType: 'capsule',
+                  targetId: capsuleId
+                })
+              )
+          );
+        }
+      } catch {
+        // Non-fatal
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `comments/${newComment.id}`);
     }
@@ -1086,6 +1264,31 @@ export const zaureService = {
     else if (file.type.startsWith('video/')) attType = 'video';
     else if (file.type.startsWith('audio/')) attType = 'audio';
 
+    const buildSafeFallbackAttachment = (errToReject?: unknown): Promise<MessageAttachment> => {
+      if (file.size > 680 * 1024) {
+        return Promise.reject(
+          new Error(
+            'Le stockage Firebase Storage n’a pas pu finaliser le fichier. Limitez la taille à 650 Ko ou réessayez.'
+          )
+        );
+      }
+      return new Promise<MessageAttachment>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (onProgress) onProgress(100);
+          resolve({
+            type: attType,
+            url: reader.result as string,
+            name: safeName,
+            size: file.size,
+            mime_type: file.type
+          });
+        };
+        reader.onerror = () => reject(errToReject || new Error('Lecture du fichier impossible.'));
+        reader.readAsDataURL(file);
+      });
+    };
+
     if (storage) {
       try {
         const fileRef = storageRef(storage, storagePath);
@@ -1099,19 +1302,8 @@ export const zaureService = {
               if (onProgress) onProgress(Math.round(progress));
             },
             (error) => {
-              console.warn('Info - Storage upload error, using local data URL fallback:', error);
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                resolve({
-                  type: attType,
-                  url: reader.result as string,
-                  name: safeName,
-                  size: file.size,
-                  mime_type: file.type
-                });
-              };
-              reader.onerror = () => reject(error);
-              reader.readAsDataURL(file);
+              console.warn('Info - Storage upload error, checking fallback:', error);
+              buildSafeFallbackAttachment(error).then(resolve).catch(reject);
             },
             async () => {
               try {
@@ -1125,41 +1317,18 @@ export const zaureService = {
                   mime_type: file.type
                 });
               } catch (err) {
-                console.warn('Info - getDownloadURL failed, using fallback:', err);
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  resolve({
-                    type: attType,
-                    url: reader.result as string,
-                    name: safeName,
-                    size: file.size,
-                    mime_type: file.type
-                  });
-                };
-                reader.readAsDataURL(file);
+                console.warn('Info - getDownloadURL failed, checking fallback:', err);
+                buildSafeFallbackAttachment(err).then(resolve).catch(reject);
               }
             }
           );
         });
       } catch (e) {
-        console.warn('Info - Storage init error, fallback data URL:', e);
+        console.warn('Info - Storage init error:', e);
       }
     }
 
-    return new Promise<MessageAttachment>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (onProgress) onProgress(100);
-        resolve({
-          type: attType,
-          url: reader.result as string,
-          name: safeName,
-          size: file.size,
-          mime_type: file.type
-        });
-      };
-      reader.readAsDataURL(file);
-    });
+    return buildSafeFallbackAttachment();
   },
 
   // --- CONVERSATIONS TEMPS RÉEL (STYLE MESSENGER) ---
@@ -1190,7 +1359,10 @@ export const zaureService = {
             created_at: data.created_at || new Date().toISOString(),
             updated_at: data.updated_at || data.created_at || new Date().toISOString(),
             is_archived_by: data.is_archived_by || [],
-            is_muted_by: data.is_muted_by || []
+            is_muted_by: data.is_muted_by || [],
+            is_favorite_by: data.is_favorite_by || [],
+            deleted_by: data.deleted_by || [],
+            cleared_at: data.cleared_at || {}
           });
         });
 
@@ -1241,7 +1413,10 @@ export const zaureService = {
             read_by: data.read_by || [],
             status: data.status || 'sent',
             is_edited: data.is_edited || false,
-            is_deleted: data.is_deleted || false
+            is_deleted: data.is_deleted || false,
+            is_pinned: Boolean(data.is_pinned),
+            pinned_by: data.pinned_by || undefined,
+            pinned_at: data.pinned_at || undefined
           });
         });
         callback(list);
@@ -1300,6 +1475,7 @@ export const zaureService = {
             type,
             created_at: nowIso
           },
+          deleted_by: [],
           [typingResetKey]: false
         };
 
@@ -1355,7 +1531,9 @@ export const zaureService = {
           unread_counts: receiverId ? { [receiverId]: 1, [currentUser.id]: 0 } : {},
           typing: { [currentUser.id]: false },
           is_archived_by: [],
-          is_muted_by: []
+          is_muted_by: [],
+          is_favorite_by: [],
+          deleted_by: []
         });
       }
     } catch (err) {
@@ -1386,6 +1564,63 @@ export const zaureService = {
       await setDoc(msgDocRef, messagePayload);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `conversations/${conversationId}/messages/${messageId}`);
+    }
+
+    // Notifications temps réel de messagerie (message privé & @mention dans un groupe)
+    if (type !== 'system') {
+      try {
+        const { notificationService, buildDeterministicNotificationId, extractMentionedUserIds } =
+          await import('./services/notificationService');
+        const convAfterSnap = await getDoc(convDocRef);
+        const convData = convAfterSnap.exists() ? (convAfterSnap.data() as Conversation) : null;
+        const mutedBy = convData?.is_muted_by || [];
+
+        if (receiverId && receiverId !== currentUser.id && !mutedBy.includes(receiverId)) {
+          await notificationService.createAppNotification({
+            id: buildDeterministicNotificationId(['msg', conversationId, messageId, receiverId]),
+            userId: receiverId,
+            actorId: currentUser.id,
+            actorName: currentUser.nom,
+            actorAvatar: currentUser.avatar_url || undefined,
+            type: 'new_message',
+            category: 'interactions',
+            title: 'Nouveau message privé',
+            message: `${currentUser.nom} vous a envoyé un message.`,
+            previewText: displayPreview.slice(0, 140),
+            targetType: 'conversation',
+            targetId: conversationId
+          });
+        } else if (convData && convData.type === 'group' && safeContent.includes('@')) {
+          const participantsMap = convData.participants || {};
+          const candidates = (convData.participant_ids || [])
+            .filter((pid) => pid !== currentUser?.id && !mutedBy.includes(pid))
+            .map((pid) => ({
+              id: pid,
+              nom: participantsMap[pid]?.nom || 'Membre'
+            }));
+          const mentionedIds = extractMentionedUserIds(safeContent, candidates);
+          await Promise.all(
+            mentionedIds.slice(0, 15).map((uid) =>
+              notificationService.createAppNotification({
+                id: buildDeterministicNotificationId(['gmsgm', conversationId, messageId, uid]),
+                userId: uid,
+                actorId: currentUser!.id,
+                actorName: currentUser!.nom,
+                actorAvatar: currentUser!.avatar_url || undefined,
+                type: 'group_mention',
+                category: 'mentions',
+                title: `Mention dans ${convData.group_name || 'une conversation'}`,
+                message: `${currentUser!.nom} vous a mentionné(e) dans le groupe « ${convData.group_name || 'Discussion'} ».`,
+                previewText: displayPreview.slice(0, 140),
+                targetType: 'conversation',
+                targetId: conversationId
+              })
+            )
+          );
+        }
+      } catch {
+        // Non-fatal
+      }
     }
 
     return {
@@ -1460,7 +1695,9 @@ export const zaureService = {
       created_at: nowIso,
       updated_at: nowIso,
       is_archived_by: [],
-      is_muted_by: []
+      is_muted_by: [],
+      is_favorite_by: [],
+      deleted_by: []
     };
 
     try {
@@ -1571,7 +1808,10 @@ export const zaureService = {
           read_by: data.read_by || [],
           status: data.status || 'sent',
           is_edited: data.is_edited || false,
-          is_deleted: data.is_deleted || false
+          is_deleted: data.is_deleted || false,
+          is_pinned: Boolean(data.is_pinned),
+          pinned_by: data.pinned_by || undefined,
+          pinned_at: data.pinned_at || undefined
         });
       });
       list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -1669,6 +1909,62 @@ export const zaureService = {
     });
   },
 
+  toggleFavoriteConversation: async (convId: string): Promise<boolean> => {
+    if (!currentUser || !dbFirestore) return false;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return false;
+    const data = snap.data();
+    const favs: string[] = data.is_favorite_by || [];
+    const isFav = favs.includes(currentUser.id);
+    await updateDoc(ref, {
+      is_favorite_by: isFav ? arrayRemove(currentUser.id) : arrayUnion(currentUser.id)
+    });
+    return !isFav;
+  },
+
+  togglePinMessage: async (convId: string, messageId: string, currentlyPinned: boolean): Promise<boolean> => {
+    if (!currentUser || !dbFirestore) return false;
+    const msgRef = doc(dbFirestore, 'conversations', convId, 'messages', messageId);
+    const nextPinned = !currentlyPinned;
+    try {
+      await updateDoc(msgRef, {
+        is_pinned: nextPinned,
+        pinned_by: nextPinned ? currentUser.id : '',
+        pinned_at: nextPinned ? new Date().toISOString() : ''
+      });
+      return nextPinned;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}/messages/${messageId}`);
+      return currentlyPinned;
+    }
+  },
+
+  softDeleteConversationForUser: async (convId: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    const nowIso = new Date().toISOString();
+    try {
+      await updateDoc(ref, {
+        deleted_by: arrayUnion(currentUser.id),
+        [`cleared_at.${currentUser.id}`]: nowIso,
+        [`unread_counts.${currentUser.id}`]: 0
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `conversations/${convId}`);
+    }
+  },
+
+  deleteGroupConversation: async (convId: string): Promise<void> => {
+    if (!currentUser || !dbFirestore) return;
+    const ref = doc(dbFirestore, 'conversations', convId);
+    try {
+      await deleteDoc(ref);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `conversations/${convId}`);
+    }
+  },
+
   // Rétrocompatibilité pour les anciens appels
   subscribePrivateMessages: (otherUserId: string, callback: (messages: Message[]) => void): (() => void) => {
     if (!currentUser || !dbFirestore) {
@@ -1748,6 +2044,19 @@ export const zaureService = {
     if (!dbFirestore) return false;
     try {
       await setDoc(doc(dbFirestore, 'user_settings', userId), newSettings, { merge: true });
+      if (newSettings.privacy_settings && auth?.currentUser && auth.currentUser.uid === userId) {
+        const cleanPriv = normalizePrivacySettings(newSettings.privacy_settings);
+        await updateDoc(doc(dbFirestore, 'users', userId), { privacy_settings: cleanPriv }).catch(() => {});
+        if (currentUser && currentUser.id === userId) {
+          currentUser = { ...currentUser, privacy_settings: cleanPriv };
+          await syncPublicProfile(currentUser);
+          try {
+            localStorage.setItem('zaure_user_session_cache', JSON.stringify(currentUser));
+          } catch {
+            // ignore storage cache
+          }
+        }
+      }
       return true;
     } catch (error) {
       console.error('Erreur sauvegarde des préférences:', error);
@@ -1757,16 +2066,53 @@ export const zaureService = {
 
   updateUserProfile: async (
     userId: string, 
-    updates: { nom?: string; bio?: string; avatar_url?: string; langue_preferee?: 'fr' | 'ha' | 'en' }
+    updates: {
+      nom?: string;
+      username?: string;
+      bio?: string | null;
+      avatar_url?: string | null;
+      cover_url?: string | null;
+      profession?: string;
+      formation?: string;
+      localisation?: string;
+      site_web?: string;
+      infos_complementaires?: string;
+      privacy_settings?: UserPrivacySettings;
+      langue_preferee?: 'fr' | 'ha' | 'en';
+    }
   ): Promise<{ user: UserProfile | null, error: string | null }> => {
     if (!dbFirestore || !auth?.currentUser || auth.currentUser.uid !== userId) {
       return { user: null, error: 'Non autorisé ou Firestore non connecté' };
     }
 
     const sanitized: Record<string, any> = {};
-    if (updates.nom !== undefined) sanitized.nom = updates.nom.trim().slice(0, 120);
+    if (updates.nom !== undefined) {
+      const trimmedNom = updates.nom.trim().slice(0, 120);
+      if (!trimmedNom) {
+        return { user: null, error: 'Le nom complet ne peut pas être vide.' };
+      }
+      sanitized.nom = trimmedNom;
+    }
+    if (updates.username !== undefined) {
+      sanitized.username = sanitizeUsername(updates.username, updates.nom || currentUser?.nom).slice(0, 40);
+    }
     if (updates.bio !== undefined) sanitized.bio = updates.bio ? updates.bio.trim().slice(0, 1000) : null;
-    if (updates.avatar_url !== undefined) sanitized.avatar_url = updates.avatar_url;
+    if (updates.avatar_url !== undefined) {
+      sanitized.avatar_url = updates.avatar_url ? updates.avatar_url.slice(0, 350000) : null;
+    }
+    if (updates.cover_url !== undefined) {
+      sanitized.cover_url = updates.cover_url ? updates.cover_url.slice(0, 350000) : null;
+    }
+    if (updates.profession !== undefined) sanitized.profession = updates.profession.trim().slice(0, 120);
+    if (updates.formation !== undefined) sanitized.formation = updates.formation.trim().slice(0, 160);
+    if (updates.localisation !== undefined) sanitized.localisation = updates.localisation.trim().slice(0, 120);
+    if (updates.site_web !== undefined) sanitized.site_web = sanitizeWebsiteUrl(updates.site_web).slice(0, 300);
+    if (updates.infos_complementaires !== undefined) {
+      sanitized.infos_complementaires = updates.infos_complementaires.trim().slice(0, 1000);
+    }
+    if (updates.privacy_settings !== undefined) {
+      sanitized.privacy_settings = normalizePrivacySettings(updates.privacy_settings);
+    }
     if (updates.langue_preferee !== undefined) sanitized.langue_preferee = updates.langue_preferee;
 
     try {
@@ -1774,6 +2120,11 @@ export const zaureService = {
       if (currentUser && currentUser.id === userId) {
         currentUser = { ...currentUser, ...sanitized };
         await syncPublicProfile(currentUser);
+        try {
+          localStorage.setItem('zaure_user_session_cache', JSON.stringify(currentUser));
+        } catch {
+          // ignore storage cache
+        }
       } else {
         await setDoc(doc(dbFirestore, 'public_profiles', userId), sanitized, { merge: true });
       }
@@ -1885,20 +2236,7 @@ export const zaureService = {
     try {
       const userDoc = await getDoc(doc(dbFirestore, 'public_profiles', userId));
       if (!userDoc.exists()) return null;
-      const data = userDoc.data();
-      return {
-        id: userDoc.id,
-        nom: data.nom || 'Membre Zaure',
-        email: '',
-        bio: data.bio || null,
-        avatar_url: data.avatar_url || null,
-        role: data.role || 'utilisateur',
-        langue_preferee: data.langue_preferee || 'fr',
-        created_at: data.created_at || undefined,
-        availability: data.availability || 'online',
-        status_message: data.status_message || '',
-        last_active: data.last_active || undefined
-      };
+      return mapPublicProfileData(userDoc.id, userDoc.data());
     } catch (e) {
       handleFirestoreError(e, OperationType.GET, `public_profiles/${userId}`);
     }
@@ -1915,6 +2253,22 @@ export const zaureService = {
       await updateEmail(auth.currentUser, safeEmail);
       await updateDoc(doc(dbFirestore, 'users', currentUser.id), { email: safeEmail });
       currentUser.email = safeEmail;
+      try {
+        const { notificationService } = await import('./services/notificationService');
+        await notificationService.createAppNotification({
+          userId: currentUser.id,
+          actorId: currentUser.id,
+          actorName: 'Sécurité Zaure',
+          type: 'security_alert',
+          category: 'system',
+          title: 'Adresse email mise à jour',
+          message: `L'adresse email de votre compte a été modifiée pour ${safeEmail}.`,
+          targetType: 'settings',
+          targetId: 'compte'
+        });
+      } catch {
+        // Non-fatal
+      }
       return { success: true, error: null };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erreur lors de la mise à jour de l\'email' };
@@ -1928,6 +2282,24 @@ export const zaureService = {
 
     try {
       await updatePassword(auth.currentUser, newPassword);
+      if (currentUser) {
+        try {
+          const { notificationService } = await import('./services/notificationService');
+          await notificationService.createAppNotification({
+            userId: currentUser.id,
+            actorId: currentUser.id,
+            actorName: 'Sécurité Zaure',
+            type: 'security_alert',
+            category: 'system',
+            title: 'Mot de passe modifié',
+            message: 'Votre mot de passe Zaure vient d’être modifié avec succès.',
+            targetType: 'settings',
+            targetId: 'compte'
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
       return { success: true, error: null };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erreur lors du changement de mot de passe.' };

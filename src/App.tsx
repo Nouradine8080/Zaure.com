@@ -45,11 +45,15 @@ import {
   UsersRound,
   Bell,
   CircleUserRound,
-  MessageCircle
+  MessageCircle,
+  ArrowUp,
+  ChevronDown
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { compressImageFile } from './utils/imageCompressor';
 import { zaureService } from './firebaseClient';
 import { communityService, PUBLIC_FEED_GROUP } from './services/communityService';
+import { notificationService } from './services/notificationService';
 import {
   Circle,
   Capsule,
@@ -58,7 +62,10 @@ import {
   GroupPost,
   GroupPostType,
   PostComment,
-  PostReaction
+  PostReaction,
+  UnifiedNotification,
+  UserSettings,
+  DEFAULT_USER_SETTINGS
 } from './types';
 import CircleCard from './components/CircleCard';
 import CapsuleCard from './components/CapsuleCard';
@@ -76,6 +83,8 @@ import { REGISTRATION_ROUTES } from './constants/registration';
 import CommunitiesHub from './components/communities/CommunitiesHub';
 import CommunityPostComposer from './components/communities/CommunityPostComposer';
 import CommunityPostCard from './components/communities/CommunityPostCard';
+import ProfilePage from './components/profile/ProfilePage';
+import NotificationsCenter from './components/notifications/NotificationsCenter';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { useTranslation } from './context/LanguageContext';
 import { AdminPortalRoot } from './admin/AdminPortalRoot';
@@ -125,11 +134,18 @@ export default function App() {
   const [communityInviteCode, setCommunityInviteCode] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get('invite')
   );
-  const [activeTab, setActiveTab] = useState<'feed' | 'communities' | 'chat' | 'settings'>(() => {
+  const [profileDeepLinkId, setProfileDeepLinkId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('profile')
+  );
+  const [activeTab, setActiveTab] = useState<'feed' | 'communities' | 'chat' | 'notifications' | 'settings' | 'profile'>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('community') || params.get('invite') ? 'communities' : 'feed';
+    if (params.get('community') || params.get('invite')) return 'communities';
+    if (params.get('profile')) return 'profile';
+    if (params.get('notifications')) return 'notifications';
+    return 'feed';
   });
   const [feedSection, setFeedSection] = useState<'feed' | 'circles' | 'mentors' | 'bookmarks'>('feed');
+  const [viewedProfileUser, setViewedProfileUser] = useState<UserProfile | null>(null);
   
   // Data state
   const cachedUserSession = useMemo(() => {
@@ -148,20 +164,24 @@ export default function App() {
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
   const [selectedCircleId, setSelectedCircleId] = useState<string>('all');
   
-  // Notifications state
-  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: '1', title: 'Nouveau message dans le Cercle Médical du Sahel', time: 'Il y a 10 min', unread: true },
-    { id: '2', title: 'Votre publication a reçu une mention Utile 💡', time: 'Il y a 1 heure', unread: true },
-    { id: '3', title: 'Bienvenue sur la plateforme académique Zaure', time: "Aujourd'hui", unread: false }
-  ]);
-  const unreadNotificationsCount = notifications.filter(n => n.unread).length;
+  // Real-time Notifications state
+  const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
+  const [notificationSettings, setNotificationSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
+  const [notifBadgePulse, setNotifBadgePulse] = useState(false);
+  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const unreadNotificationsCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
 
-  // Feed filters & Search
+  // Feed filters, Search & UX helpers
   const [feedFilter, setFeedFilter] = useState<'all' | 'public' | 'joined' | 'audio' | 'questions'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isFeedLoading, setIsFeedLoading] = useState<boolean>(true);
+  const [visibleFeedCount, setVisibleFeedCount] = useState<number>(10);
+  const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
 
   // Public Facebook-style out-of-circle posts
   const [publicPosts, setPublicPosts] = useState<GroupPost[]>([]);
@@ -325,6 +345,35 @@ export default function App() {
     };
   }, [currentUser]);
 
+  // Real-time unified notifications listener (Firestore sync across social, community & platform alerts)
+  useEffect(() => {
+    if (!currentUser) {
+      setNotifications([]);
+      setNotificationSettings(DEFAULT_USER_SETTINGS);
+      return;
+    }
+
+    let pulseTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = notificationService.subscribeUnifiedNotifications(
+      currentUser,
+      allUsers,
+      ({ notifications: nextNotifs, settings: nextSettings, newArrivals }) => {
+        setNotifications(nextNotifs);
+        setNotificationSettings(nextSettings);
+        if (newArrivals.length > 0) {
+          setNotifBadgePulse(true);
+          if (pulseTimer) clearTimeout(pulseTimer);
+          pulseTimer = setTimeout(() => setNotifBadgePulse(false), 1800);
+        }
+      }
+    );
+
+    return () => {
+      unsub();
+      if (pulseTimer) clearTimeout(pulseTimer);
+    };
+  }, [currentUser, allUsers]);
+
   const loadInitialData = async () => {
     try {
       const allCircles = await zaureService.getCircles();
@@ -346,11 +395,26 @@ export default function App() {
     }
   };
 
+  // Reset progressive feed pagination on filter/search changes & track scroll for Back-to-Top
+  useEffect(() => {
+    setVisibleFeedCount(10);
+  }, [feedFilter, feedSection, searchQuery, selectedCircleId]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowBackToTop(window.scrollY > 520);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const loadCapsules = async () => {
     if (!currentUser) {
       setCapsules([]);
+      setIsFeedLoading(false);
       return;
     }
+    setIsFeedLoading(true);
     try {
       let filteredIds: string[] = [];
 
@@ -364,6 +428,8 @@ export default function App() {
       setCapsules(list);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsFeedLoading(false);
     }
   };
 
@@ -755,8 +821,7 @@ export default function App() {
 
     const shouldIncludePublicPosts =
       selectedCircleId === 'all' &&
-      feedFilter !== 'joined' &&
-      feedFilter !== 'audio';
+      feedFilter !== 'joined';
 
     if (shouldIncludePublicPosts && currentUser) {
       const nowMs = Date.now();
@@ -771,6 +836,12 @@ export default function App() {
 
       if (feedSection === 'bookmarks') {
         filteredPosts = filteredPosts.filter((p) => (p.savedBy || []).includes(currentUser.id));
+      }
+
+      if (feedFilter === 'audio') {
+        filteredPosts = filteredPosts.filter((p) =>
+          p.media.some((m) => m.type === 'audio' || m.mimeType?.startsWith('audio/'))
+        );
       }
 
       if (feedFilter === 'questions') {
@@ -814,6 +885,28 @@ export default function App() {
     currentUser
   ]);
 
+  // Scroll cleanly to target post/capsule opened from Notifications Center
+  useEffect(() => {
+    if (!focusedItemId || activeTab !== 'feed') return;
+    const idx = displayedFeedItems.findIndex((item) =>
+      item.kind === 'post' ? `pub_${item.id}` === focusedItemId : `cap_${item.id}` === focusedItemId
+    );
+    if (idx >= visibleFeedCount) {
+      setVisibleFeedCount(idx + 5);
+    }
+    const scrollTimer = setTimeout(() => {
+      const el = document.getElementById(`feed-item-${focusedItemId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 120);
+    const clearTimer = setTimeout(() => setFocusedItemId(null), 3500);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [focusedItemId, activeTab, displayedFeedItems, visibleFeedCount]);
+
   // Filtered Circles based on search & category
   const displayedCircles = useMemo(() => {
     let list = circles;
@@ -845,6 +938,54 @@ export default function App() {
   const suggestedCircles = useMemo(() => {
     return circles.filter((c) => !joinedCircleIds.includes(c.id)).slice(0, 3);
   }, [circles, joinedCircleIds]);
+
+  // Open any member's social profile (or own profile)
+  const openUserProfile = async (target: UserProfile | string) => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    const targetId = typeof target === 'string' ? target : target.id;
+    let initialUser: UserProfile | null =
+      typeof target !== 'string'
+        ? target
+        : targetId === currentUser.id
+          ? currentUser
+          : allUsers.find((u) => u.id === targetId) || null;
+
+    if (initialUser) {
+      setViewedProfileUser(initialUser);
+    }
+    setActiveTab('profile');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (targetId === currentUser.id) {
+      setViewedProfileUser(currentUser);
+      return;
+    }
+
+    try {
+      const freshProfile = await zaureService.getUserPublicProfile(targetId);
+      if (freshProfile) {
+        setViewedProfileUser(freshProfile);
+      } else if (!initialUser) {
+        setActiveTab('feed');
+      }
+    } catch {
+      if (!initialUser) {
+        setActiveTab('feed');
+      }
+    }
+  };
+
+  // Resolve ?profile=<userId> URL deep link once authenticated
+  useEffect(() => {
+    if (!currentUser || !profileDeepLinkId) return;
+    const targetId = profileDeepLinkId;
+    setProfileDeepLinkId(null);
+    openUserProfile(targetId);
+  }, [currentUser, profileDeepLinkId]);
 
   // Navigate directly to private chat with a selected user
   const handleOpenChatWithUser = (user: UserProfile) => {
@@ -1120,37 +1261,62 @@ export default function App() {
             {/* 5. Notifications */}
             <button
               type="button"
-              onClick={() => setShowNotificationsModal(true)}
-              className="h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl"
+              onClick={() => {
+                setActiveTab('notifications');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group rounded-xl ${
+                activeTab === 'notifications'
+                  ? 'text-blue-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
+              }`}
               title="Notifications"
             >
               <div className="relative">
-                <Bell className="w-5 h-5 stroke-2" />
+                <motion.div
+                  animate={notifBadgePulse ? { rotate: [0, -14, 14, -10, 10, 0] } : { rotate: 0 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <Bell className={`w-5 h-5 ${activeTab === 'notifications' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                </motion.div>
                 {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
-                    {unreadNotificationsCount}
-                  </span>
+                  <motion.span
+                    key={unreadNotificationsCount}
+                    initial={{ scale: 0.65, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 450, damping: 22 }}
+                    className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center shadow-xs tabular-nums"
+                  >
+                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                  </motion.span>
                 )}
               </div>
               <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Alertes</span>
+              {activeTab === 'notifications' && (
+                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
+              )}
             </button>
 
             {/* 6. Profil Utilisateur */}
             <button
               type="button"
               onClick={() => {
-                setActiveTab('settings');
+                if (currentUser) {
+                  openUserProfile(currentUser);
+                } else {
+                  setShowAuthModal(true);
+                }
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'settings'
+                activeTab === 'profile'
                   ? 'text-blue-600 font-bold'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
               }`}
-              title="Profil & Paramètres"
+              title="Mon profil Zaure"
             >
-              <CircleUserRound className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <CircleUserRound className={`w-5 h-5 ${activeTab === 'profile' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
               <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Profil</span>
-              {activeTab === 'settings' && (
+              {activeTab === 'profile' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
@@ -1195,9 +1361,9 @@ export default function App() {
               <div className="flex items-center gap-1 sm:gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('settings')}
+                  onClick={() => openUserProfile(currentUser)}
                   className="flex items-center gap-2 p-1 hover:bg-[#F0F2F5] rounded-full transition pr-2"
-                  title="Mon profil et réglages"
+                  title="Mon profil Zaure"
                 >
                   <div className="relative">
                     {currentUser.avatar_url ? (
@@ -1282,7 +1448,7 @@ export default function App() {
       </header>
 
       <div 
-        className="flex-1 w-full mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center max-w-[1520px]" 
+        className="flex-1 w-full mx-auto px-1.5 sm:px-4 lg:px-6 py-2.5 sm:py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center max-w-[1520px]" 
         id="main-layout-container"
       >
         
@@ -1295,7 +1461,7 @@ export default function App() {
           {currentUser ? (
             <button
               type="button"
-              onClick={() => setActiveTab('settings')}
+              onClick={() => openUserProfile(currentUser)}
               className="w-full bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-3 transition shadow-xs text-left group"
             >
               <div className="relative shrink-0">
@@ -1489,6 +1655,29 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
+                setActiveTab('notifications');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                activeTab === 'notifications'
+                  ? 'bg-blue-50 text-blue-900 font-bold'
+                  : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Bell className="w-4 h-4 text-blue-600" />
+                <span>Notifications</span>
+              </div>
+              {unreadNotificationsCount > 0 && (
+                <span className="font-mono text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-bold tabular-nums">
+                  {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 setActiveTab('settings');
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
@@ -1580,25 +1769,133 @@ export default function App() {
         {/* ======================================================== */}
         {/* COLONNE CENTRALE : FIL D'ACTUALITÉ / FEED PRINCIPAL */}
         {/* ======================================================== */}
-        <main className={`flex-1 min-w-0 w-full space-y-4 ${activeTab === 'communities' ? 'max-w-3xl' : 'max-w-2xl'}`}>
+        <main
+          className={`flex-1 min-w-0 w-full space-y-4 ${
+            activeTab === 'communities'
+              ? 'max-w-4xl'
+              : activeTab === 'profile'
+                ? 'max-w-3xl'
+                : 'max-w-2xl'
+          }`}
+        >
 
           {/* 0. VUE SPÉCIFIQUE : MODULE COMMUNAUTÉS (CERCLES AVANCÉS) */}
-          {activeTab === 'communities' && currentUser && (
-            <CommunitiesHub
+          {activeTab === 'communities' && (
+            currentUser ? (
+              <CommunitiesHub
+                currentUser={currentUser}
+                allUsers={allUsers}
+                initialGroupId={communityDeepLinkId}
+                initialInviteCode={communityInviteCode}
+                onOpenUserProfile={openUserProfile}
+                onClearDeepLink={() => {
+                  setCommunityDeepLinkId(null);
+                  setCommunityInviteCode(null);
+                  if (
+                    window.location.search.includes('community=') ||
+                    window.location.search.includes('invite=')
+                  ) {
+                    window.history.replaceState({}, '', window.location.pathname);
+                  }
+                }}
+              />
+            ) : (
+              <div className="bg-white border border-slate-200/85 rounded-3xl p-8 text-center shadow-xs space-y-3">
+                <Users className="w-12 h-12 text-blue-600 mx-auto stroke-1" />
+                <h2 className="font-extrabold text-slate-950 text-base">
+                  Connectez-vous pour accéder aux Communautés
+                </h2>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  Rejoignez des communautés thématiques, créez vos propres espaces et participez aux discussions et événements Zaure.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(false);
+                    setShowAuthModal(true);
+                  }}
+                  className="min-h-[42px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                >
+                  Se connecter maintenant
+                </button>
+              </div>
+            )
+          )}
+
+          {/* 0b. VUE SPÉCIFIQUE : SYSTÈME DE PROFILS UTILISATEURS */}
+          {activeTab === 'profile' && currentUser && (
+            <ProfilePage
+              profileUser={viewedProfileUser || currentUser}
               currentUser={currentUser}
               allUsers={allUsers}
-              initialGroupId={communityDeepLinkId}
-              initialInviteCode={communityInviteCode}
-              onClearDeepLink={() => {
-                setCommunityDeepLinkId(null);
-                setCommunityInviteCode(null);
-                if (
-                  window.location.search.includes('community=') ||
-                  window.location.search.includes('invite=')
-                ) {
+              circles={circles}
+              joinedCircleIds={joinedCircleIds}
+              bookmarkedIds={bookmarkedIds}
+              onToggleBookmark={toggleBookmark}
+              onBack={() => {
+                setActiveTab('feed');
+                if (window.location.search.includes('profile=')) {
                   window.history.replaceState({}, '', window.location.pathname);
                 }
               }}
+              onNavigateProfile={(targetUser) => openUserProfile(targetUser)}
+              onOpenChat={(targetUser) => handleOpenChatWithUser(targetUser)}
+              onOpenSettings={() => setActiveTab('settings')}
+              onOpenCommunityGroup={(groupId) => {
+                setCommunityDeepLinkId(groupId);
+                setActiveTab('communities');
+              }}
+              onOpenCircle={(circleId) => {
+                setActiveTab('feed');
+                setFeedSection('feed');
+                setSelectedCircleId(circleId);
+              }}
+              onProfileUpdated={(updated) => {
+                setCurrentUser(updated);
+                setViewedProfileUser((prev) => (prev?.id === updated.id ? updated : prev));
+                setAllUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+              }}
+            />
+          )}
+
+          {/* 0c. VUE SPÉCIFIQUE : CENTRE DE NOTIFICATIONS TEMPS RÉEL */}
+          {activeTab === 'notifications' && currentUser && (
+            <NotificationsCenter
+              currentUser={currentUser}
+              notifications={notifications}
+              settings={notificationSettings}
+              onOpenProfile={(userId) => openUserProfile(userId)}
+              onOpenPost={(postId, groupId) => {
+                if (groupId && groupId !== 'public') {
+                  setCommunityDeepLinkId(groupId);
+                  setActiveTab('communities');
+                } else {
+                  setActiveTab('feed');
+                  setFeedSection('feed');
+                  setSelectedCircleId('all');
+                  setFeedFilter('all');
+                  setFocusedItemId(`pub_${postId}`);
+                }
+              }}
+              onOpenCapsule={(capsuleId) => {
+                setActiveTab('feed');
+                setFeedSection('feed');
+                setSelectedCircleId('all');
+                setFeedFilter('all');
+                setFocusedItemId(`cap_${capsuleId}`);
+              }}
+              onOpenCommunity={(groupId) => {
+                setCommunityDeepLinkId(groupId);
+                setActiveTab('communities');
+              }}
+              onOpenConversation={(_convId, actorId) => {
+                const matched = actorId ? allUsers.find((u) => u.id === actorId) || null : null;
+                setDirectChatUser(matched);
+                setChatMobileView(matched ? 'chat' : 'list');
+                setActiveTab('chat');
+              }}
+              onOpenAccountSettings={() => setActiveTab('settings')}
+              onBackToFeed={() => setActiveTab('feed')}
             />
           )}
 
@@ -1608,7 +1905,12 @@ export default function App() {
               {currentUser ? (
                 <SettingsView
                   currentUser={currentUser}
-                  onProfileUpdated={(updated) => setCurrentUser(updated)}
+                  onProfileUpdated={(updated) => {
+                    setCurrentUser(updated);
+                    setViewedProfileUser((prev) => (prev?.id === updated.id ? updated : prev));
+                    setAllUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+                  }}
+                  onOpenOwnProfile={() => openUserProfile(currentUser)}
                   onSignOut={requestSignOut}
                   onImmediateSignOut={executeSignOut}
                 />
@@ -1686,9 +1988,13 @@ export default function App() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {mentorsList.map((mentor) => (
                   <div key={mentor.id} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-col justify-between">
-                    <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openUserProfile(mentor)}
+                      className="flex items-start gap-3 text-left group w-full"
+                    >
                       {mentor.avatar_url ? (
-                        <img src={mentor.avatar_url} alt={mentor.nom} className="w-12 h-12 rounded-full object-cover ring-2 ring-amber-400 shrink-0" referrerPolicy="no-referrer" />
+                        <img src={mentor.avatar_url} alt={mentor.nom} className="w-12 h-12 rounded-full object-cover ring-2 ring-amber-400 shrink-0 group-hover:opacity-90 transition-opacity" referrerPolicy="no-referrer" />
                       ) : (
                         <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center shrink-0">
                           {mentor.nom.charAt(0)}
@@ -1696,7 +2002,7 @@ export default function App() {
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-bold text-slate-900 truncate">{mentor.nom}</p>
+                          <p className="text-xs font-bold text-slate-900 group-hover:text-blue-700 truncate transition-colors">{mentor.nom}</p>
                           {mentor.role === 'verifie' && <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
                         </div>
                         <p className="text-[10px] text-amber-700 font-semibold uppercase mt-0.5">
@@ -1706,12 +2012,16 @@ export default function App() {
                           {mentor.bio || "Membre engagé pour l'entraide communautaire."}
                         </p>
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        Langue : {mentor.langue_preferee.toUpperCase()}
-                      </span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openUserProfile(mentor)}
+                        className="text-[11px] text-blue-700 hover:underline font-bold"
+                      >
+                        Voir le profil
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleOpenChatWithUser(mentor)}
@@ -1877,7 +2187,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* B. BOÎTE DE CRÉATION DE PUBLICATION (STYLE FACEBOOK COMPOSER) */}
+              {/* B. BOÎTE DE CRÉATION DE PUBLICATION COMPACTE & ÉLÉGANTE */}
               {currentUser ? (
                 composerMode === 'post' ? (
                   <CommunityPostComposer
@@ -1888,82 +2198,92 @@ export default function App() {
                     onCancel={() => setComposerMode('none')}
                   />
                 ) : (
-                  <div className="bg-white border border-slate-200/80 rounded-3xl p-4 shadow-xs">
+                  <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
                     {/* Top trigger row */}
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center shrink-0 ring-1 ring-slate-200/80 overflow-hidden">
                         {currentUser.avatar_url ? (
-                          <img src={currentUser.avatar_url} alt={currentUser.nom} className="w-full h-full rounded-full object-cover" />
+                          <img
+                            src={currentUser.avatar_url}
+                            alt={currentUser.nom}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
                         ) : (
                           currentUser.nom.charAt(0).toUpperCase()
                         )}
                       </div>
 
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.99 }}
                         onClick={() => {
                           setShowCreateCapsule(false);
                           setComposerPostInitialType('text');
                           setComposerMode('post');
                         }}
-                        className="flex-1 text-left px-4 py-2.5 bg-[#F0F2F5] hover:bg-slate-200/70 border border-transparent rounded-full text-xs sm:text-sm text-slate-500 font-medium transition truncate"
+                        className="flex-1 text-left px-4 py-2.5 bg-slate-100/90 hover:bg-slate-200/60 border border-slate-200/60 rounded-full text-xs sm:text-sm text-slate-500 font-medium transition truncate"
                       >
-                        Quoi de neuf, {currentUser.nom.split(' ')[0]} ? Publiez hors cercle...
-                      </button>
+                        Quoi de neuf, {currentUser.nom.split(' ')[0]} ? Partagez une réflexion...
+                      </motion.button>
                     </div>
 
-                    {/* Horizontal direct action pills (Facebook style) */}
+                    {/* Organized 4 Quick-Action Triggers */}
                     {composerMode === 'none' && !showCreateCapsule && (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-3 mt-3 border-t border-slate-100">
-                        <button
+                        <motion.button
                           type="button"
+                          whileTap={{ scale: 0.96 }}
                           onClick={() => {
                             setComposerPostInitialType('image');
                             setComposerMode('post');
                           }}
-                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
+                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-emerald-50/70 text-slate-700 hover:text-emerald-800 font-semibold text-xs transition"
                         >
-                          <ImageIcon className="w-4 h-4 text-emerald-600" />
-                          <span>Photo / Vidéo</span>
-                        </button>
+                          <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="truncate">Photo / Vidéo</span>
+                        </motion.button>
 
-                        <button
+                        <motion.button
                           type="button"
+                          whileTap={{ scale: 0.96 }}
                           onClick={() => {
                             setComposerPostInitialType('text');
                             setComposerMode('post');
                           }}
-                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
+                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-blue-50/70 text-slate-700 hover:text-blue-800 font-semibold text-xs transition"
                         >
-                          <BookOpen className="w-4 h-4 text-blue-600" />
-                          <span>Texte / Lien / Doc</span>
-                        </button>
+                          <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+                          <span className="truncate">Texte / Lien / Doc</span>
+                        </motion.button>
 
-                        <button
+                        <motion.button
                           type="button"
+                          whileTap={{ scale: 0.96 }}
                           onClick={() => {
                             setComposerPostInitialType('poll');
                             setComposerMode('post');
                           }}
-                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
+                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-amber-50/70 text-slate-700 hover:text-amber-800 font-semibold text-xs transition"
                         >
-                          <BarChart2 className="w-4 h-4 text-amber-600" />
-                          <span>Sondage</span>
-                        </button>
+                          <BarChart2 className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span className="truncate">Sondage</span>
+                        </motion.button>
 
-                        <button
+                        <motion.button
                           type="button"
+                          whileTap={{ scale: 0.96 }}
                           onClick={() => {
                             setNewCapsuleCircleId('public');
                             setNewCapsuleType('audio');
                             setShowCreateCapsule(true);
                             setComposerMode('capsule');
                           }}
-                          className="min-h-[40px] flex items-center justify-center gap-2 p-1.5 rounded-xl hover:bg-[#F0F2F5] text-slate-700 font-semibold text-xs transition"
+                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-red-50/70 text-slate-700 hover:text-red-800 font-semibold text-xs transition"
                         >
-                          <Volume2 className="w-4 h-4 text-red-600" />
-                          <span>Note Vocale</span>
-                        </button>
+                          <Volume2 className="w-4 h-4 text-red-600 shrink-0" />
+                          <span className="truncate">Note Vocale</span>
+                        </motion.button>
                       </div>
                     )}
 
@@ -2246,12 +2566,54 @@ export default function App() {
               )}
 
               {/* E. LISTE DES PUBLICATIONS (FIL PUBLIC + CAPSULES) */}
-              <div className="space-y-4" id="capsules-stream-list">
-                {displayedFeedItems.length === 0 ? (
-                  <div className="bg-white border border-slate-200/80 rounded-3xl p-8 sm:p-12 text-center shadow-xs">
-                    <BookOpen className="w-12 h-12 text-slate-300 mx-auto stroke-1 mb-3" />
-                    <h4 className="font-bold text-slate-900 text-base">Aucune publication dans ce flux</h4>
-                    
+              <div className="space-y-3.5 sm:space-y-4" id="capsules-stream-list">
+                {isFeedLoading && displayedFeedItems.length === 0 ? (
+                  <div className="space-y-4" aria-label="Chargement des publications">
+                    {[1, 2, 3].map((n) => (
+                      <div
+                        key={n}
+                        className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] animate-pulse space-y-3.5"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-200 shrink-0" />
+                          <div className="space-y-2 flex-1">
+                            <div className="h-3.5 bg-slate-200 rounded w-1/3" />
+                            <div className="h-2.5 bg-slate-100 rounded w-1/4" />
+                          </div>
+                        </div>
+                        <div className="space-y-2 pt-1">
+                          <div className="h-3 bg-slate-100 rounded w-full" />
+                          <div className="h-3 bg-slate-100 rounded w-5/6" />
+                        </div>
+                        <div className="h-36 bg-slate-100 rounded-2xl w-full" />
+                        <div className="flex justify-between pt-2 border-t border-slate-100">
+                          <div className="h-7 bg-slate-100 rounded-xl w-20" />
+                          <div className="h-7 bg-slate-100 rounded-xl w-20" />
+                          <div className="h-7 bg-slate-100 rounded-xl w-20" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : displayedFeedItems.length === 0 ? (
+                  <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+                    {/* Custom Zaure SVG Empty State Illustration */}
+                    <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-blue-50/80 border border-blue-100 flex items-center justify-center">
+                      <svg
+                        viewBox="0 0 64 64"
+                        fill="none"
+                        className="w-12 h-12"
+                        aria-hidden="true"
+                      >
+                        <rect x="10" y="14" width="44" height="36" rx="8" fill="#EFF6FF" stroke="#2563EB" strokeWidth="2.5" />
+                        <path d="M18 26H46M18 34H38M18 42H30" stroke="#1D4ED8" strokeWidth="2.5" strokeLinecap="round" />
+                        <circle cx="48" cy="18" r="7" fill="#DC2626" />
+                        <path d="M48 14.5V21.5M44.5 18H51.5" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <h4 className="font-extrabold text-slate-950 text-base">
+                      Aucune publication dans ce flux
+                    </h4>
+
                     {feedFilter === 'joined' ? (
                       <div className="max-w-md mx-auto mt-2">
                         <p className="text-xs text-slate-500 leading-relaxed">
@@ -2261,7 +2623,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => setFeedSection('circles')}
-                            className="min-h-[38px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                            className="min-h-[40px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
                           >
                             Explorer les cercles de savoir
                           </button>
@@ -2270,35 +2632,88 @@ export default function App() {
                     ) : feedSection === 'bookmarks' ? (
                       <div className="max-w-md mx-auto mt-2">
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Vous n'avez encore enregistré aucune publication. Cliquez sur l'icône de signet d'une publication pour la retrouver ici !
+                          Vous n'avez encore enregistré aucune publication. Cliquez sur le bouton Enregistrer d'une publication pour la retrouver ici !
                         </p>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 mt-2">Soyez le premier à partager une publication libre ou dans un cercle !</p>
+                      <div className="max-w-md mx-auto mt-2">
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Partagez une réflexion, une photo, un document ou une note vocale avec la communauté Zaure.
+                        </p>
+                        {currentUser && (
+                          <div className="mt-4 flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setComposerPostInitialType('text');
+                                setComposerMode('post');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="min-h-[40px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs inline-flex items-center gap-1.5"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Créer une publication</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ) : (
-                  displayedFeedItems.map((item) =>
-                    item.kind === 'post' && currentUser ? (
-                      <CommunityPostCard
-                        key={`pub_${item.id}`}
-                        group={PUBLIC_FEED_GROUP}
-                        post={item.data}
-                        comments={publicPostComments.filter((c) => c.postId === item.id)}
-                        reactions={publicPostReactions.filter((r) => r.postId === item.id)}
-                        members={publicMentionMembers}
-                        currentUser={currentUser}
-                      />
-                    ) : item.kind === 'capsule' ? (
-                      <CapsuleCard
-                        key={`cap_${item.id}`}
-                        capsule={item.data}
-                        currentUser={currentUser}
-                        isBookmarked={bookmarkedIds.includes(item.id)}
-                        onToggleBookmark={() => toggleBookmark(item.id)}
-                      />
-                    ) : null
-                  )
+                  <>
+                    {displayedFeedItems.slice(0, visibleFeedCount).map((item) => {
+                      const itemDomKey = item.kind === 'post' ? `pub_${item.id}` : `cap_${item.id}`;
+                      const isHighlighted = focusedItemId === itemDomKey;
+                      return (
+                        <div
+                          key={itemDomKey}
+                          id={`feed-item-${itemDomKey}`}
+                          className={
+                            isHighlighted
+                              ? 'rounded-3xl ring-2 ring-blue-500 ring-offset-2 ring-offset-[#F0F2F5] transition-all'
+                              : undefined
+                          }
+                        >
+                          {item.kind === 'post' && currentUser ? (
+                            <CommunityPostCard
+                              group={PUBLIC_FEED_GROUP}
+                              post={item.data}
+                              comments={publicPostComments.filter((c) => c.postId === item.id)}
+                              reactions={publicPostReactions.filter((r) => r.postId === item.id)}
+                              members={publicMentionMembers}
+                              currentUser={currentUser}
+                              onAuthorClick={openUserProfile}
+                            />
+                          ) : item.kind === 'capsule' ? (
+                            <CapsuleCard
+                              capsule={item.data}
+                              currentUser={currentUser}
+                              isBookmarked={bookmarkedIds.includes(item.id)}
+                              onToggleBookmark={() => toggleBookmark(item.id)}
+                              onAuthorClick={openUserProfile}
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
+
+                    {/* Progressive Load More Button */}
+                    {displayedFeedItems.length > visibleFeedCount && (
+                      <div className="pt-2 flex justify-center">
+                        <motion.button
+                          type="button"
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => setVisibleFeedCount((prev) => prev + 10)}
+                          className="min-h-[44px] px-6 py-2.5 bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-800 font-bold text-xs rounded-2xl shadow-xs flex items-center gap-2 transition"
+                        >
+                          <ChevronDown className="w-4 h-4 text-blue-600" />
+                          <span>
+                            Afficher plus de publications ({displayedFeedItems.length - visibleFeedCount} restantes)
+                          </span>
+                        </motion.button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -2396,7 +2811,12 @@ export default function App() {
             <div className="space-y-2.5">
               {mentorsList.slice(0, 4).map((mentor) => (
                 <div key={mentor.id} className="flex items-center justify-between gap-2 p-1 group">
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => openUserProfile(mentor)}
+                    className="flex items-center gap-2.5 min-w-0 text-left flex-1"
+                    title={`Voir le profil de ${mentor.nom}`}
+                  >
                     <div className="relative shrink-0">
                       {mentor.avatar_url ? (
                         <img src={mentor.avatar_url} alt={mentor.nom} className="w-8 h-8 rounded-full object-cover ring-1 ring-amber-400" referrerPolicy="no-referrer" />
@@ -2408,14 +2828,14 @@ export default function App() {
                       <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-600 border-2 border-white rounded-full" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                      <p className="text-xs font-bold text-slate-900 group-hover:text-blue-700 truncate flex items-center gap-1 transition-colors">
                         <span>{mentor.nom}</span>
                       </p>
                       <p className="text-[10px] text-slate-500 truncate">
                         {mentor.role === 'verifie' ? 'Santé' : 'Mentor'} · {mentor.langue_preferee.toUpperCase()}
                       </p>
                     </div>
-                  </div>
+                  </button>
 
                   <button
                     type="button"
@@ -2550,16 +2970,32 @@ export default function App() {
         {/* Notifications */}
         <button
           type="button"
-          onClick={() => setShowNotificationsModal(true)}
-          className="min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 text-slate-500 hover:text-slate-800 relative"
+          onClick={() => {
+            setActiveTab('notifications');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 relative ${
+            activeTab === 'notifications' ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
           title="Notifications"
         >
           <div className="relative">
-            <Bell className="w-5 h-5 stroke-2" />
+            <motion.div
+              animate={notifBadgePulse ? { rotate: [0, -14, 14, -10, 10, 0] } : { rotate: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <Bell className={`w-5 h-5 ${activeTab === 'notifications' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+            </motion.div>
             {unreadNotificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
-                {unreadNotificationsCount}
-              </span>
+              <motion.span
+                key={unreadNotificationsCount}
+                initial={{ scale: 0.65, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 22 }}
+                className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black min-w-[14px] h-3.5 px-1 rounded-full flex items-center justify-center tabular-nums"
+              >
+                {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+              </motion.span>
             )}
           </div>
           <span className="text-[10px] font-semibold tracking-tight mt-0.5">Alertes</span>
@@ -2568,15 +3004,21 @@ export default function App() {
         {/* Profil */}
         <button
           type="button"
-          onClick={() => setActiveTab('settings')}
+          onClick={() => {
+            if (currentUser) {
+              openUserProfile(currentUser);
+            } else {
+              setShowAuthModal(true);
+            }
+          }}
           className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
-            activeTab === 'settings'
+            activeTab === 'profile'
               ? 'text-blue-700 font-bold'
               : 'text-slate-500 hover:text-slate-800'
           }`}
-          title="Profil"
+          title="Mon profil"
         >
-          <CircleUserRound className={`w-5 h-5 ${activeTab === 'settings' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <CircleUserRound className={`w-5 h-5 ${activeTab === 'profile' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
           <span className="text-[10px] font-semibold tracking-tight mt-0.5">Profil</span>
         </button>
       </nav>
@@ -3560,82 +4002,25 @@ export default function App() {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* 8. MODAL : CENTRE DE NOTIFICATIONS (ZAURE) */}
-      {/* ============================================================ */}
-      {showNotificationsModal && (
-        <div
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn"
-          onClick={() => setShowNotificationsModal(false)}
-        >
-          <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200/90 animate-slideUp"
-            onClick={(e) => e.stopPropagation()}
+
+      {/* Floating Back-to-Top Button */}
+      <AnimatePresence>
+        {showBackToTop && activeTab === 'feed' && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, scale: 0.85, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 12 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 w-11 h-11 rounded-full bg-slate-950 hover:bg-blue-600 text-white shadow-lg flex items-center justify-center transition-colors"
+            title="Revenir en haut du fil"
+            aria-label="Revenir en haut du fil"
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Bell className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-950">Centre d'Alertes</h3>
-                  <p className="text-xs text-slate-500">Notifications de la communauté Zaure</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowNotificationsModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
-              {notifications.map((notif) => (
-                <div
-                  key={notif.id}
-                  onClick={() => {
-                    setNotifications(notifications.map(n => n.id === notif.id ? { ...n, unread: false } : n));
-                  }}
-                  className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-start gap-3 ${
-                    notif.unread
-                      ? 'bg-blue-50/60 border-blue-200/80 hover:bg-blue-50'
-                      : 'bg-[#F0F2F5]/60 border-slate-200/60 hover:bg-[#F0F2F5]'
-                  }`}
-                >
-                  <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${notif.unread ? 'bg-blue-600' : 'bg-transparent'}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs ${notif.unread ? 'font-extrabold text-slate-900' : 'font-semibold text-slate-700'}`}>
-                      {notif.title}
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{notif.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  setNotifications(notifications.map(n => ({ ...n, unread: false })));
-                }}
-                className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                Tout marquer comme lu
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowNotificationsModal(false)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition shadow-xs"
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <ArrowUp className="w-5 h-5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
     </div>
   );

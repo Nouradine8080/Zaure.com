@@ -7,10 +7,18 @@
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "username": { "type": "string", "maxLength": 40 },
         "email": { "type": "string", "maxLength": 200 },
         "phone": { "type": "string", "maxLength": 32 },
         "bio": { "type": "string", "maxLength": 1000 },
         "avatar_url": { "type": "string", "maxLength": 350000 },
+        "cover_url": { "type": "string", "maxLength": 350000 },
+        "profession": { "type": "string", "maxLength": 120 },
+        "formation": { "type": "string", "maxLength": 160 },
+        "localisation": { "type": "string", "maxLength": 120 },
+        "site_web": { "type": "string", "maxLength": 300 },
+        "infos_complementaires": { "type": "string", "maxLength": 1000 },
+        "privacy_settings": { "type": "object" },
         "role": { "type": "string", "enum": ["utilisateur", "mentor", "verifie"] },
         "langue_preferee": { "type": "string", "enum": ["fr", "ha", "en"] },
         "created_at": { "type": "string", "maxLength": 64 },
@@ -27,8 +35,16 @@
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "username": { "type": "string", "maxLength": 40 },
         "bio": { "type": "string", "maxLength": 1000 },
         "avatar_url": { "type": "string", "maxLength": 350000 },
+        "cover_url": { "type": "string", "maxLength": 350000 },
+        "profession": { "type": "string", "maxLength": 120 },
+        "formation": { "type": "string", "maxLength": 160 },
+        "localisation": { "type": "string", "maxLength": 120 },
+        "site_web": { "type": "string", "maxLength": 300 },
+        "infos_complementaires": { "type": "string", "maxLength": 1000 },
+        "privacy_settings": { "type": "object" },
         "role": { "type": "string", "enum": ["utilisateur", "mentor", "verifie"] },
         "langue_preferee": { "type": "string", "enum": ["fr", "ha", "en"] },
         "availability": { "type": "string", "enum": ["online", "busy", "offline"] },
@@ -37,6 +53,18 @@
         "created_at": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "nom", "role", "langue_preferee"]
+    },
+    "UserFollow": {
+      "title": "UserFollow",
+      "description": "Directed follow relationship between two users (${followerId}_${followingId}).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "followerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "followingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "followerId", "followingId", "createdAt"]
     },
     "UserSettings": {
       "title": "UserSettings",
@@ -53,10 +81,19 @@
         "messages_autorises": { "type": "string", "enum": ["tous", "cercles", "mentors"] },
         "mentorat_autorise": { "type": "string", "enum": ["tous", "verifies", "aucun"] },
         "utilisateurs_bloques": { "type": "array" },
+        "privacy_settings": { "type": "object" },
         "notif_capsule": { "type": "boolean" },
         "notif_message": { "type": "boolean" },
         "notif_mentorat": { "type": "boolean" },
         "notif_reaction": { "type": "boolean" },
+        "notif_comment": { "type": "boolean" },
+        "notif_follower": { "type": "boolean" },
+        "notif_community": { "type": "boolean" },
+        "notif_mention": { "type": "boolean" },
+        "notif_system": { "type": "boolean" },
+        "notif_push_enabled": { "type": "boolean" },
+        "read_platform_notification_ids": { "type": "array" },
+        "dismissed_platform_notification_ids": { "type": "array" },
         "canal_notif": { "type": "string", "enum": ["inapp", "email", "les_deux"] },
         "langue_interface": { "type": "string", "enum": ["fr", "ha", "en"] },
         "traduction_auto": { "type": "boolean" },
@@ -152,7 +189,10 @@
         "created_at": { "type": "string", "maxLength": 64 },
         "updated_at": { "type": "string", "maxLength": 64 },
         "is_archived_by": { "type": "array" },
-        "is_muted_by": { "type": "array" }
+        "is_muted_by": { "type": "array" },
+        "is_favorite_by": { "type": "array" },
+        "deleted_by": { "type": "array" },
+        "cleared_at": { "type": "object" }
       },
       "required": ["id", "type", "participant_ids", "created_at", "updated_at"]
     },
@@ -177,7 +217,10 @@
         "read_by": { "type": "array" },
         "status": { "type": "string", "enum": ["sending", "sent", "delivered", "read"] },
         "is_edited": { "type": "boolean" },
-        "is_deleted": { "type": "boolean" }
+        "is_deleted": { "type": "boolean" },
+        "is_pinned": { "type": "boolean" },
+        "pinned_by": { "type": "string", "maxLength": 128 },
+        "pinned_at": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "sender_id", "content", "created_at"]
     },
@@ -384,7 +427,7 @@
         "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "groupName": { "type": "string", "minLength": 1, "maxLength": 120 },
-        "type": { "type": "string", "enum": ["invitation", "member_approved", "new_post", "post_approved", "comment", "mention", "announcement", "event", "role_changed"] },
+        "type": { "type": "string", "enum": ["invitation", "member_approved", "new_post", "post_approved", "comment", "mention", "announcement", "event", "role_changed", "rules_updated"] },
         "message": { "type": "string", "minLength": 1, "maxLength": 500 },
         "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
         "isRead": { "type": "boolean" },
@@ -502,6 +545,42 @@
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["userId", "status", "reason", "updatedBy", "updatedAt"]
+    },
+    "UserNotification": {
+      "title": "UserNotification",
+      "description": "Real-time user notification across interactions, mentions, follows, messaging, communities, and system/security alerts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actorAvatar": { "type": "string", "maxLength": 350000 },
+        "type": {
+          "type": "string",
+          "enum": [
+            "like", "reaction", "comment", "comment_reply", "share",
+            "new_follower", "mention", "new_message", "group_mention",
+            "community_invitation", "community_approved", "community_post",
+            "community_announcement", "community_rules", "community_role",
+            "security_alert", "system"
+          ]
+        },
+        "category": { "type": "string", "enum": ["interactions", "mentions", "communities", "system"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "previewText": { "type": "string", "maxLength": 300 },
+        "targetType": {
+          "type": "string",
+          "enum": ["post", "capsule", "comment", "community", "conversation", "profile", "settings", "system"]
+        },
+        "targetId": { "type": "string", "maxLength": 260 },
+        "groupId": { "type": "string", "maxLength": 128 },
+        "groupName": { "type": "string", "maxLength": 120 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "actorId", "actorName", "type", "category", "title", "message", "isRead", "createdAt"]
     }
   },
   "firestore": {
@@ -608,6 +687,14 @@
     "/user_moderation/{userId}": {
       "schema": { "$ref": "#/entities/UserModeration" },
       "description": "Administrative moderation statuses (active, warned, suspended) per user."
+    },
+    "/user_follows/{followId}": {
+      "schema": { "$ref": "#/entities/UserFollow" },
+      "description": "Directed user follow records (${followerId}_${followingId})."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/UserNotification" },
+      "description": "Owner-scoped real-time user notifications across social interactions, follows, messaging, communities, and security alerts."
     }
   }
 }

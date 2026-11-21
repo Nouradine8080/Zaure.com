@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   Image as ImageIcon,
   Video,
@@ -16,6 +17,7 @@ import {
   Mic
 } from 'lucide-react';
 import AudioRecorder from '../AudioRecorder';
+import VoiceNotePlayer from '../VoiceNotePlayer';
 import {
   CommunityGroup,
   CommunityMember,
@@ -164,12 +166,15 @@ export default function CommunityPostComposer({
 
     setIsSubmitting(true);
     try {
+      const firestoreSafeType: GroupPostType =
+        postType === 'audio' ? 'document' : postType;
+
       const created = await communityService.createGroupPost(
         group,
         currentUser,
         effectiveRole,
         {
-          type: postType,
+          type: firestoreSafeType,
           content: content.trim() || pollPayload?.question || externalLink.trim() || media[0]?.name || '',
           media,
           externalLink: postType === 'link' ? externalLink.trim() : '',
@@ -206,7 +211,12 @@ export default function CommunityPostComposer({
   };
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_2px_10px_-4px_rgba(15,23,42,0.06)] space-y-3.5"
+    >
       {/* Header Row */}
       <div className="flex items-center gap-3">
         {isAnonymous ? (
@@ -411,31 +421,38 @@ export default function CommunityPostComposer({
 
         {/* Attached Media Previews */}
         {media.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {media.map((m, idx) => (
               <div
                 key={`${m.name}-${idx}`}
-                className="relative rounded-xl border border-slate-200 bg-slate-50 overflow-hidden p-2 flex items-center gap-2"
+                className={`relative rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden p-2.5 flex items-center gap-2 ${
+                  m.type === 'audio' ? 'sm:col-span-2' : ''
+                }`}
               >
                 {m.type === 'image' ? (
-                  <img src={m.url} alt={m.name} className="w-full h-24 object-cover rounded-lg" />
+                  <img src={m.url} alt={m.name} className="w-full h-28 object-cover rounded-xl" />
                 ) : m.type === 'video' ? (
                   <div className="w-full py-3 px-2 text-center">
                     <Video className="w-6 h-6 text-red-600 mx-auto" />
                     <p className="text-[11px] font-bold text-slate-800 truncate mt-1">{m.name}</p>
                   </div>
+                ) : m.type === 'audio' ? (
+                  <div className="w-full pr-7">
+                    <VoiceNotePlayer url={m.url} />
+                  </div>
                 ) : (
-                  <div className="min-w-0 flex-1 py-1">
+                  <div className="min-w-0 flex-1 py-1 pr-7">
                     <p className="text-xs font-bold text-slate-800 truncate">{m.name}</p>
                     {m.size && (
-                      <p className="text-[10px] text-slate-500">{formatFileSize(m.size)}</p>
+                      <p className="text-[10px] text-slate-500 font-mono tabular-nums">{formatFileSize(m.size)}</p>
                     )}
                   </div>
                 )}
                 <button
                   type="button"
                   onClick={() => handleRemoveMedia(idx)}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-950/75 text-white flex items-center justify-center hover:bg-red-600 transition"
+                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-950/75 text-white flex items-center justify-center hover:bg-red-600 transition"
+                  title="Retirer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -596,7 +613,8 @@ export default function CommunityPostComposer({
                 {
                   type: 'audio',
                   url: base64Audio,
-                  name: `Note_vocale_${Date.now()}.webm`
+                  name: `Note_vocale_${Date.now()}.webm`,
+                  mimeType: 'audio/webm'
                 }
               ]);
               setPostType('audio');
@@ -606,6 +624,6 @@ export default function CommunityPostComposer({
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

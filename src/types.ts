@@ -1,16 +1,54 @@
+export type PrivacyAudience = 'public' | 'followers' | 'cercles' | 'private';
+export type MessageAudience = 'tous' | 'followers' | 'cercles' | 'mentors' | 'personne';
+
+export interface UserPrivacySettings {
+  profileMode: 'public' | 'private';
+  infoVisibility: PrivacyAudience;
+  postsVisibility: PrivacyAudience;
+  followersVisibility: PrivacyAudience;
+  followingVisibility: PrivacyAudience;
+  communitiesVisibility: PrivacyAudience;
+  allowMessages: MessageAudience;
+}
+
+export const DEFAULT_PRIVACY_SETTINGS: UserPrivacySettings = {
+  profileMode: 'public',
+  infoVisibility: 'public',
+  postsVisibility: 'public',
+  followersVisibility: 'public',
+  followingVisibility: 'public',
+  communitiesVisibility: 'public',
+  allowMessages: 'tous'
+};
+
 export interface UserProfile {
   id: string; // Auth UID
   nom: string;
+  username?: string;
   email: string;
   phone?: string;
   bio: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
+  profession?: string;
+  formation?: string;
+  localisation?: string;
+  site_web?: string;
+  infos_complementaires?: string;
+  privacy_settings?: UserPrivacySettings;
   role: 'utilisateur' | 'mentor' | 'verifie';
   langue_preferee: 'fr' | 'ha' | 'en';
   created_at?: string;
   availability?: 'online' | 'busy' | 'offline';
   status_message?: string;
   last_active?: string;
+}
+
+export interface UserFollow {
+  id: string; // `${followerId}_${followingId}`
+  followerId: string;
+  followingId: string;
+  createdAt: string;
 }
 
 export interface UserReport {
@@ -114,6 +152,9 @@ export interface Message {
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   is_edited?: boolean;
   is_deleted?: boolean;
+  is_pinned?: boolean;
+  pinned_by?: string;
+  pinned_at?: string;
 }
 
 export interface ConversationParticipant {
@@ -147,6 +188,9 @@ export interface Conversation {
   updated_at: string;
   is_archived_by?: string[];
   is_muted_by?: string[];
+  is_favorite_by?: string[];
+  deleted_by?: string[];
+  cleared_at?: Record<string, string>;
 }
 
 export interface Mentorship {
@@ -172,12 +216,21 @@ export interface UserSettings {
   messages_autorises: 'tous' | 'cercles' | 'mentors';
   mentorat_autorise: 'tous' | 'verifies' | 'aucun';
   utilisateurs_bloques: string[];
+  privacy_settings?: UserPrivacySettings;
 
   // 3. Notifications
   notif_capsule: boolean;
   notif_message: boolean;
   notif_mentorat: boolean;
   notif_reaction: boolean;
+  notif_comment?: boolean;
+  notif_follower?: boolean;
+  notif_community?: boolean;
+  notif_mention?: boolean;
+  notif_system?: boolean;
+  notif_push_enabled?: boolean;
+  read_platform_notification_ids?: string[];
+  dismissed_platform_notification_ids?: string[];
   canal_notif: 'inapp' | 'email' | 'les_deux';
 
   // 4. Contenu & langue
@@ -204,10 +257,19 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   messages_autorises: 'tous',
   mentorat_autorise: 'tous',
   utilisateurs_bloques: [],
+  privacy_settings: DEFAULT_PRIVACY_SETTINGS,
   notif_capsule: true,
   notif_message: true,
   notif_mentorat: true,
   notif_reaction: true,
+  notif_comment: true,
+  notif_follower: true,
+  notif_community: true,
+  notif_mention: true,
+  notif_system: true,
+  notif_push_enabled: false,
+  read_platform_notification_ids: [],
+  dismissed_platform_notification_ids: [],
   canal_notif: 'les_deux',
   langue_interface: 'fr',
   traduction_auto: true,
@@ -390,7 +452,7 @@ export interface GroupNotification {
   userId: string;
   groupId: string;
   groupName: string;
-  type: 'invitation' | 'member_approved' | 'new_post' | 'post_approved' | 'comment' | 'mention' | 'announcement' | 'event' | 'role_changed';
+  type: 'invitation' | 'member_approved' | 'new_post' | 'post_approved' | 'comment' | 'mention' | 'announcement' | 'event' | 'role_changed' | 'rules_updated';
   message: string;
   actorName: string;
   isRead: boolean;
@@ -410,4 +472,65 @@ export interface GroupReport {
   status: 'pending' | 'resolved' | 'dismissed';
   resolvedBy?: string;
   createdAt: string;
+}
+
+// ============================================================
+// CENTRE DE NOTIFICATIONS UNIFIÉ TEMPS RÉEL (ZAURE)
+// ============================================================
+
+export type AppNotificationType =
+  | 'like'
+  | 'reaction'
+  | 'comment'
+  | 'comment_reply'
+  | 'share'
+  | 'new_follower'
+  | 'mention'
+  | 'new_message'
+  | 'group_mention'
+  | 'community_invitation'
+  | 'community_approved'
+  | 'community_post'
+  | 'community_announcement'
+  | 'community_rules'
+  | 'community_role'
+  | 'security_alert'
+  | 'system';
+
+export type AppNotificationCategory = 'interactions' | 'mentions' | 'communities' | 'system';
+
+export type AppNotificationTargetType =
+  | 'post'
+  | 'capsule'
+  | 'comment'
+  | 'community'
+  | 'conversation'
+  | 'profile'
+  | 'settings'
+  | 'system';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  actorId: string;
+  actorName: string;
+  actorAvatar?: string;
+  type: AppNotificationType;
+  category: AppNotificationCategory;
+  title: string;
+  message: string;
+  previewText?: string;
+  targetType?: AppNotificationTargetType;
+  targetId?: string;
+  groupId?: string;
+  groupName?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface UnifiedNotification extends AppNotification {
+  source: 'notifications' | 'group_notifications' | 'platform_notifications';
+  sourceId: string;
+  priority?: 'info' | 'warning' | 'urgent';
+  invitation?: GroupInvitation | null;
 }

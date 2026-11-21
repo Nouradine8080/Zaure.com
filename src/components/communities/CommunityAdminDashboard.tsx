@@ -97,8 +97,10 @@ const CommunityAdminDashboard: React.FC<CommunityAdminDashboardProps> = ({
   currentMember,
   onGroupDeleted
 }) => {
+  const isActiveStaff = currentMember.status === 'active';
   const isAdmin =
-    currentMember.role === 'administrateur' || group.createdBy === currentUser.id;
+    isActiveStaff &&
+    (currentMember.role === 'administrateur' || group.createdBy === currentUser.id);
   const perms = currentMember.permissions;
   const canApprovePosts = isAdmin || Boolean(perms?.approvePosts);
   const canManageReports = isAdmin || Boolean(perms?.manageReports);
@@ -900,14 +902,16 @@ const CommunityAdminDashboard: React.FC<CommunityAdminDashboardProps> = ({
                           </p>
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-lg capitalize ${
-                              member.role === 'administrateur'
-                                ? 'bg-blue-100 text-blue-800'
-                                : member.role === 'moderateur'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-slate-100 text-slate-700'
+                              isCreator
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : member.role === 'administrateur'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : member.role === 'moderateur'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-slate-100 text-slate-700'
                             }`}
                           >
-                            {member.role}
+                            {isCreator ? 'Créateur' : member.role}
                           </span>
                           {member.status === 'suspended' && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-100 text-red-700">

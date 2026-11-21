@@ -46,6 +46,11 @@ import {
   UserProfile
 } from '../types';
 import { compressImageFile } from '../utils/imageCompressor';
+import {
+  buildDeterministicNotificationId,
+  extractMentionedUserIds,
+  notificationService
+} from './notificationService';
 
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -281,6 +286,42 @@ export const communityService = {
 
     try {
       await updateDoc(doc(dbFirestore, 'groups', groupId), payload);
+
+      // Notifier les membres actifs lors d'une mise à jour des règles de la communauté
+      if (Array.isArray(updates.rules) && auth.currentUser) {
+        try {
+          const [groupSnap, membersSnap, actorSnap] = await Promise.all([
+            getDoc(doc(dbFirestore, 'groups', groupId)),
+            getDocs(query(collection(dbFirestore, 'group_members'), where('groupId', '==', groupId))),
+            getDoc(doc(dbFirestore, 'public_profiles', auth.currentUser.uid))
+          ]);
+          const groupName = groupSnap.exists() ? ((groupSnap.data() as CommunityGroup).name || 'Communauté') : 'Communauté';
+          const actorName = actorSnap.exists()
+            ? ((actorSnap.data() as UserProfile).nom || 'Administrateur')
+            : (auth.currentUser.displayName || 'Administrateur');
+          const activeMembers: string[] = [];
+          membersSnap.forEach((m) => {
+            const md = m.data() as CommunityMember;
+            if (md.status === 'active' && md.userId !== auth.currentUser?.uid) {
+              activeMembers.push(md.userId);
+            }
+          });
+          await Promise.all(
+            activeMembers.slice(0, 40).map((uid) =>
+              communityService.createNotification({
+                userId: uid,
+                groupId,
+                groupName,
+                type: 'rules_updated',
+                message: `Les règles de la communauté « ${groupName} » ont été mises à jour.`,
+                actorName
+              })
+            )
+          );
+        } catch {
+          // Non-fatal
+        }
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `groups/${groupId}`);
     }
@@ -602,6 +643,75 @@ export const communityService = {
         });
         await batch.commit();
       }
+
+      // Notifier les mentions (@nom) et publications importantes dans les communautés
+      if (status === 'published' && !useAnon) {
+        try {
+          if (post.content.includes('@')) {
+            const profilesSnap = await getDocs(collection(dbFirestore, 'public_profiles'));
+            const candidateUsers: Array<{ id: string; nom: string; username?: string }> = [];
+            profilesSnap.forEach((p) => {
+              const pd = p.data() as UserProfile;
+              candidateUsers.push({ id: pd.id, nom: pd.nom, username: pd.username });
+            });
+            const mentionedIds = extractMentionedUserIds(post.content, candidateUsers);
+            await Promise.all(
+              mentionedIds
+                .filter((uid) => uid !== author.id)
+                .slice(0, 15)
+                .map((uid) =>
+                  notificationService.createAppNotification({
+                    id: buildDeterministicNotificationId(['pmention', post.id, uid]),
+                    userId: uid,
+                    actorId: author.id,
+                    actorName: author.nom,
+                    actorAvatar: author.avatar_url || undefined,
+                    type: 'mention',
+                    category: 'mentions',
+                    title: 'Mention dans une publication',
+                    message:
+                      group.id === 'public'
+                        ? `${author.nom} vous a mentionné(e) dans une publication.`
+                        : `${author.nom} vous a mentionné(e) dans « ${group.name} ».`,
+                    previewText: post.content.slice(0, 140),
+                    targetType: 'post',
+                    targetId: post.id,
+                    groupId: group.id,
+                    groupName: group.id === 'public' ? undefined : group.name
+                  })
+                )
+            );
+          }
+
+          if (group.id !== 'public' && isStaff) {
+            const membersSnap = await getDocs(
+              query(collection(dbFirestore, 'group_members'), where('groupId', '==', group.id))
+            );
+            const notifyIds: string[] = [];
+            membersSnap.forEach((m) => {
+              const md = m.data() as CommunityMember;
+              if (md.status === 'active' && md.userId !== author.id) {
+                notifyIds.push(md.userId);
+              }
+            });
+            await Promise.all(
+              notifyIds.slice(0, 30).map((uid) =>
+                communityService.createNotification({
+                  userId: uid,
+                  groupId: group.id,
+                  groupName: group.name,
+                  type: 'new_post',
+                  message: `${author.nom} a publié une actualité importante dans « ${group.name} ».`,
+                  actorName: author.nom
+                })
+              )
+            );
+          }
+        } catch {
+          // Non-fatal
+        }
+      }
+
       return post;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `group_posts/${postId}`);
@@ -646,13 +756,37 @@ export const communityService = {
     }
   },
 
-  incrementPostShare: async (postId: string): Promise<void> => {
+  incrementPostShare: async (
+    postId: string,
+    context?: { post?: GroupPost; actor?: UserProfile; groupName?: string }
+  ): Promise<void> => {
     if (!dbFirestore || !auth?.currentUser) return;
     try {
       await updateDoc(doc(dbFirestore, 'group_posts', postId), {
         shareCount: increment(1),
         updatedAt: nowIso()
       });
+
+      const targetPost = context?.post;
+      const actor = context?.actor;
+      if (targetPost && actor && targetPost.authorId !== actor.id && !targetPost.isAnonymous) {
+        await notificationService.createAppNotification({
+          id: buildDeterministicNotificationId(['share', postId, actor.id]),
+          userId: targetPost.authorId,
+          actorId: actor.id,
+          actorName: actor.nom,
+          actorAvatar: actor.avatar_url || undefined,
+          type: 'share',
+          category: 'interactions',
+          title: 'Publication partagée',
+          message: `${actor.nom} a partagé votre publication.`,
+          previewText: targetPost.content.slice(0, 140),
+          targetType: 'post',
+          targetId: postId,
+          groupId: targetPost.groupId,
+          groupName: targetPost.groupId === 'public' ? undefined : context?.groupName
+        });
+      }
     } catch (error) {
       console.warn('Info - shareCount:', error);
     }
@@ -774,6 +908,31 @@ export const communityService = {
         });
       }
       await batch.commit();
+
+      if (!existingReaction && post.authorId !== user.id && !post.isAnonymous) {
+        const reactionLabels: Record<GroupReactionType, string> = {
+          like: 'aime votre publication',
+          love: 'adore votre publication ❤️',
+          useful: 'a trouvé votre publication utile 💡',
+          celebrate: 'félicite votre publication 🎉',
+          insightful: 'trouve votre publication instructive 🤔'
+        };
+        await notificationService.createAppNotification({
+          id: buildDeterministicNotificationId(['preact', post.id, user.id]),
+          userId: post.authorId,
+          actorId: user.id,
+          actorName: user.nom,
+          actorAvatar: user.avatar_url || undefined,
+          type: type === 'like' ? 'like' : 'reaction',
+          category: 'interactions',
+          title: type === 'like' ? "Mention J'aime" : 'Nouvelle réaction',
+          message: `${user.nom} ${reactionLabels[type]}.`,
+          previewText: post.content.slice(0, 140),
+          targetType: 'post',
+          targetId: post.id,
+          groupId: post.groupId
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `post_reactions/${reactionId}`);
     }
@@ -836,27 +995,97 @@ export const communityService = {
       });
       await batch.commit();
 
-      if (post.authorId !== author.id) {
-        await communityService.createNotification({
-          userId: post.authorId,
+      let parentAuthorId: string | null = null;
+      if (parentId) {
+        try {
+          const parentSnap = await getDoc(doc(dbFirestore, 'post_comments', parentId));
+          if (parentSnap.exists()) {
+            parentAuthorId = (parentSnap.data() as PostComment).authorId || null;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (parentAuthorId && parentAuthorId !== author.id) {
+        await notificationService.createAppNotification({
+          id: buildDeterministicNotificationId(['creply', comment.id, parentAuthorId]),
+          userId: parentAuthorId,
+          actorId: author.id,
+          actorName: author.nom,
+          actorAvatar: author.avatar_url || undefined,
+          type: 'comment_reply',
+          category: 'interactions',
+          title: 'Réponse à votre commentaire',
+          message:
+            group.id === 'public'
+              ? `${author.nom} a répondu à votre commentaire.`
+              : `${author.nom} a répondu à votre commentaire dans « ${group.name} ».`,
+          previewText: comment.content.slice(0, 140),
+          targetType: 'post',
+          targetId: post.id,
           groupId: group.id,
-          groupName: group.name,
-          type: 'comment',
-          message: `${author.nom} a commenté votre publication dans « ${group.name} ».`,
-          actorName: author.nom
+          groupName: group.id === 'public' ? undefined : group.name
         });
       }
 
-      for (const mentionedUid of mentions) {
-        if (mentionedUid && mentionedUid !== author.id && mentionedUid !== post.authorId) {
+      if (post.authorId !== author.id && post.authorId !== parentAuthorId) {
+        if (group.id === 'public') {
+          await notificationService.createAppNotification({
+            id: buildDeterministicNotificationId(['pcom', comment.id, post.authorId]),
+            userId: post.authorId,
+            actorId: author.id,
+            actorName: author.nom,
+            actorAvatar: author.avatar_url || undefined,
+            type: 'comment',
+            category: 'interactions',
+            title: 'Nouveau commentaire',
+            message: `${author.nom} a commenté votre publication.`,
+            previewText: comment.content.slice(0, 140),
+            targetType: 'post',
+            targetId: post.id,
+            groupId: group.id
+          });
+        } else {
           await communityService.createNotification({
-            userId: mentionedUid,
+            userId: post.authorId,
             groupId: group.id,
             groupName: group.name,
-            type: 'mention',
-            message: `${author.nom} vous a mentionné dans un commentaire (« ${group.name} »).`,
+            type: 'comment',
+            message: `${author.nom} a commenté votre publication dans « ${group.name} ».`,
             actorName: author.nom
           });
+        }
+      }
+
+      for (const mentionedUid of mentions) {
+        if (mentionedUid && mentionedUid !== author.id && mentionedUid !== post.authorId && mentionedUid !== parentAuthorId) {
+          if (group.id === 'public') {
+            await notificationService.createAppNotification({
+              id: buildDeterministicNotificationId(['cmention', comment.id, mentionedUid]),
+              userId: mentionedUid,
+              actorId: author.id,
+              actorName: author.nom,
+              actorAvatar: author.avatar_url || undefined,
+              type: 'mention',
+              category: 'mentions',
+              title: 'Mention dans un commentaire',
+              message: `${author.nom} vous a mentionné(e) dans un commentaire.`,
+              previewText: comment.content.slice(0, 140),
+              targetType: 'post',
+              targetId: post.id,
+              groupId: group.id
+            });
+          } else {
+            await communityService.createNotification({
+              userId: mentionedUid,
+              groupId: group.id,
+              groupName: group.name,
+              type: 'mention',
+              message: `${author.nom} vous a mentionné dans un commentaire (« ${group.name} »).`,
+              actorName: author.nom
+            });
+          }
         }
       }
 
@@ -880,13 +1109,36 @@ export const communityService = {
     }
   },
 
-  toggleLikeComment: async (commentId: string, userId: string, isLiked: boolean): Promise<void> => {
+  toggleLikeComment: async (
+    commentId: string,
+    userId: string,
+    isLiked: boolean,
+    context?: { comment?: PostComment; actor?: UserProfile }
+  ): Promise<void> => {
     if (!dbFirestore || !auth?.currentUser) throw new Error('Non connecté.');
     try {
       await updateDoc(doc(dbFirestore, 'post_comments', commentId), {
         likedBy: isLiked ? arrayRemove(userId) : arrayUnion(userId),
         updatedAt: nowIso()
       });
+
+      if (!isLiked && context?.comment && context?.actor && context.comment.authorId !== userId) {
+        await notificationService.createAppNotification({
+          id: buildDeterministicNotificationId(['clike', commentId, userId]),
+          userId: context.comment.authorId,
+          actorId: userId,
+          actorName: context.actor.nom,
+          actorAvatar: context.actor.avatar_url || undefined,
+          type: 'like',
+          category: 'interactions',
+          title: 'Commentaire aimé',
+          message: `${context.actor.nom} a aimé votre commentaire.`,
+          previewText: context.comment.content.slice(0, 140),
+          targetType: 'post',
+          targetId: context.comment.postId,
+          groupId: context.comment.groupId
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `post_comments/${commentId}`);
     }
@@ -1059,6 +1311,32 @@ export const communityService = {
 
     try {
       await setDoc(doc(dbFirestore, 'group_announcements', annId), ann);
+
+      try {
+        const membersSnap = await getDocs(
+          query(collection(dbFirestore, 'group_members'), where('groupId', '==', group.id))
+        );
+        const memberIds: string[] = [];
+        membersSnap.forEach((m) => {
+          const md = m.data() as CommunityMember;
+          if (md.status === 'active' && md.userId !== author.id) memberIds.push(md.userId);
+        });
+        await Promise.all(
+          memberIds.slice(0, 40).map((uid) =>
+            communityService.createNotification({
+              userId: uid,
+              groupId: group.id,
+              groupName: group.name,
+              type: 'announcement',
+              message: `Annonce officielle dans « ${group.name} » : ${ann.title}`,
+              actorName: author.nom
+            })
+          )
+        );
+      } catch {
+        // Non-fatal
+      }
+
       return ann;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `group_announcements/${annId}`);

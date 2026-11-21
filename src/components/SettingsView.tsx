@@ -27,20 +27,39 @@ import {
   Camera,
   Upload
 } from 'lucide-react';
-import { UserProfile, UserSettings, DEFAULT_USER_SETTINGS, Circle } from '../types';
-import { zaureService } from '../firebaseClient';
+import {
+  UserProfile,
+  UserSettings,
+  DEFAULT_USER_SETTINGS,
+  Circle,
+  UserPrivacySettings,
+  DEFAULT_PRIVACY_SETTINGS
+} from '../types';
+import { zaureService, normalizePrivacySettings } from '../firebaseClient';
 import { useTranslation } from '../context/LanguageContext';
 import { compressImageFile } from '../utils/imageCompressor';
 import { PWAInstallButton } from './PWAInstallButton';
+import {
+  getPushNotificationPermission,
+  isPushNotificationSupported,
+  requestBrowserPushPermission
+} from '../services/notificationService';
 
 interface SettingsViewProps {
   currentUser: UserProfile;
   onProfileUpdated: (updatedUser: UserProfile) => void;
   onSignOut: () => void;
   onImmediateSignOut?: () => void;
+  onOpenOwnProfile?: () => void;
 }
 
-export default function SettingsView({ currentUser, onProfileUpdated, onSignOut, onImmediateSignOut }: SettingsViewProps) {
+export default function SettingsView({
+  currentUser,
+  onProfileUpdated,
+  onSignOut,
+  onImmediateSignOut,
+  onOpenOwnProfile
+}: SettingsViewProps) {
   const { language, setLanguage, t } = useTranslation();
   const [activeSection, setActiveSection] = useState<'compte' | 'confidentialite' | 'notifications' | 'contenu' | 'cercles' | 'accessibilite' | 'apropos'>('compte');
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
@@ -132,14 +151,84 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut,
     }, 3000);
   };
 
+  const activePrivacySettings: UserPrivacySettings = normalizePrivacySettings(
+    settings.privacy_settings || currentUser.privacy_settings || DEFAULT_PRIVACY_SETTINGS
+  );
+
   const updateSettingField = async <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
-    const updated = { ...settings, [key]: value };
+    const nextPrivacy: UserPrivacySettings = { ...activePrivacySettings };
+    let touchedPrivacy = false;
+
+    if (key === 'profil_visibilite') {
+      const v = value as UserSettings['profil_visibilite'];
+      nextPrivacy.infoVisibility = v === 'public' ? 'public' : v === 'cercles' ? 'cercles' : 'followers';
+      if (v !== 'public') nextPrivacy.profileMode = 'private';
+      touchedPrivacy = true;
+    } else if (key === 'capsules_visibilite') {
+      const v = value as UserSettings['capsules_visibilite'];
+      nextPrivacy.postsVisibility = v === 'public' ? 'public' : v === 'cercles' ? 'cercles' : 'followers';
+      touchedPrivacy = true;
+    } else if (key === 'messages_autorises') {
+      const v = value as UserSettings['messages_autorises'];
+      nextPrivacy.allowMessages = v;
+      touchedPrivacy = true;
+    } else if (key === 'privacy_settings') {
+      touchedPrivacy = true;
+    }
+
+    const patch: Partial<UserSettings> = touchedPrivacy && key !== 'privacy_settings'
+      ? { [key]: value, privacy_settings: nextPrivacy }
+      : { [key]: value };
+
+    const updated = { ...settings, ...patch };
     setSettings(updated);
     if (key === 'langue_interface' || key === 'langue_preferee') {
       setLanguage(value as any);
     }
-    await zaureService.saveUserSettings(currentUser.id, { [key]: value });
+    await zaureService.saveUserSettings(currentUser.id, patch);
+
+    if (touchedPrivacy) {
+      const finalPrivacy = key === 'privacy_settings'
+        ? normalizePrivacySettings(value as UserPrivacySettings)
+        : nextPrivacy;
+      onProfileUpdated({
+        ...currentUser,
+        privacy_settings: finalPrivacy
+      });
+    }
+
     showToast('Préférence enregistrée dans Firestore');
+  };
+
+  const updateGranularPrivacy = async (patch: Partial<UserPrivacySettings>) => {
+    const merged: UserPrivacySettings = {
+      ...activePrivacySettings,
+      ...patch
+    };
+    const legacySync: Partial<UserSettings> = {
+      privacy_settings: merged
+    };
+    if (patch.infoVisibility !== undefined) {
+      legacySync.profil_visibilite = patch.infoVisibility === 'public' ? 'public' : 'cercles';
+    }
+    if (patch.postsVisibility !== undefined) {
+      legacySync.capsules_visibilite = patch.postsVisibility === 'public' ? 'public' : 'cercles';
+    }
+    if (patch.allowMessages !== undefined) {
+      legacySync.messages_autorises =
+        patch.allowMessages === 'tous'
+          ? 'tous'
+          : patch.allowMessages === 'cercles' || patch.allowMessages === 'followers'
+            ? 'cercles'
+            : 'mentors';
+    }
+    setSettings((prev) => ({ ...prev, ...legacySync }));
+    await zaureService.saveUserSettings(currentUser.id, legacySync);
+    onProfileUpdated({
+      ...currentUser,
+      privacy_settings: merged
+    });
+    showToast('Confidentialité du profil mise à jour');
   };
 
   // Account updates
@@ -319,6 +408,16 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut,
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          {onOpenOwnProfile && (
+            <button
+              type="button"
+              onClick={onOpenOwnProfile}
+              className="min-h-[40px] px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition shrink-0 flex items-center gap-1.5"
+            >
+              <User className="w-4 h-4" />
+              <span>Voir mon profil</span>
+            </button>
+          )}
           <PWAInstallButton />
           <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
             <img
@@ -644,9 +743,104 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut,
                   className="w-full text-xs bg-slate-50 border border-slate-200 p-2.5 rounded-xl font-medium text-slate-800"
                 >
                   <option value="tous">Tous les membres du réseau</option>
-                  <option value="cercles">Membres de mes cercles uniquement</option>
+                  <option value="cercles">Membres de mes cercles / abonnés</option>
                   <option value="mentors">Mentors vérifiés uniquement</option>
                 </select>
+              </div>
+
+              {/* Contrôles granulaires du profil social */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-900">Mode du profil social</p>
+                    <p className="text-[11px] text-slate-500">
+                      Un profil privé restreint vos onglets aux personnes qui vous suivent.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
+                    {(['public', 'private'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => updateGranularPrivacy({ profileMode: mode })}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition ${
+                          activePrivacySettings.profileMode === mode
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {mode === 'public' ? 'Public' : 'Privé'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Liste des abonnés
+                    </label>
+                    <select
+                      value={activePrivacySettings.followersVisibility}
+                      onChange={(e) =>
+                        updateGranularPrivacy({ followersVisibility: e.target.value as any })
+                      }
+                      className="w-full text-xs bg-white border border-slate-200 p-2 rounded-xl text-slate-800"
+                    >
+                      <option value="public">Public</option>
+                      <option value="followers">Abonnés uniquement</option>
+                      <option value="private">Moi uniquement</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Liste des abonnements
+                    </label>
+                    <select
+                      value={activePrivacySettings.followingVisibility}
+                      onChange={(e) =>
+                        updateGranularPrivacy({ followingVisibility: e.target.value as any })
+                      }
+                      className="w-full text-xs bg-white border border-slate-200 p-2 rounded-xl text-slate-800"
+                    >
+                      <option value="public">Public</option>
+                      <option value="followers">Abonnés uniquement</option>
+                      <option value="private">Moi uniquement</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Communautés rejointes
+                    </label>
+                    <select
+                      value={activePrivacySettings.communitiesVisibility}
+                      onChange={(e) =>
+                        updateGranularPrivacy({ communitiesVisibility: e.target.value as any })
+                      }
+                      className="w-full text-xs bg-white border border-slate-200 p-2 rounded-xl text-slate-800"
+                    >
+                      <option value="public">Public</option>
+                      <option value="followers">Abonnés uniquement</option>
+                      <option value="private">Moi uniquement</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Galeries & Publications
+                    </label>
+                    <select
+                      value={activePrivacySettings.postsVisibility}
+                      onChange={(e) =>
+                        updateGranularPrivacy({ postsVisibility: e.target.value as any })
+                      }
+                      className="w-full text-xs bg-white border border-slate-200 p-2 rounded-xl text-slate-800"
+                    >
+                      <option value="public">Public</option>
+                      <option value="followers">Abonnés uniquement</option>
+                      <option value="private">Moi uniquement</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Demandes de mentorat */}
@@ -730,17 +924,22 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut,
               </div>
 
               <div className="space-y-3">
-                <label className="block text-xs font-bold text-slate-800">Notifier pour :</label>
+                <label className="block text-xs font-bold text-slate-800">Préférences par catégorie :</label>
 
                 {[
+                  { key: 'notif_reaction', title: 'Réactions', desc: "Mentions J'aime et réactions sur vos publications et capsules" },
+                  { key: 'notif_comment', title: 'Commentaires', desc: 'Nouveaux commentaires et réponses à vos discussions' },
+                  { key: 'notif_follower', title: 'Nouveaux abonnés', desc: 'Lorsque quelqu’un commence à suivre votre profil' },
+                  { key: 'notif_community', title: 'Activités des communautés', desc: 'Invitations, demandes approuvées, annonces et mises à jour de règles' },
+                  { key: 'notif_mention', title: 'Mentions (@nom)', desc: 'Identifications dans les publications, commentaires et discussions de groupe' },
+                  { key: 'notif_message', title: 'Messages privés', desc: 'Alertes lors de la réception d’un nouveau message direct' },
+                  { key: 'notif_system', title: 'Notifications système', desc: 'Annonces importantes et informations de sécurité du compte' },
                   { key: 'notif_capsule', title: 'Nouvelles capsules publiées', desc: 'Quand un membre ou mentor publie dans un de vos cercles rejoints' },
-                  { key: 'notif_message', title: 'Messages directs reçus', desc: 'Alertes lors de la réception d\'un nouveau message privé' },
-                  { key: 'notif_mentorat', title: 'Invitations de mentorat', desc: 'Lorsqu\'un mentor ou un apprenant sollicite votre accompagnement' },
-                  { key: 'notif_reaction', title: 'Réactions sur mes capsules', desc: 'Quand quelqu\'un indique votre capsule comme utile ou pose une question' },
+                  { key: 'notif_mentorat', title: 'Invitations de mentorat', desc: 'Lorsqu’un mentor ou un apprenant sollicite votre accompagnement' },
                 ].map(item => {
-                  const val = !!(settings as any)[item.key];
+                  const val = (settings as any)[item.key] !== false;
                   return (
-                    <div key={item.key} className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl">
+                    <div key={item.key} className="flex items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-100 rounded-2xl">
                       <div>
                         <p className="text-xs font-bold text-slate-800">{item.title}</p>
                         <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>
@@ -749,7 +948,7 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut,
                       <button
                         type="button"
                         onClick={() => updateSettingField(item.key as any, !val)}
-                        className={`w-12 h-6 rounded-full transition p-1 flex items-center ${
+                        className={`w-12 h-6 rounded-full transition p-1 flex items-center shrink-0 ${
                           val ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
                         }`}
                       >
@@ -758,6 +957,44 @@ export default function SettingsView({ currentUser, onProfileUpdated, onSignOut,
                     </div>
                   );
                 })}
+
+                {isPushNotificationSupported() && (
+                  <div className="flex items-center justify-between gap-3 p-3.5 bg-blue-50/60 border border-blue-200/70 rounded-2xl">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Notifications Push navigateur</p>
+                      <p className="text-[10px] text-slate-600 mt-0.5">
+                        {getPushNotificationPermission() === 'granted'
+                          ? 'Autorisées sur cet appareil'
+                          : getPushNotificationPermission() === 'denied'
+                            ? 'Bloquées par votre navigateur (modifiable dans les réglages du site)'
+                            : 'Recevez une alerte en arrière-plan lors d’une nouvelle notification'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (settings.notif_push_enabled) {
+                          await updateSettingField('notif_push_enabled', false);
+                          return;
+                        }
+                        const perm = await requestBrowserPushPermission();
+                        if (perm === 'granted') {
+                          await updateSettingField('notif_push_enabled', true);
+                        } else {
+                          showToast('Autorisation de notification refusée ou bloquée par le navigateur');
+                          await updateSettingField('notif_push_enabled', false);
+                        }
+                      }}
+                      className={`w-12 h-6 rounded-full transition p-1 flex items-center shrink-0 ${
+                        settings.notif_push_enabled && getPushNotificationPermission() === 'granted'
+                          ? 'bg-blue-600 justify-end'
+                          : 'bg-slate-300 justify-start'
+                      }`}
+                    >
+                      <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <hr className="border-slate-100" />
