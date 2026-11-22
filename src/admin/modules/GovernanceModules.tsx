@@ -956,17 +956,17 @@ export const AuditLogModule: React.FC<AuditLogProps> = ({ logs, initialSearch = 
   }, [logs]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return logs.filter((l) => {
       if (roleFilter !== 'all' && l.actorRole !== roleFilter) return false;
       if (moduleFilter !== 'all' && l.module !== moduleFilter) return false;
       if (!q) return true;
       return (
-        l.action.toLowerCase().includes(q) ||
-        l.actorName.toLowerCase().includes(q) ||
-        l.details.toLowerCase().includes(q) ||
-        l.module.toLowerCase().includes(q) ||
-        l.targetId.toLowerCase().includes(q)
+        String(l.action ?? '').toLowerCase().includes(q) ||
+        String(l.actorName ?? '').toLowerCase().includes(q) ||
+        String(l.details ?? '').toLowerCase().includes(q) ||
+        String(l.module ?? '').toLowerCase().includes(q) ||
+        String(l.targetId ?? '').toLowerCase().includes(q)
       );
     });
   }, [logs, search, roleFilter, moduleFilter]);

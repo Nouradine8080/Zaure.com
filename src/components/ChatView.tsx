@@ -31,8 +31,10 @@ import {
 interface ChatViewProps {
   currentUser: UserProfile | null;
   initialSelectedUser?: UserProfile | null;
+  initialConversationId?: string | null;
   mobileView?: 'list' | 'chat';
   onMobileViewChange?: (view: 'list' | 'chat') => void;
+  onConversationChange?: (convId: string | null) => void;
   onProfileUpdated?: (updatedUser: UserProfile) => void;
   onExitChat?: () => void;
 }
@@ -40,14 +42,16 @@ interface ChatViewProps {
 export default function ChatView({
   currentUser,
   initialSelectedUser = null,
+  initialConversationId = null,
   mobileView: propMobileView = 'list',
   onMobileViewChange,
+  onConversationChange,
   onProfileUpdated,
   onExitChat
 }: ChatViewProps) {
   // Core Data State
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [activeConvId, setActiveConvId] = useState<string | null>(initialConversationId || null);
   const [rawMessages, setRawMessages] = useState<Message[]>([]);
   const [availableUsers, setAvailableUsers] = useState<UserProfile[]>([]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
@@ -212,12 +216,31 @@ export default function ChatView({
     return () => clearInterval(interval);
   }, [currentUser?.id, presenceStatus]);
 
+  // Sync activeConvId when parent URL route changes (refresh / browser Back & Forward)
+  useEffect(() => {
+    if (initialSelectedUser) return;
+    if (initialConversationId) {
+      setActiveConvId(initialConversationId);
+      setMobileView('chat');
+    } else if (initialConversationId === null) {
+      setActiveConvId(null);
+      if (window.innerWidth < 768) {
+        setMobileView('list');
+      }
+    }
+  }, [initialConversationId]);
+
+  const selectConversationId = (convId: string | null) => {
+    setActiveConvId(convId);
+    onConversationChange?.(convId);
+  };
+
   // Direct jump when initialSelectedUser is passed from Profile / Feed
   const handleStartDirectChat = (user: UserProfile) => {
     if (!currentUser) return;
     setSelectedDirectUser(user);
     const convId = zaureService.getConversationId(currentUser.id, user.id);
-    setActiveConvId(convId);
+    selectConversationId(convId);
     setMobileView('chat');
     setShowNewChatModal(false);
     setViewingUserProfile(null);
@@ -230,17 +253,22 @@ export default function ChatView({
     handleStartDirectChat(initialSelectedUser);
   }, [initialSelectedUser?.id, currentUser?.id]);
 
-  // Auto-select first visible conversation on desktop
+  // Auto-select first visible conversation on desktop when visiting /messages directly
   const visibleConversations = useMemo(() => {
     if (!currentUser) return conversations;
     return conversations.filter((c) => !c.deleted_by?.includes(currentUser.id));
   }, [conversations, currentUser]);
 
   useEffect(() => {
-    if (!activeConvId && visibleConversations.length > 0 && window.innerWidth >= 768) {
+    if (
+      !activeConvId &&
+      !initialConversationId &&
+      visibleConversations.length > 0 &&
+      window.innerWidth >= 768
+    ) {
       setActiveConvId(visibleConversations[0].id);
     }
-  }, [visibleConversations, activeConvId]);
+  }, [visibleConversations, activeConvId, initialConversationId]);
 
   // --------------------------------------------------------------------------
   // 2. Active Conversation & Other User Resolution
@@ -656,7 +684,7 @@ export default function ChatView({
         showToast('Conversation effacée de votre messagerie.');
       }
       if (activeConvId === targetId) {
-        setActiveConvId(null);
+        selectConversationId(null);
         setMobileView('list');
       }
     } catch {
@@ -923,7 +951,7 @@ export default function ChatView({
             onFilterChange={setActiveFilter}
             onSearchChange={setSearchQuery}
             onSelectConversation={(convId) => {
-              setActiveConvId(convId);
+              selectConversationId(convId);
               setMobileView('chat');
               setInChatSearchOpen(false);
               setInChatSearchQuery('');
@@ -970,7 +998,12 @@ export default function ChatView({
             currentMatchIndex={currentMatchIndex}
             highlightedMsgId={highlightedMsgId}
             lastReadMessageIdByOther={lastReadMessageIdByOther}
-            onBackMobile={() => setMobileView('list')}
+            onBackMobile={() => {
+              setMobileView('list');
+              if (window.innerWidth < 768) {
+                selectConversationId(null);
+              }
+            }}
             onToggleRightPanel={() => {
               if (window.innerWidth < 1024) setShowMobileDetails(true);
               else setShowRightPanel((v) => !v);
@@ -1104,7 +1137,7 @@ export default function ChatView({
                 currentUser.id,
                 currentUser.nom
               );
-              setActiveConvId(null);
+              selectConversationId(null);
               setMobileView('list');
               showToast('Vous avez quitté le groupe.');
             }}
@@ -1161,7 +1194,7 @@ export default function ChatView({
               currentUser.nom
             );
             setShowMobileDetails(false);
-            setActiveConvId(null);
+            selectConversationId(null);
             setMobileView('list');
             showToast('Vous avez quitté le groupe.');
           }}
@@ -1187,7 +1220,7 @@ export default function ChatView({
             memberIds,
             allUsers: availableUsers
           });
-          setActiveConvId(newGroup.id);
+          selectConversationId(newGroup.id);
           setMobileView('chat');
           showToast(`Groupe « ${newGroup.group_name} » créé.`);
         }}
@@ -1235,7 +1268,7 @@ export default function ChatView({
             currentUser.id,
             currentUser.nom
           );
-          setActiveConvId(null);
+          selectConversationId(null);
           setMobileView('list');
           showToast('Vous avez quitté le groupe.');
         }}

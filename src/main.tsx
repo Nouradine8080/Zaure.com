@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { LanguageProvider } from './context/LanguageContext';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { bootstrapAppearancePreferences } from './utils/appearancePreferences';
 import './index.css';
 
@@ -13,11 +14,13 @@ registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <LanguageProvider>
-        <App />
-        <OfflineIndicator />
-      </LanguageProvider>
-    </BrowserRouter>
+    <ErrorBoundary scopeLabel="Application ZAURE" variant="fullscreen">
+      <BrowserRouter>
+        <LanguageProvider>
+          <App />
+          <OfflineIndicator />
+        </LanguageProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>
 );

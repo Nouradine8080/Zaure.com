@@ -72,7 +72,7 @@ export const PostsManagementModule: React.FC<PostsModuleProps> = ({
   }, [search, sourceFilter, statusFilter]);
 
   const filteredPosts = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return groupPosts.filter((p) => {
       if (sourceFilter === 'public' && p.groupId !== 'public') return false;
       if (sourceFilter === 'circles' && p.groupId === 'public') return false;
@@ -80,9 +80,9 @@ export const PostsManagementModule: React.FC<PostsModuleProps> = ({
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (!q) return true;
       return (
-        p.content.toLowerCase().includes(q) ||
-        p.authorName.toLowerCase().includes(q) ||
-        p.groupId.toLowerCase().includes(q)
+        String(p.content ?? '').toLowerCase().includes(q) ||
+        String(p.authorName ?? '').toLowerCase().includes(q) ||
+        String(p.groupId ?? '').toLowerCase().includes(q)
       );
     });
   }, [groupPosts, search, sourceFilter, statusFilter]);
@@ -96,13 +96,13 @@ export const PostsManagementModule: React.FC<PostsModuleProps> = ({
 
   const filteredCapsules = useMemo(() => {
     if (sourceFilter === 'public' || sourceFilter === 'circles') return [];
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return capsules.filter((c) => {
       if (!q) return true;
       return (
-        c.contenu.toLowerCase().includes(q) ||
-        (c.auteur_nom || '').toLowerCase().includes(q) ||
-        (c.circle_nom || c.circle_id).toLowerCase().includes(q)
+        String(c.contenu ?? '').toLowerCase().includes(q) ||
+        String(c.auteur_nom ?? '').toLowerCase().includes(q) ||
+        String(c.circle_nom ?? c.circle_id ?? '').toLowerCase().includes(q)
       );
     });
   }, [capsules, search, sourceFilter]);
@@ -723,9 +723,9 @@ export const CommentsManagementModule: React.FC<CommentsModuleProps> = ({
       .filter(
         (m) =>
           !q ||
-          m.content.toLowerCase().includes(q) ||
-          m.author.toLowerCase().includes(q) ||
-          m.targetId.toLowerCase().includes(q)
+          String(m.content ?? '').toLowerCase().includes(q) ||
+          String(m.author ?? '').toLowerCase().includes(q) ||
+          String(m.targetId ?? '').toLowerCase().includes(q)
       )
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }, [postComments, capsuleComments, search, source, session]);
@@ -944,10 +944,12 @@ export const ContentModerationModule: React.FC<ContentModerationProps> = ({
   );
 
   const keywordFlagged = useMemo(() => {
-    const words = (settings.forbiddenKeywords || []).map((w) => w.toLowerCase()).filter(Boolean);
+    const words = (settings.forbiddenKeywords || [])
+      .map((w) => String(w ?? '').toLowerCase().trim())
+      .filter(Boolean);
     if (words.length === 0) return [];
     return groupPosts.filter((p) => {
-      const lower = (p.content || '').toLowerCase();
+      const lower = String(p?.content ?? '').toLowerCase();
       return words.some((w) => lower.includes(w));
     });
   }, [groupPosts, settings.forbiddenKeywords]);

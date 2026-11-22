@@ -330,3 +330,203 @@ export function buildTopCommunitiesActivity(
     .sort((a, b) => b.activityScore - a.activityScore || b.memberCount - a.memberCount)
     .slice(0, 6);
 }
+
+export type UserPresetFilter =
+  | 'all'
+  | 'active'
+  | 'suspended'
+  | 'new_users'
+  | 'admins'
+  | 'moderators';
+
+export type UserSortField = 'nom' | 'role' | 'status' | 'created_at' | 'last_active';
+
+export interface UsersSummaryStats {
+  totalUsers: number;
+  activeAccountsCount: number;
+  recentlyActive30dCount: number;
+  newUsers30dCount: number;
+  newUsers7dCount: number;
+  suspendedUsersCount: number;
+  bannedUsersCount: number;
+  warnedUsersCount: number;
+}
+
+export function buildUserLastActivityMap(params: {
+  users: UserProfile[];
+  authLastSignInMap?: Record<string, string | null | undefined>;
+  groupPosts: GroupPost[];
+  capsules: Capsule[];
+  postComments: PostComment[];
+  capsuleComments: Comment[];
+}): Record<string, number> {
+  const map: Record<string, number> = {};
+  const bump = (userId: string | undefined | null, iso: string | undefined | null) => {
+    if (!userId) return;
+    const ms = parseTimestampMs(iso);
+    if (ms === null) return;
+    if (!map[userId] || ms > map[userId]) {
+      map[userId] = ms;
+    }
+  };
+
+  params.users.forEach((u) => {
+    bump(u.id, u.last_active);
+    if (params.authLastSignInMap?.[u.id]) {
+      bump(u.id, params.authLastSignInMap[u.id]);
+    }
+  });
+  params.groupPosts.forEach((p) => bump(p.authorId, p.createdAt));
+  params.capsules.forEach((c) => bump(c.auteur_id, c.created_at));
+  params.postComments.forEach((c) => bump(c.authorId, c.createdAt));
+  params.capsuleComments.forEach((c) => bump(c.auteur_id, c.created_at));
+
+  return map;
+}
+
+export function computeUsersSummaryStats(params: {
+  users: UserProfile[];
+  moderationMap: Record<string, { status: 'active' | 'warned' | 'suspended'; reason?: string }>;
+  groupPosts: GroupPost[];
+  capsules: Capsule[];
+  postComments: PostComment[];
+  capsuleComments: Comment[];
+  nowMs?: number;
+}): UsersSummaryStats {
+  const nowMs = params.nowMs ?? Date.now();
+  const dayMs = 86400 * 1000;
+  let suspendedUsersCount = 0;
+  let bannedUsersCount = 0;
+  let warnedUsersCount = 0;
+  let newUsers30dCount = 0;
+  let newUsers7dCount = 0;
+
+  params.users.forEach((u) => {
+    const mod = params.moderationMap[u.id];
+    const status = mod?.status || 'active';
+    if (status === 'suspended') {
+      suspendedUsersCount += 1;
+      if (mod?.reason?.includes('[BANNISSEMENT]')) {
+        bannedUsersCount += 1;
+      }
+    } else if (status === 'warned') {
+      warnedUsersCount += 1;
+    }
+    if (isInRange(u.created_at, nowMs - 30 * dayMs, nowMs)) {
+      newUsers30dCount += 1;
+    }
+    if (isInRange(u.created_at, nowMs - 7 * dayMs, nowMs)) {
+      newUsers7dCount += 1;
+    }
+  });
+
+  const activeSet = computeActiveUserIdsInRange(
+    {
+      users: params.users,
+      groupPosts: params.groupPosts,
+      capsules: params.capsules,
+      postComments: params.postComments,
+      capsuleComments: params.capsuleComments
+    },
+    nowMs - 30 * dayMs,
+    nowMs
+  );
+
+  return {
+    totalUsers: params.users.length,
+    activeAccountsCount: Math.max(0, params.users.length - suspendedUsersCount),
+    recentlyActive30dCount: activeSet.size,
+    newUsers30dCount,
+    newUsers7dCount,
+    suspendedUsersCount,
+    bannedUsersCount,
+    warnedUsersCount
+  };
+}
+
+export function filterAndSortAdminUsers(params: {
+  users: UserProfile[];
+  moderationMap: Record<string, { status: 'active' | 'warned' | 'suspended'; reason?: string }>;
+  staffRoleMap: Record<string, 'SUPER_ADMIN' | 'ADMIN' | 'MODERATOR'>;
+  lastActivityMap: Record<string, number>;
+  search: string;
+  presetFilter: UserPresetFilter;
+  roleFilter: 'all' | 'utilisateur' | 'mentor' | 'verifie';
+  dateFilter: 'all' | '7d' | '30d' | '90d';
+  sortField: UserSortField;
+  sortDir: 'asc' | 'desc';
+  nowMs?: number;
+}): UserProfile[] {
+  const nowMs = params.nowMs ?? Date.now();
+  const dayMs = 86400 * 1000;
+  const q = params.search.trim().toLowerCase();
+  const dateCutoff =
+    params.dateFilter === '7d'
+      ? nowMs - 7 * dayMs
+      : params.dateFilter === '30d'
+        ? nowMs - 30 * dayMs
+        : params.dateFilter === '90d'
+          ? nowMs - 90 * dayMs
+          : 0;
+
+  const list = params.users.filter((u) => {
+    const modStatus = params.moderationMap[u.id]?.status || 'active';
+    const staffRole = params.staffRoleMap[u.id];
+
+    if (params.presetFilter === 'active' && modStatus === 'suspended') return false;
+    if (params.presetFilter === 'suspended' && modStatus !== 'suspended') return false;
+    if (params.presetFilter === 'new_users' && !isInRange(u.created_at, nowMs - 30 * dayMs, nowMs)) {
+      return false;
+    }
+    if (
+      params.presetFilter === 'admins' &&
+      staffRole !== 'SUPER_ADMIN' &&
+      staffRole !== 'ADMIN'
+    ) {
+      return false;
+    }
+    if (params.presetFilter === 'moderators' && staffRole !== 'MODERATOR') {
+      return false;
+    }
+
+    if (params.roleFilter !== 'all' && u.role !== params.roleFilter) return false;
+    if (dateCutoff > 0) {
+      const createdMs = parseTimestampMs(u.created_at);
+      if (createdMs === null || createdMs < dateCutoff) return false;
+    }
+
+    if (!q) return true;
+    return (
+      String(u.nom ?? '').toLowerCase().includes(q) ||
+      String(u.username ?? '').toLowerCase().includes(q) ||
+      String(u.email ?? '').toLowerCase().includes(q) ||
+      String(u.id ?? '').toLowerCase().includes(q) ||
+      String(u.phone ?? '').toLowerCase().includes(q) ||
+      String(u.localisation ?? '').toLowerCase().includes(q) ||
+      String(u.profession ?? '').toLowerCase().includes(q)
+    );
+  });
+
+  list.sort((a, b) => {
+    let cmp = 0;
+    if (params.sortField === 'nom') {
+      cmp = (a.nom || '').localeCompare(b.nom || '');
+    } else if (params.sortField === 'role') {
+      cmp = (a.role || '').localeCompare(b.role || '');
+    } else if (params.sortField === 'status') {
+      const sA = params.moderationMap[a.id]?.status || 'active';
+      const sB = params.moderationMap[b.id]?.status || 'active';
+      cmp = sA.localeCompare(sB);
+    } else if (params.sortField === 'last_active') {
+      const lA = params.lastActivityMap[a.id] || 0;
+      const lB = params.lastActivityMap[b.id] || 0;
+      cmp = lA - lB;
+    } else {
+      cmp = (a.created_at || '').localeCompare(b.created_at || '');
+    }
+    return params.sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  return list;
+}
+

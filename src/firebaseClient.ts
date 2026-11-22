@@ -2300,6 +2300,35 @@ export const zaureService = {
     }
   },
 
+  resolveUserProfileByIdentifier: async (
+    identifier: string
+  ): Promise<(UserProfile & { circles_count?: number }) | null> => {
+    if (!dbFirestore || !auth?.currentUser) return null;
+    const clean = (identifier || '').replace(/^@+/, '').trim();
+    if (!clean) return null;
+    try {
+      const byIdDoc = await getDoc(doc(dbFirestore, 'public_profiles', clean));
+      if (byIdDoc.exists()) {
+        return mapPublicProfileData(byIdDoc.id, byIdDoc.data());
+      }
+      const normalized = clean.toLowerCase();
+      const q = query(
+        collection(dbFirestore, 'public_profiles'),
+        where('username', '==', normalized),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const first = snap.docs[0];
+        return mapPublicProfileData(first.id, first.data());
+      }
+      return null;
+    } catch (e) {
+      console.warn('Info - resolveUserProfileByIdentifier:', e);
+      return null;
+    }
+  },
+
   changeUserEmail: async (
     newEmail: string,
     currentPassword?: string

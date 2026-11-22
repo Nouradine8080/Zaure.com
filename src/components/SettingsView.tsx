@@ -50,6 +50,8 @@ export type SettingsCategoryId =
 
 interface SettingsViewProps {
   currentUser: UserProfile;
+  initialCategory?: SettingsCategoryId;
+  onCategoryChange?: (category: SettingsCategoryId) => void;
   onProfileUpdated: (updatedUser: UserProfile) => void;
   onSignOut: () => void;
   onImmediateSignOut?: () => void;
@@ -73,6 +75,8 @@ interface CategoryItem {
 
 export default function SettingsView({
   currentUser,
+  initialCategory = 'compte',
+  onCategoryChange,
   onProfileUpdated,
   onSignOut,
   onImmediateSignOut,
@@ -82,7 +86,7 @@ export default function SettingsView({
   onPreferencesApplied
 }: SettingsViewProps) {
   const { setLanguage, t } = useTranslation();
-  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>('compte');
+  const [activeCategory, setActiveCategory] = useState<SettingsCategoryId>(initialCategory);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -94,6 +98,12 @@ export default function SettingsView({
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3600);
   };
+
+  useEffect(() => {
+    if (initialCategory) {
+      setActiveCategory(initialCategory);
+    }
+  }, [initialCategory]);
 
   useEffect(() => {
     return () => {
@@ -246,6 +256,7 @@ export default function SettingsView({
 
   const handleSelectCategory = (id: SettingsCategoryId) => {
     setActiveCategory(id);
+    onCategoryChange?.(id);
     setMobileShowDetail(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

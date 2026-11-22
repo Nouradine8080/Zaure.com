@@ -62,6 +62,9 @@ import {
 } from './types';
 import { adminService } from './services/adminService';
 import { AdminAuthGate } from './components/AdminAuthGate';
+import { AdminGlobalSearchModal } from './components/AdminGlobalSearchModal';
+import { normalizeAdminModuleRoute } from './utils/adminSearch';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DashboardOverviewModule } from './modules/DashboardOverviewModule';
 import { UsersManagementModule } from './modules/UsersManagementModule';
 import {
@@ -121,10 +124,7 @@ export const AdminPortalRoot: React.FC = () => {
   const navigate = useNavigate();
   const { moduleId } = useParams<{ moduleId?: string }>();
 
-  const normalizedRouteId = moduleId === 'communities' ? 'circles' : moduleId;
-  const activeModule: AdminModuleId = ADMIN_NAV_ITEMS.some((i) => i.id === normalizedRouteId)
-    ? (normalizedRouteId as AdminModuleId)
-    : 'dashboard';
+  const activeModule: AdminModuleId = normalizeAdminModuleRoute(moduleId);
 
   const cachedAdminSession = useMemo(() => {
     try {
@@ -136,6 +136,7 @@ export const AdminPortalRoot: React.FC = () => {
   }, []);
 
   const [isCheckingAuth, setIsCheckingAuth] = useState(!cachedAdminSession);
+  const [isAuthSettled, setIsAuthSettled] = useState(!auth);
   const [session, setSession] = useState<AdminSessionContext | null>(cachedAdminSession);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -294,6 +295,7 @@ export const AdminPortalRoot: React.FC = () => {
   useEffect(() => {
     if (!auth) {
       setIsCheckingAuth(false);
+      setIsAuthSettled(true);
       return;
     }
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -304,6 +306,7 @@ export const AdminPortalRoot: React.FC = () => {
       } else {
         localStorage.removeItem('zaure_admin_session_cache');
       }
+      setIsAuthSettled(true);
       setIsCheckingAuth(false);
     });
     return () => unsub();
@@ -364,10 +367,10 @@ export const AdminPortalRoot: React.FC = () => {
   }, [session, showToast]);
 
   useEffect(() => {
-    if (session?.isAuthorized) {
+    if (session?.isAuthorized && isAuthSettled) {
       loadAllAdminData();
     }
-  }, [session?.isAuthorized, loadAllAdminData]);
+  }, [session?.isAuthorized, isAuthSettled, loadAllAdminData]);
 
   const navigateModule = (id: AdminModuleId, seedQuery?: string) => {
     setMobileMenuOpen(false);
@@ -379,153 +382,6 @@ export const AdminPortalRoot: React.FC = () => {
     }
     navigate(id === 'dashboard' ? '/admin' : `/admin/${id}`);
   };
-
-  // Global cross-module search results (real loaded Firestore datasets)
-  const globalSearchResults = useMemo(() => {
-    const q = globalQuery.trim().toLowerCase();
-    if (!q || !session?.isAuthorized) return [];
-
-    const can = (mod: AdminModuleId) =>
-      session.role === 'SUPER_ADMIN' || Boolean(session.permissions[MODULE_TO_PERMISSION[mod]]);
-
-    const hits: Array<{
-      key: string;
-      module: AdminModuleId;
-      category: string;
-      title: string;
-      subtitle: string;
-      seed: string;
-    }> = [];
-
-    if (can('users')) {
-      users
-        .filter(
-          (u) =>
-            u.nom.toLowerCase().includes(q) ||
-            (u.email || '').toLowerCase().includes(q) ||
-            (u.username || '').toLowerCase().includes(q) ||
-            u.id.toLowerCase().includes(q)
-        )
-        .slice(0, 4)
-        .forEach((u) => {
-          hits.push({
-            key: `u_${u.id}`,
-            module: 'users',
-            category: 'Utilisateur',
-            title: u.nom,
-            subtitle: u.email || (u.username ? `@${u.username}` : u.id),
-            seed: u.nom
-          });
-        });
-    }
-
-    if (can('posts')) {
-      groupPosts
-        .filter(
-          (p) =>
-            p.content.toLowerCase().includes(q) ||
-            p.authorName.toLowerCase().includes(q) ||
-            p.id.toLowerCase().includes(q)
-        )
-        .slice(0, 4)
-        .forEach((p) => {
-          hits.push({
-            key: `p_${p.id}`,
-            module: 'posts',
-            category: 'Publication',
-            title: p.authorName,
-            subtitle: p.content.slice(0, 75),
-            seed: p.content.slice(0, 24) || p.authorName
-          });
-        });
-    }
-
-    if (can('circles')) {
-      groups
-        .filter(
-          (g) =>
-            g.name.toLowerCase().includes(q) ||
-            g.category.toLowerCase().includes(q) ||
-            g.id.toLowerCase().includes(q)
-        )
-        .slice(0, 4)
-        .forEach((g) => {
-          hits.push({
-            key: `g_${g.id}`,
-            module: 'circles',
-            category: 'Communauté',
-            title: g.name,
-            subtitle: `${g.category} · ${g.memberCount || 0} membre(s)`,
-            seed: g.name
-          });
-        });
-    }
-
-    if (can('files')) {
-      files
-        .filter(
-          (f) =>
-            f.name.toLowerCase().includes(q) ||
-            f.ownerName.toLowerCase().includes(q) ||
-            f.originLabel.toLowerCase().includes(q)
-        )
-        .slice(0, 4)
-        .forEach((f) => {
-          hits.push({
-            key: `f_${f.id}`,
-            module: 'files',
-            category: 'Fichier',
-            title: f.name,
-            subtitle: `${f.originLabel} · ${f.ownerName}`,
-            seed: f.name
-          });
-        });
-    }
-
-    if (can('reports')) {
-      userReports
-        .filter(
-          (r) =>
-            r.reason.toLowerCase().includes(q) ||
-            r.reportedUserName.toLowerCase().includes(q) ||
-            r.reporterName.toLowerCase().includes(q)
-        )
-        .slice(0, 3)
-        .forEach((r) => {
-          hits.push({
-            key: `ur_${r.id}`,
-            module: 'reports',
-            category: 'Signalement',
-            title: r.reportedUserName,
-            subtitle: r.reason,
-            seed: r.reportedUserName
-          });
-        });
-    }
-
-    if (can('audit')) {
-      auditLogs
-        .filter(
-          (l) =>
-            l.action.toLowerCase().includes(q) ||
-            l.actorName.toLowerCase().includes(q) ||
-            l.details.toLowerCase().includes(q)
-        )
-        .slice(0, 3)
-        .forEach((l) => {
-          hits.push({
-            key: `al_${l.id}`,
-            module: 'audit',
-            category: 'Audit',
-            title: l.action,
-            subtitle: l.details.slice(0, 75),
-            seed: l.action
-          });
-        });
-    }
-
-    return hits.slice(0, 14);
-  }, [globalQuery, session, users, groupPosts, groups, files, userReports, auditLogs]);
 
   if (isCheckingAuth) {
     return (
@@ -1112,7 +968,14 @@ export const AdminPortalRoot: React.FC = () => {
               <div className="h-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl animate-pulse" />
             </div>
           ) : (
-            <>
+            <ErrorBoundary
+              scopeLabel={`Module ${currentNavMeta.label}`}
+              variant="section"
+              resetKey={activeModule}
+              homeLabel="Retour au tableau de bord"
+              onReset={loadAllAdminData}
+              onNavigateHome={() => navigateModule('dashboard')}
+            >
               {activeModule === 'dashboard' && (
                 <DashboardOverviewModule
                   users={users}
@@ -1136,6 +999,11 @@ export const AdminPortalRoot: React.FC = () => {
                   moderationMap={moderationMap}
                   groupPosts={groupPosts}
                   capsules={capsules}
+                  postComments={postComments}
+                  capsuleComments={capsuleComments}
+                  groups={groups}
+                  legacyCircles={legacyCircles}
+                  admins={admins}
                   userReports={userReports}
                   auditLogs={auditLogs}
                   initialSearch={getInitialSearch('users')}
@@ -1260,74 +1128,29 @@ export const AdminPortalRoot: React.FC = () => {
                   onNotify={showToast}
                 />
               )}
-            </>
+            </ErrorBoundary>
           )}
         </main>
       </div>
 
       {/* Global Search Modal */}
-      {globalSearchOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-[2px] flex items-start justify-center p-4 pt-16 sm:pt-24"
-          onClick={() => setGlobalSearchOpen(false)}
-        >
-          <div
-            className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
-              <Search className="w-4 h-4 text-slate-400 shrink-0" />
-              <input
-                type="text"
-                autoFocus
-                value={globalQuery}
-                onChange={(e) => setGlobalQuery(e.target.value)}
-                placeholder="Rechercher un utilisateur, publication, communauté, fichier, audit..."
-                className="flex-1 bg-transparent text-xs text-slate-900 dark:text-white focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setGlobalSearchOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-              {!globalQuery.trim() ? (
-                <p className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
-                  Tapez un nom, un e-mail, un mot-clé ou une action pour explorer toute l&apos;administration.
-                </p>
-              ) : globalSearchResults.length === 0 ? (
-                <p className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
-                  Aucun résultat dans les collections chargées pour « {globalQuery} ».
-                </p>
-              ) : (
-                globalSearchResults.map((hit) => (
-                  <button
-                    key={hit.key}
-                    type="button"
-                    onClick={() => navigateModule(hit.module, hit.seed)}
-                    className="w-full px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 dark:text-white truncate">
-                        {hit.title}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {hit.subtitle}
-                      </p>
-                    </div>
-                    <span className="font-mono text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
-                      {hit.category}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminGlobalSearchModal
+        isOpen={globalSearchOpen}
+        query={globalQuery}
+        onQueryChange={setGlobalQuery}
+        onClose={() => setGlobalSearchOpen(false)}
+        onSelectHit={(mod, seed) => navigateModule(mod, seed)}
+        session={session}
+        users={users}
+        groupPosts={groupPosts}
+        capsules={capsules}
+        groups={groups}
+        files={files}
+        userReports={userReports}
+        groupReports={groupReports}
+        supportTickets={supportTickets}
+        auditLogs={auditLogs}
+      />
     </div>
   );
 };

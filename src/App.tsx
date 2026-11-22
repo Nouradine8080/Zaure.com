@@ -92,8 +92,15 @@ import CommunityPostCard from './components/communities/CommunityPostCard';
 import ProfilePage from './components/profile/ProfilePage';
 import NotificationsCenter from './components/notifications/NotificationsCenter';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useTranslation } from './context/LanguageContext';
 import { AdminPortalRoot } from './admin/AdminPortalRoot';
+import {
+  buildProfilePath,
+  parseZaureRoute,
+  ProfileRouteTab,
+  SettingsRouteCategory
+} from './utils/zaureRoutes';
 
 const AVATAR_PRESETS = [
   {
@@ -133,25 +140,24 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Navigation & View tabs
-  const [communityDeepLinkId, setCommunityDeepLinkId] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get('community')
+  // Persistent URL-driven route state (BrowserRouter)
+  const parsedRoute = useMemo(
+    () => parseZaureRoute(location.pathname, location.search),
+    [location.pathname, location.search]
   );
-  const [communityInviteCode, setCommunityInviteCode] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get('invite')
-  );
-  const [profileDeepLinkId, setProfileDeepLinkId] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get('profile')
-  );
-  const [activeTab, setActiveTab] = useState<'feed' | 'communities' | 'chat' | 'notifications' | 'settings' | 'profile'>(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('community') || params.get('invite')) return 'communities';
-    if (params.get('profile')) return 'profile';
-    if (params.get('notifications')) return 'notifications';
-    return 'feed';
-  });
-  const [feedSection, setFeedSection] = useState<'feed' | 'circles' | 'mentors' | 'bookmarks'>('feed');
+  const activeTab = parsedRoute.activeTab;
+  const feedSection = parsedRoute.feedSection;
+  const selectedCircleId = parsedRoute.circleId;
+  const communityDeepLinkId = parsedRoute.groupId;
+  const communityInviteCode = parsedRoute.inviteCode;
+  const urlConversationId = parsedRoute.conversationId;
+  const urlSettingsCategory: SettingsRouteCategory = parsedRoute.settingsCategory;
+  const urlProfileIdentifier = parsedRoute.profileIdentifier;
+  const urlProfileTab: ProfileRouteTab = parsedRoute.profileTab;
+
   const [viewedProfileUser, setViewedProfileUser] = useState<UserProfile | null>(null);
+  const [profileLookupStatus, setProfileLookupStatus] = useState<'idle' | 'loading' | 'ready' | 'not_found'>('idle');
+  const [circlesLoaded, setCirclesLoaded] = useState(false);
   
   // Data state
   const cachedUserSession = useMemo(() => {
@@ -168,7 +174,6 @@ export default function App() {
   const [capsules, setCapsules] = useState<Capsule[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
-  const [selectedCircleId, setSelectedCircleId] = useState<string>('all');
   
   // Real-time Notifications & Settings sync state
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
@@ -295,14 +300,13 @@ export default function App() {
         zaureService.getAvailableUsers().then(setAllUsers).catch(() => {});
         zaureService.getCircles().then((freshCircles) => {
           setCircles(freshCircles);
+          setCirclesLoaded(true);
           if (freshCircles.length > 0) {
             setNewCapsuleCircleId((prev) => prev || freshCircles[0].id);
-            const urlCircle = new URLSearchParams(window.location.search).get('circle');
-            if (urlCircle && freshCircles.some((c) => c.id === urlCircle)) {
-              setSelectedCircleId(urlCircle);
-            }
           }
-        }).catch(() => {});
+        }).catch(() => {
+          setCirclesLoaded(true);
+        });
       } else {
         localStorage.removeItem('zaure_user_session_cache');
         setJoinedCircleIds([]);
@@ -418,6 +422,7 @@ export default function App() {
     try {
       const allCircles = await zaureService.getCircles();
       setCircles(allCircles);
+      setCirclesLoaded(true);
 
       if (allCircles.length > 0) {
         setNewCapsuleCircleId((prev) => prev || 'public');
@@ -432,6 +437,7 @@ export default function App() {
       }
     } catch (e) {
       console.error(e);
+      setCirclesLoaded(true);
     }
   };
 
@@ -702,8 +708,8 @@ export default function App() {
       setJoinedCircleIds([]);
       setDirectChatUser(null);
       setChatMobileView('list');
-      setActiveTab('feed');
       setShowLogoutConfirm(false);
+      navigate('/', { replace: true });
     } finally {
       setIsLoggingOut(false);
     }
@@ -728,8 +734,8 @@ export default function App() {
       const allCircles = await zaureService.getCircles();
       setCircles(allCircles);
       setJoinedCircleIds((prev) => [...prev, added.id]);
-      setSelectedCircleId('all');
       setFeedFilter('all');
+      navigate('/feed');
       setNewCircleNom('');
       setNewCircleDesc('');
       setNewCircleImg('');
@@ -759,7 +765,7 @@ export default function App() {
       setCircles((prev) => prev.filter((c) => c.id !== circleId));
       setJoinedCircleIds((prev) => prev.filter((id) => id !== circleId));
       if (selectedCircleId === circleId) {
-        setSelectedCircleId('all');
+        navigate('/circles');
       }
     }
   };
@@ -979,85 +985,138 @@ export default function App() {
     return circles.filter((c) => !joinedCircleIds.includes(c.id)).slice(0, 3);
   }, [circles, joinedCircleIds]);
 
-  // Open any member's social profile (or own profile)
-  const openUserProfile = async (target: UserProfile | string) => {
+  // Open any member's social profile (or own profile) with persistent URL
+  const openUserProfile = (target: UserProfile | string) => {
     if (!currentUser) {
       setShowAuthModal(true);
       return;
     }
 
-    const targetId = typeof target === 'string' ? target : target.id;
-    let initialUser: UserProfile | null =
-      typeof target !== 'string'
-        ? target
-        : targetId === currentUser.id
-          ? currentUser
-          : allUsers.find((u) => u.id === targetId) || null;
-
-    if (initialUser) {
-      setViewedProfileUser(initialUser);
-    }
-    setActiveTab('profile');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    if (targetId === currentUser.id) {
-      setViewedProfileUser(currentUser);
+    if (typeof target !== 'string') {
+      if (target.id === currentUser.id) {
+        setViewedProfileUser(currentUser);
+        navigate('/profile');
+      } else {
+        setViewedProfileUser(target);
+        navigate(buildProfilePath(target.username || target.id));
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    try {
-      const freshProfile = await zaureService.getUserPublicProfile(targetId);
-      if (freshProfile) {
-        setViewedProfileUser(freshProfile);
-      } else if (!initialUser) {
-        setActiveTab('feed');
-      }
-    } catch {
-      if (!initialUser) {
-        setActiveTab('feed');
-      }
+    if (target === currentUser.id || target.replace(/^@+/, '').toLowerCase() === currentUser.username?.toLowerCase()) {
+      setViewedProfileUser(currentUser);
+      navigate('/profile');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
+
+    const matched = allUsers.find(
+      (u) => u.id === target || (u.username && u.username.toLowerCase() === target.replace(/^@+/, '').toLowerCase())
+    );
+    if (matched) {
+      setViewedProfileUser(matched);
+      navigate(buildProfilePath(matched.username || matched.id));
+    } else {
+      navigate(buildProfilePath(target));
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Resolve ?profile=<userId> URL deep link once authenticated
+  // Resolve `/profile` and `/profile/:identifier` directly on initial load, refresh, or history navigation
   useEffect(() => {
-    if (!currentUser || !profileDeepLinkId) return;
-    const targetId = profileDeepLinkId;
-    setProfileDeepLinkId(null);
-    openUserProfile(targetId);
-  }, [currentUser, profileDeepLinkId]);
+    if (!currentUser || activeTab !== 'profile') {
+      return;
+    }
 
-  // Navigate directly to private chat with a selected user
+    if (!urlProfileIdentifier) {
+      setViewedProfileUser(currentUser);
+      setProfileLookupStatus('ready');
+      return;
+    }
+
+    const clean = urlProfileIdentifier.replace(/^@+/, '').trim();
+    const cleanLower = clean.toLowerCase();
+
+    if (
+      clean === currentUser.id ||
+      (currentUser.username && currentUser.username.toLowerCase() === cleanLower)
+    ) {
+      setViewedProfileUser(currentUser);
+      setProfileLookupStatus('ready');
+      return;
+    }
+
+    const localMatch = allUsers.find(
+      (u) => u.id === clean || (u.username && u.username.toLowerCase() === cleanLower)
+    );
+    if (localMatch) {
+      setViewedProfileUser(localMatch);
+      setProfileLookupStatus('ready');
+    } else {
+      setProfileLookupStatus('loading');
+    }
+
+    let active = true;
+    zaureService
+      .resolveUserProfileByIdentifier(clean)
+      .then((fresh) => {
+        if (!active) return;
+        if (fresh) {
+          setViewedProfileUser(fresh);
+          setProfileLookupStatus('ready');
+        } else if (!localMatch) {
+          setViewedProfileUser(null);
+          setProfileLookupStatus('not_found');
+        }
+      })
+      .catch(() => {
+        if (active && !localMatch) {
+          setProfileLookupStatus('not_found');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeTab, urlProfileIdentifier, currentUser, allUsers]);
+
+  // Navigate directly to private chat with a selected user (syncs URL `/messages/:convId`)
   const handleOpenChatWithUser = (user: UserProfile) => {
     if (!currentUser) {
       setShowAuthModal(true);
       return;
     }
+    const convId = zaureService.getConversationId(currentUser.id, user.id);
     setDirectChatUser(user);
     setChatMobileView('chat');
-    setActiveTab('chat');
+    navigate(`/messages/${encodeURIComponent(convId)}`);
   };
 
   useEffect(() => {
     if (currentUser && location.pathname.startsWith(REGISTRATION_ROUTES.BASE)) {
-      navigate('/', { replace: true });
+      navigate('/feed', { replace: true });
     }
   }, [currentUser, location.pathname, navigate]);
 
   const handleAuthSuccess = (user: UserProfile) => {
     setCurrentUser(user);
     zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
-    navigate('/', { replace: true });
+    if (location.pathname.startsWith(REGISTRATION_ROUTES.BASE)) {
+      navigate('/feed', { replace: true });
+    }
   };
 
   // 0. Independent Administration Console (/admin) — strictly isolated from user space
   if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
     return (
-      <Routes>
-        <Route path="/admin" element={<AdminPortalRoot />} />
-        <Route path="/admin/:moduleId" element={<AdminPortalRoot />} />
-        <Route path="*" element={<Navigate to="/admin" replace />} />
-      </Routes>
+      <ErrorBoundary scopeLabel="Administration ZAURE" variant="fullscreen">
+        <Routes>
+          <Route path="/admin" element={<AdminPortalRoot />} />
+          <Route path="/admin/:moduleId" element={<AdminPortalRoot />} />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </ErrorBoundary>
     );
   }
 
@@ -1076,20 +1135,11 @@ export default function App() {
     );
   }
 
-  // 2. Page protection & Independent Multi-Page Registration Routes
+  // 2. Page protection & Independent Multi-Page Registration Routes (preserves requested URL on reload/deep link)
   if (!currentUser) {
     return (
       <RegistrationProvider>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <AuthPortal
-                circles={circles}
-                onAuthSuccess={handleAuthSuccess}
-              />
-            }
-          />
           <Route
             path={REGISTRATION_ROUTES.BASE}
             element={<Navigate to={REGISTRATION_ROUTES.IDENTITE} replace />}
@@ -1111,7 +1161,15 @@ export default function App() {
               />
             }
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route
+            path="*"
+            element={
+              <AuthPortal
+                circles={circles}
+                onAuthSuccess={handleAuthSuccess}
+              />
+            }
+          />
         </Routes>
       </RegistrationProvider>
     );
@@ -1124,18 +1182,31 @@ export default function App() {
         className="w-full h-[100dvh] bg-[#F0F2F5] text-slate-900 overflow-hidden flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900"
         id="chat-fullscreen-page"
       >
-        <ChatView
-          currentUser={currentUser}
-          initialSelectedUser={directChatUser}
-          mobileView={chatMobileView}
-          onMobileViewChange={setChatMobileView}
-          onProfileUpdated={(updated) => setCurrentUser(updated)}
-          onExitChat={() => {
-            setActiveTab('feed');
-            setDirectChatUser(null);
-            setChatMobileView('list');
-          }}
-        />
+        <ErrorBoundary
+          scopeLabel="Messagerie privée"
+          variant="fullscreen"
+          resetKey={location.pathname}
+          homeLabel="Retour au fil d'actualité"
+          onNavigateHome={() => navigate('/feed')}
+        >
+          <ChatView
+            currentUser={currentUser}
+            initialSelectedUser={directChatUser}
+            initialConversationId={urlConversationId}
+            mobileView={chatMobileView}
+            onMobileViewChange={setChatMobileView}
+            onConversationChange={(convId) => {
+              setDirectChatUser(null);
+              navigate(convId ? `/messages/${encodeURIComponent(convId)}` : '/messages');
+            }}
+            onProfileUpdated={(updated) => setCurrentUser(updated)}
+            onExitChat={() => {
+              setDirectChatUser(null);
+              setChatMobileView('list');
+              navigate('/feed');
+            }}
+          />
+        </ErrorBoundary>
       </div>
     );
   }
@@ -1155,10 +1226,8 @@ export default function App() {
             <button 
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('feed');
-                setSelectedCircleId('all');
                 setFeedFilter('all');
+                navigate('/feed');
               }}
               className="flex items-center gap-2 group shrink-0"
               title="Accueil Zaure"
@@ -1217,20 +1286,19 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('feed');
-                setSelectedCircleId('all');
+                setFeedFilter('all');
+                navigate('/feed');
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all'
+                activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
                   ? 'text-blue-600 dark:text-blue-400 font-bold'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
               title={t('nav.feed')}
             >
-              <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
               <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.feed')}</span>
-              {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && (
+              {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
@@ -1239,20 +1307,18 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('circles');
-                setSelectedCircleId('all');
+                navigate('/circles');
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all'
+                activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
                   ? 'text-blue-600 dark:text-blue-400 font-bold'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
               title="Découvrir les Cercles"
             >
-              <Compass className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <Compass className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
               <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Découverte</span>
-              {activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all' && (
+              {activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
@@ -1261,7 +1327,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('communities');
+                navigate('/communities');
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'communities'
@@ -1283,7 +1349,7 @@ export default function App() {
               onClick={() => {
                 setDirectChatUser(null);
                 setChatMobileView('list');
-                setActiveTab('chat');
+                navigate('/messages');
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'chat'
@@ -1303,7 +1369,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('notifications');
+                navigate('/notifications');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group rounded-xl ${
@@ -1388,7 +1454,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('settings');
+                  navigate('/settings');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
                 className={`p-2 rounded-full transition ${
@@ -1575,13 +1641,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('feed');
-                setSelectedCircleId('all');
                 setFeedFilter('all');
+                navigate('/feed');
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'all' && selectedCircleId === 'all'
+                activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'all' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
                   ? 'bg-blue-50 text-blue-900 font-bold'
                   : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -1593,7 +1657,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('communities');
+                navigate('/communities');
               }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                 activeTab === 'communities'
@@ -1614,10 +1678,8 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('feed');
-                  setFeedSection('feed');
-                  setSelectedCircleId('all');
                   setFeedFilter('joined');
+                  navigate('/feed');
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                   activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'joined'
@@ -1638,10 +1700,8 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('feed');
-                setSelectedCircleId('all');
                 setFeedFilter('audio');
+                navigate('/feed');
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                 activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'audio'
@@ -1656,9 +1716,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('bookmarks');
-                setSelectedCircleId('all');
+                navigate('/bookmarks');
               }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                 activeTab === 'feed' && feedSection === 'bookmarks'
@@ -1680,9 +1738,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('feed');
-                setFeedSection('mentors');
-                setSelectedCircleId('all');
+                navigate('/mentors');
               }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                 activeTab === 'feed' && feedSection === 'mentors'
@@ -1704,7 +1760,7 @@ export default function App() {
               onClick={() => {
                 setDirectChatUser(null);
                 setChatMobileView('list');
-                setActiveTab('chat');
+                navigate('/messages');
               }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition text-slate-700 hover:bg-slate-50"
             >
@@ -1715,7 +1771,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('notifications');
+                navigate('/notifications');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
@@ -1738,7 +1794,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('settings');
+                navigate('/settings');
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                 activeTab === 'settings'
@@ -1775,10 +1831,7 @@ export default function App() {
                   <p className="text-[11px] text-slate-400">Vous n'avez pas encore rejoint de cercle.</p>
                   <button
                     type="button"
-                    onClick={() => {
-                      setActiveTab('feed');
-                      setFeedSection('circles');
-                    }}
+                    onClick={() => navigate('/circles')}
                     className="mt-2 text-xs font-bold text-blue-700 hover:underline"
                   >
                     Explorer les cercles →
@@ -1789,10 +1842,7 @@ export default function App() {
                   <button
                     key={circle.id}
                     type="button"
-                    onClick={() => {
-                      setActiveTab('feed');
-                      setSelectedCircleId(circle.id);
-                    }}
+                    onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
                     className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition group ${
                       selectedCircleId === circle.id
                         ? 'bg-blue-50 text-blue-900 font-bold'
@@ -1839,26 +1889,59 @@ export default function App() {
           }`}
         >
 
+          {/* -1. PAGE INTROUVABLE (404 UTILISATEUR) */}
+          {parsedRoute.kind === 'not_found' && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xs space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center mx-auto font-black text-lg">
+                404
+              </div>
+              <div className="space-y-1">
+                <h2 className="font-extrabold text-slate-950 dark:text-white text-base">
+                  Page introuvable
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                  L&apos;adresse <span className="font-mono font-semibold">{location.pathname}</span> n&apos;existe pas ou a été déplacée.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/feed')}
+                className="min-h-[40px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
+              >
+                Revenir au fil d&apos;actualité
+              </button>
+            </div>
+          )}
+
           {/* 0. VUE SPÉCIFIQUE : MODULE COMMUNAUTÉS (CERCLES AVANCÉS) */}
-          {activeTab === 'communities' && (
+          {parsedRoute.kind !== 'not_found' && activeTab === 'communities' && (
             currentUser ? (
-              <CommunitiesHub
-                currentUser={currentUser}
-                allUsers={allUsers}
-                initialGroupId={communityDeepLinkId}
-                initialInviteCode={communityInviteCode}
-                onOpenUserProfile={openUserProfile}
-                onClearDeepLink={() => {
-                  setCommunityDeepLinkId(null);
-                  setCommunityInviteCode(null);
-                  if (
-                    window.location.search.includes('community=') ||
-                    window.location.search.includes('invite=')
-                  ) {
-                    window.history.replaceState({}, '', window.location.pathname);
-                  }
-                }}
-              />
+              <ErrorBoundary
+                scopeLabel="Communautés"
+                variant="section"
+                resetKey={location.pathname}
+                homeLabel="Retour aux communautés"
+                onNavigateHome={() => navigate('/communities')}
+              >
+                <CommunitiesHub
+                  currentUser={currentUser}
+                  allUsers={allUsers}
+                  initialGroupId={communityDeepLinkId}
+                  initialInviteCode={communityInviteCode}
+                  onGroupChange={(groupId) => {
+                    navigate(groupId ? `/communities/${encodeURIComponent(groupId)}` : '/communities');
+                  }}
+                  onOpenUserProfile={openUserProfile}
+                  onClearDeepLink={() => {
+                    if (
+                      window.location.search.includes('community=') ||
+                      window.location.search.includes('invite=')
+                    ) {
+                      navigate('/communities', { replace: true });
+                    }
+                  }}
+                />
+              </ErrorBoundary>
             ) : (
               <div className="bg-white border border-slate-200/85 rounded-3xl p-8 text-center shadow-xs space-y-3">
                 <Users className="w-12 h-12 text-blue-600 mx-auto stroke-1" />
@@ -1883,153 +1966,234 @@ export default function App() {
           )}
 
           {/* 0b. VUE SPÉCIFIQUE : SYSTÈME DE PROFILS UTILISATEURS */}
-          {activeTab === 'profile' && currentUser && (
-            <ProfilePage
-              profileUser={viewedProfileUser || currentUser}
-              currentUser={currentUser}
-              allUsers={allUsers}
-              circles={circles}
-              joinedCircleIds={joinedCircleIds}
-              bookmarkedIds={bookmarkedIds}
-              onToggleBookmark={toggleBookmark}
-              onBack={() => {
-                setActiveTab('feed');
-                if (window.location.search.includes('profile=')) {
-                  window.history.replaceState({}, '', window.location.pathname);
-                }
-              }}
-              onNavigateProfile={(targetUser) => openUserProfile(targetUser)}
-              onOpenChat={(targetUser) => handleOpenChatWithUser(targetUser)}
-              onOpenSettings={() => setActiveTab('settings')}
-              onOpenCommunityGroup={(groupId) => {
-                setCommunityDeepLinkId(groupId);
-                setActiveTab('communities');
-              }}
-              onOpenCircle={(circleId) => {
-                setActiveTab('feed');
-                setFeedSection('feed');
-                setSelectedCircleId(circleId);
-              }}
-              onProfileUpdated={(updated) => {
-                setCurrentUser(updated);
-                setViewedProfileUser((prev) => (prev?.id === updated.id ? updated : prev));
-                setAllUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-              }}
-            />
-          )}
-
-          {/* 0c. VUE SPÉCIFIQUE : CENTRE DE NOTIFICATIONS TEMPS RÉEL */}
-          {activeTab === 'notifications' && currentUser && (
-            <NotificationsCenter
-              currentUser={currentUser}
-              notifications={notifications}
-              settings={notificationSettings}
-              onOpenProfile={(userId) => openUserProfile(userId)}
-              onOpenPost={(postId, groupId) => {
-                if (groupId && groupId !== 'public') {
-                  setCommunityDeepLinkId(groupId);
-                  setActiveTab('communities');
-                } else {
-                  setActiveTab('feed');
-                  setFeedSection('feed');
-                  setSelectedCircleId('all');
-                  setFeedFilter('all');
-                  setFocusedItemId(`pub_${postId}`);
-                }
-              }}
-              onOpenCapsule={(capsuleId) => {
-                setActiveTab('feed');
-                setFeedSection('feed');
-                setSelectedCircleId('all');
-                setFeedFilter('all');
-                setFocusedItemId(`cap_${capsuleId}`);
-              }}
-              onOpenCommunity={(groupId) => {
-                setCommunityDeepLinkId(groupId);
-                setActiveTab('communities');
-              }}
-              onOpenConversation={(_convId, actorId) => {
-                const matched = actorId ? allUsers.find((u) => u.id === actorId) || null : null;
-                setDirectChatUser(matched);
-                setChatMobileView(matched ? 'chat' : 'list');
-                setActiveTab('chat');
-              }}
-              onOpenAccountSettings={() => setActiveTab('settings')}
-              onBackToFeed={() => setActiveTab('feed')}
-            />
-          )}
-
-          {/* 1. VUE SPÉCIFIQUE : PARAMÈTRES */}
-          {activeTab === 'settings' && (
-            <div className="animate-fadeIn">
-              {currentUser ? (
-                <SettingsView
+          {parsedRoute.kind !== 'not_found' && activeTab === 'profile' && currentUser && (
+            <ErrorBoundary
+              scopeLabel="Profil utilisateur"
+              variant="section"
+              resetKey={location.pathname + location.search}
+              homeLabel="Retour au fil d'actualité"
+              onNavigateHome={() => navigate('/feed')}
+            >
+              {profileLookupStatus === 'loading' && !viewedProfileUser ? (
+                <div className="bg-white border border-slate-200/85 rounded-3xl p-8 text-center shadow-xs animate-pulse space-y-3">
+                  <div className="w-16 h-16 rounded-full bg-slate-200 mx-auto" />
+                  <div className="h-4 bg-slate-200 rounded w-40 mx-auto" />
+                  <p className="text-xs text-slate-500">Chargement du profil...</p>
+                </div>
+              ) : profileLookupStatus === 'not_found' && urlProfileIdentifier && !viewedProfileUser ? (
+                <div className="bg-white border border-slate-200/85 rounded-3xl p-8 text-center shadow-xs space-y-3">
+                  <User className="w-12 h-12 text-slate-300 mx-auto" />
+                  <h2 className="font-extrabold text-slate-950 text-base">
+                    Profil introuvable
+                  </h2>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                    Aucun membre ne correspond à « {urlProfileIdentifier} ».
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/feed')}
+                    className="min-h-[40px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                  >
+                    Retour au fil d&apos;actualité
+                  </button>
+                </div>
+              ) : (
+                <ProfilePage
+                  profileUser={viewedProfileUser || currentUser}
                   currentUser={currentUser}
+                  allUsers={allUsers}
+                  circles={circles}
+                  joinedCircleIds={joinedCircleIds}
+                  bookmarkedIds={bookmarkedIds}
+                  initialTab={urlProfileTab}
+                  onTabChange={(nextTab) => {
+                    const targetSlug =
+                      urlProfileIdentifier ||
+                      ((viewedProfileUser || currentUser).id === currentUser.id
+                        ? ''
+                        : (viewedProfileUser || currentUser).username ||
+                          (viewedProfileUser || currentUser).id);
+                    const nextUrl = targetSlug
+                      ? buildProfilePath(targetSlug, nextTab)
+                      : nextTab === 'publications'
+                        ? '/profile'
+                        : `/profile?tab=${encodeURIComponent(nextTab)}`;
+                    navigate(nextUrl, { replace: true });
+                  }}
+                  onToggleBookmark={toggleBookmark}
+                  onBack={() => navigate('/feed')}
+                  onNavigateProfile={(targetUser) => openUserProfile(targetUser)}
+                  onOpenChat={(targetUser) => handleOpenChatWithUser(targetUser)}
+                  onOpenSettings={() => navigate('/settings')}
+                  onOpenCommunityGroup={(groupId) => {
+                    navigate(`/communities/${encodeURIComponent(groupId)}`);
+                  }}
+                  onOpenCircle={(circleId) => {
+                    navigate(`/circles/${encodeURIComponent(circleId)}`);
+                  }}
                   onProfileUpdated={(updated) => {
                     setCurrentUser(updated);
                     setViewedProfileUser((prev) => (prev?.id === updated.id ? updated : prev));
                     setAllUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
                   }}
-                  onOpenOwnProfile={() => openUserProfile(currentUser)}
-                  onOpenUserProfile={(uid) => openUserProfile(uid)}
-                  onOpenCircles={() => {
-                    setActiveTab('feed');
-                    setFeedSection('circles');
-                    setSelectedCircleId('all');
-                  }}
-                  onPreferencesApplied={(_, patch) => {
-                    if (typeof patch.animations_reduites === 'boolean') {
-                      setReducedMotionPref(patch.animations_reduites);
-                    }
-                  }}
-                  onSignOut={requestSignOut}
-                  onImmediateSignOut={executeSignOut}
                 />
-              ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xs">
-                  <Settings className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3 stroke-1" />
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Identifiez-vous pour vos réglages</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-                    Connectez-vous pour personnaliser votre profil, modifier votre biographie et choisir vos langues préférées.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setIsSignUp(false);
-                      setShowAuthModal(true);
-                    }}
-                    className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
-                  >
-                    Se connecter maintenant
-                  </button>
-                </div>
               )}
+            </ErrorBoundary>
+          )}
+
+          {/* 0c. VUE SPÉCIFIQUE : CENTRE DE NOTIFICATIONS TEMPS RÉEL */}
+          {parsedRoute.kind !== 'not_found' && activeTab === 'notifications' && currentUser && (
+            <ErrorBoundary
+              scopeLabel="Notifications"
+              variant="section"
+              resetKey={location.pathname}
+              homeLabel="Retour au fil d'actualité"
+              onNavigateHome={() => navigate('/feed')}
+            >
+              <NotificationsCenter
+                currentUser={currentUser}
+                notifications={notifications}
+                settings={notificationSettings}
+                onOpenProfile={(userId) => openUserProfile(userId)}
+                onOpenPost={(postId, groupId) => {
+                  if (groupId && groupId !== 'public') {
+                    navigate(`/communities/${encodeURIComponent(groupId)}`);
+                  } else {
+                    setFeedFilter('all');
+                    setFocusedItemId(`pub_${postId}`);
+                    navigate('/feed');
+                  }
+                }}
+                onOpenCapsule={(capsuleId) => {
+                  setFeedFilter('all');
+                  setFocusedItemId(`cap_${capsuleId}`);
+                  navigate('/feed');
+                }}
+                onOpenCommunity={(groupId) => {
+                  navigate(`/communities/${encodeURIComponent(groupId)}`);
+                }}
+                onOpenConversation={(convId, actorId) => {
+                  const matched = actorId ? allUsers.find((u) => u.id === actorId) || null : null;
+                  const targetConvId =
+                    convId ||
+                    (matched ? zaureService.getConversationId(currentUser.id, matched.id) : null);
+                  setDirectChatUser(matched);
+                  setChatMobileView(matched || targetConvId ? 'chat' : 'list');
+                  navigate(targetConvId ? `/messages/${encodeURIComponent(targetConvId)}` : '/messages');
+                }}
+                onOpenAccountSettings={() => navigate('/settings/compte')}
+                onBackToFeed={() => navigate('/feed')}
+              />
+            </ErrorBoundary>
+          )}
+
+          {/* 1. VUE SPÉCIFIQUE : PARAMÈTRES */}
+          {parsedRoute.kind !== 'not_found' && activeTab === 'settings' && (
+            <div className="animate-fadeIn">
+              <ErrorBoundary
+                scopeLabel="Paramètres"
+                variant="section"
+                resetKey={location.pathname}
+                homeLabel="Retour au fil d'actualité"
+                onNavigateHome={() => navigate('/feed')}
+              >
+                {currentUser ? (
+                  <SettingsView
+                    currentUser={currentUser}
+                    initialCategory={urlSettingsCategory}
+                    onCategoryChange={(cat) => navigate(`/settings/${cat}`)}
+                    onProfileUpdated={(updated) => {
+                      setCurrentUser(updated);
+                      setViewedProfileUser((prev) => (prev?.id === updated.id ? updated : prev));
+                      setAllUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+                    }}
+                    onOpenOwnProfile={() => openUserProfile(currentUser)}
+                    onOpenUserProfile={(uid) => openUserProfile(uid)}
+                    onOpenCircles={() => navigate('/circles')}
+                    onPreferencesApplied={(_, patch) => {
+                      if (typeof patch.animations_reduites === 'boolean') {
+                        setReducedMotionPref(patch.animations_reduites);
+                      }
+                    }}
+                    onSignOut={requestSignOut}
+                    onImmediateSignOut={executeSignOut}
+                  />
+                ) : (
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xs">
+                    <Settings className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3 stroke-1" />
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base">Identifiez-vous pour vos réglages</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
+                      Connectez-vous pour personnaliser votre profil, modifier votre biographie et choisir vos langues préférées.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setIsSignUp(false);
+                        setShowAuthModal(true);
+                      }}
+                      className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                    >
+                      Se connecter maintenant
+                    </button>
+                  </div>
+                )}
+              </ErrorBoundary>
             </div>
           )}
 
           {/* 3. VUE SPÉCIFIQUE : PAGE DE GROUPE DU CERCLE (quand un cercle précis est sélectionné) */}
-          {activeTab === 'feed' && selectedCircleId !== 'all' && circles.some((c) => c.id === selectedCircleId) && (
-            <div className="animate-fadeIn">
-              <CircleGroupPage
-                circle={circles.find((c) => c.id === selectedCircleId)!}
-                capsules={capsules}
-                isJoined={joinedCircleIds.includes(selectedCircleId)}
-                currentUser={currentUser}
-                onBack={() => setSelectedCircleId('all')}
-                onToggleJoin={() => handleToggleJoinCircle(selectedCircleId)}
-                onCreateCapsule={async (circleId, type, contenu, langue) => {
-                  const added = await zaureService.createCapsule(circleId, type, contenu, langue);
-                  setCapsules((prev) => [added, ...prev]);
-                }}
-                onUpdateCircle={handleUpdateCircle}
-                onDeleteCircle={handleDeleteCircle}
-                t={t}
-                language={language}
-              />
-            </div>
+          {parsedRoute.kind !== 'not_found' && activeTab === 'feed' && selectedCircleId !== 'all' && (
+            circles.some((c) => c.id === selectedCircleId) ? (
+              <div className="animate-fadeIn">
+                <ErrorBoundary
+                  scopeLabel="Cercle de savoir"
+                  variant="section"
+                  resetKey={selectedCircleId}
+                  homeLabel="Explorer les cercles"
+                  onNavigateHome={() => navigate('/circles')}
+                >
+                  <CircleGroupPage
+                    circle={circles.find((c) => c.id === selectedCircleId)!}
+                    capsules={capsules}
+                    isJoined={joinedCircleIds.includes(selectedCircleId)}
+                    currentUser={currentUser}
+                    onBack={() => navigate('/circles')}
+                    onToggleJoin={() => handleToggleJoinCircle(selectedCircleId)}
+                    onCreateCapsule={async (circleId, type, contenu, langue) => {
+                      const added = await zaureService.createCapsule(circleId, type, contenu, langue);
+                      setCapsules((prev) => [added, ...prev]);
+                    }}
+                    onUpdateCircle={handleUpdateCircle}
+                    onDeleteCircle={handleDeleteCircle}
+                    t={t}
+                    language={language}
+                  />
+                </ErrorBoundary>
+              </div>
+            ) : !circlesLoaded ? (
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center animate-pulse space-y-3">
+                <div className="h-32 bg-slate-100 rounded-2xl" />
+                <p className="text-xs text-slate-500">Chargement du cercle...</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs space-y-3">
+                <Compass className="w-12 h-12 text-slate-300 mx-auto" />
+                <h2 className="font-extrabold text-slate-950 text-base">Cercle introuvable</h2>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  Ce cercle de savoir n&apos;existe plus ou son identifiant est invalide.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/circles')}
+                  className="min-h-[40px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                >
+                  Découvrir les cercles
+                </button>
+              </div>
+            )
           )}
 
           {/* 4. VUE SPÉCIFIQUE : RÉPERTOIRE DES MENTORS DU SAHEL */}
-          {activeTab === 'feed' && selectedCircleId === 'all' && feedSection === 'mentors' && (
+          {parsedRoute.kind !== 'not_found' && activeTab === 'feed' && selectedCircleId === 'all' && feedSection === 'mentors' && (
             <div className="space-y-4 animate-fadeIn">
               <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex items-center justify-between">
@@ -2048,7 +2212,7 @@ export default function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setFeedSection('feed')}
+                    onClick={() => navigate('/feed')}
                     className="text-xs font-bold text-slate-600 hover:text-slate-900"
                   >
                     Retour au fil
@@ -2109,7 +2273,7 @@ export default function App() {
           )}
 
           {/* 5. VUE SPÉCIFIQUE : EXPLORATEUR DE TOUS LES CERCLES */}
-          {activeTab === 'feed' && selectedCircleId === 'all' && feedSection === 'circles' && (
+          {parsedRoute.kind !== 'not_found' && activeTab === 'feed' && selectedCircleId === 'all' && feedSection === 'circles' && (
             <div className="space-y-4 animate-fadeIn">
               <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -2165,7 +2329,7 @@ export default function App() {
                       isJoined={isJoined}
                       currentUser={currentUser}
                       onToggleJoin={() => handleToggleJoinCircle(circle.id)}
-                      onSelect={() => setSelectedCircleId(circle.id)}
+                      onSelect={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
                       onUpdateCircle={handleUpdateCircle}
                       onDeleteCircle={handleDeleteCircle}
                       isActive={false}
@@ -2177,7 +2341,7 @@ export default function App() {
           )}
 
           {/* 6. VUE PRINCIPALE : FIL D'ACTUALITÉ DU SAVOIR (FEED CENTRAL) */}
-          {activeTab === 'feed' && selectedCircleId === 'all' && (feedSection === 'feed' || feedSection === 'bookmarks') && (
+          {parsedRoute.kind !== 'not_found' && activeTab === 'feed' && selectedCircleId === 'all' && (feedSection === 'feed' || feedSection === 'bookmarks') && (
             <div className="space-y-4 animate-fadeIn">
               
               {/* A. STORIES / REELS DES CERCLES (Horizontal Carousel style Facebook) */}
@@ -2189,7 +2353,7 @@ export default function App() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setFeedSection('circles')}
+                    onClick={() => navigate('/circles')}
                     className="text-xs font-bold text-blue-700 hover:text-blue-800 transition flex items-center gap-0.5"
                   >
                     <span>Voir tout</span>
@@ -2222,7 +2386,7 @@ export default function App() {
                     return (
                       <div
                         key={circle.id}
-                        onClick={() => setSelectedCircleId(circle.id)}
+                        onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
                         className="relative min-h-[140px] w-28 sm:w-32 shrink-0 rounded-2xl overflow-hidden cursor-pointer group shadow-xs border border-slate-200/60 active:scale-95 transition-all"
                       >
                         <img
@@ -2527,7 +2691,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setFeedFilter('all');
-                      setFeedSection('feed');
+                      if (feedSection !== 'feed') navigate('/feed');
                     }}
                     className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                       feedFilter === 'all' && feedSection === 'feed'
@@ -2543,7 +2707,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setFeedFilter('public');
-                      setFeedSection('feed');
+                      if (feedSection !== 'feed') navigate('/feed');
                     }}
                     className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                       feedFilter === 'public' && feedSection === 'feed'
@@ -2561,7 +2725,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         setFeedFilter('joined');
-                        setFeedSection('feed');
+                        if (feedSection !== 'feed') navigate('/feed');
                       }}
                       className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                         feedFilter === 'joined' && feedSection === 'feed'
@@ -2580,7 +2744,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setFeedFilter('audio');
-                      setFeedSection('feed');
+                      if (feedSection !== 'feed') navigate('/feed');
                     }}
                     className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                       feedFilter === 'audio' && feedSection === 'feed'
@@ -2597,7 +2761,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setFeedFilter('questions');
-                      setFeedSection('feed');
+                      if (feedSection !== 'feed') navigate('/feed');
                     }}
                     className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                       feedFilter === 'questions' && feedSection === 'feed'
@@ -2693,7 +2857,7 @@ export default function App() {
                         <div className="mt-4 flex justify-center">
                           <button
                             type="button"
-                            onClick={() => setFeedSection('circles')}
+                            onClick={() => navigate('/circles')}
                             className="min-h-[40px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
                           >
                             Explorer les cercles de savoir
@@ -2806,10 +2970,7 @@ export default function App() {
               </h3>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('feed');
-                  setFeedSection('circles');
-                }}
+                onClick={() => navigate('/circles')}
                 className="text-xs font-bold text-blue-700 hover:underline"
               >
                 Tout voir
@@ -2826,19 +2987,13 @@ export default function App() {
                       src={circle.image}
                       alt={circle.nom}
                       className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200 shrink-0 cursor-pointer"
-                      onClick={() => {
-                        setActiveTab('feed');
-                        setSelectedCircleId(circle.id);
-                      }}
+                      onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
                       referrerPolicy="no-referrer"
                     />
                     <div className="min-w-0 flex-1">
                       <p 
                         className="text-xs font-bold text-slate-900 truncate hover:text-blue-700 cursor-pointer"
-                        onClick={() => {
-                          setActiveTab('feed');
-                          setSelectedCircleId(circle.id);
-                        }}
+                        onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
                       >
                         {circle.nom}
                       </p>
@@ -2869,10 +3024,7 @@ export default function App() {
               </h3>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('feed');
-                  setFeedSection('mentors');
-                }}
+                onClick={() => navigate('/mentors')}
                 className="text-xs font-bold text-amber-700 hover:underline"
               >
                 Annuaire
@@ -2972,18 +3124,16 @@ export default function App() {
         <button
           type="button"
           onClick={() => {
-            setActiveTab('feed');
-            setFeedSection('feed');
-            setSelectedCircleId('all');
+            navigate('/feed');
           }}
           className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
-            activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all'
+            activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
               ? 'text-blue-700 font-bold'
               : 'text-slate-500 hover:text-slate-800'
           }`}
           title="Actualité"
         >
-          <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
           <span className="text-[10px] font-semibold tracking-tight mt-0.5">Fil</span>
         </button>
 
@@ -2991,25 +3141,23 @@ export default function App() {
         <button
           type="button"
           onClick={() => {
-            setActiveTab('feed');
-            setFeedSection('circles');
-            setSelectedCircleId('all');
+            navigate('/circles');
           }}
           className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
-            activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all'
+            activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
               ? 'text-blue-700 font-bold'
               : 'text-slate-500 hover:text-slate-800'
           }`}
           title="Découverte"
         >
-          <Compass className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
+          <Compass className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
           <span className="text-[10px] font-semibold tracking-tight mt-0.5">Explorer</span>
         </button>
 
         {/* Communautés */}
         <button
           type="button"
-          onClick={() => setActiveTab('communities')}
+          onClick={() => navigate('/communities')}
           className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
             activeTab === 'communities'
               ? 'text-blue-700 font-bold'
@@ -3027,7 +3175,7 @@ export default function App() {
           onClick={() => {
             setDirectChatUser(null);
             setChatMobileView('list');
-            setActiveTab('chat');
+            navigate('/messages');
           }}
           className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
             activeTab === 'chat' ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
@@ -3042,7 +3190,7 @@ export default function App() {
         <button
           type="button"
           onClick={() => {
-            setActiveTab('notifications');
+            navigate('/notifications');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 relative ${

@@ -44,6 +44,7 @@ interface CommunitiesHubProps {
   allUsers: UserProfile[];
   initialGroupId?: string | null;
   initialInviteCode?: string | null;
+  onGroupChange?: (groupId: string | null) => void;
   onClearDeepLink?: () => void;
   onOpenUserProfile?: (userId: string) => void;
 }
@@ -84,6 +85,7 @@ export default function CommunitiesHub({
   allUsers,
   initialGroupId,
   initialInviteCode,
+  onGroupChange,
   onClearDeepLink,
   onOpenUserProfile
 }: CommunitiesHubProps) {
@@ -173,11 +175,14 @@ export default function CommunitiesHub({
     };
   }, [currentUser.id]);
 
-  // Sync deep link groupId if updated externally
+  const selectGroup = (groupId: string | null) => {
+    setSelectedGroupId(groupId);
+    onGroupChange?.(groupId);
+  };
+
+  // Sync deep link groupId if updated externally (URL load, refresh, or browser Back/Forward)
   useEffect(() => {
-    if (initialGroupId) {
-      setSelectedGroupId(initialGroupId);
-    }
+    setSelectedGroupId(initialGroupId ?? null);
   }, [initialGroupId]);
 
   // Redeem deep-link invite code automatically once
@@ -191,7 +196,7 @@ export default function CommunitiesHub({
           currentUser
         );
         if (joinedGroup) {
-          setSelectedGroupId(joinedGroup.id);
+          selectGroup(joinedGroup.id);
           showToast('success', `Invitation acceptée : bienvenue dans « ${joinedGroup.name} » !`);
         }
       } catch (err: any) {
@@ -304,7 +309,7 @@ export default function CommunitiesHub({
       setBusyActionId(inv.id);
       await communityService.acceptInvitation(inv, currentUser);
       showToast('success', `Vous avez rejoint « ${inv.groupName} ».`);
-      setSelectedGroupId(inv.groupId);
+      selectGroup(inv.groupId);
     } catch (err: any) {
       showToast('error', err?.message || "Impossible d'accepter l'invitation.");
     } finally {
@@ -334,7 +339,7 @@ export default function CommunitiesHub({
       setShowInviteCodeBox(false);
       if (joined) {
         showToast('success', `Bienvenue dans la communauté « ${joined.name} » !`);
-        setSelectedGroupId(joined.id);
+        selectGroup(joined.id);
       }
     } catch (err: any) {
       showToast('error', err?.message || 'Code introuvable.');
@@ -365,11 +370,11 @@ export default function CommunitiesHub({
         currentMember={membershipByGroupId.get(selectedGroup.id)}
         onOpenUserProfile={onOpenUserProfile}
         onBack={() => {
-          setSelectedGroupId(null);
+          selectGroup(null);
           onClearDeepLink?.();
         }}
         onGroupDeleted={() => {
-          setSelectedGroupId(null);
+          selectGroup(null);
           onClearDeepLink?.();
           showToast('success', 'La communauté a été supprimée.');
         }}
@@ -398,7 +403,7 @@ export default function CommunitiesHub({
         <div>
           {/* Cover Photo */}
           <div
-            onClick={() => setSelectedGroupId(group.id)}
+            onClick={() => selectGroup(group.id)}
             className="relative h-32 sm:h-36 bg-slate-100 cursor-pointer overflow-hidden group"
           >
             <img
@@ -432,7 +437,7 @@ export default function CommunitiesHub({
                 src={avatar}
                 alt={group.name}
                 referrerPolicy="no-referrer"
-                onClick={() => setSelectedGroupId(group.id)}
+                onClick={() => selectGroup(group.id)}
                 className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white shadow-sm bg-white cursor-pointer"
               />
 
@@ -473,7 +478,7 @@ export default function CommunitiesHub({
             </div>
 
             <h3
-              onClick={() => setSelectedGroupId(group.id)}
+              onClick={() => selectGroup(group.id)}
               className="text-[15px] font-extrabold text-slate-950 mt-1 truncate cursor-pointer hover:text-blue-700 transition-colors"
             >
               {group.name}
@@ -499,7 +504,7 @@ export default function CommunitiesHub({
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setSelectedGroupId(group.id)}
+                onClick={() => selectGroup(group.id)}
                 className="min-h-[40px] px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition whitespace-nowrap"
               >
                 Voir la communauté
@@ -509,7 +514,7 @@ export default function CommunitiesHub({
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => setSelectedGroupId(group.id)}
+                  onClick={() => selectGroup(group.id)}
                   className="min-h-[40px] px-3 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-bold rounded-xl transition whitespace-nowrap"
                 >
                   Voir
@@ -641,7 +646,7 @@ export default function CommunitiesHub({
                             onClick={() => {
                               if (!n.isRead) communityService.markNotificationRead(n.id);
                               setShowNotifPanel(false);
-                              setSelectedGroupId(n.groupId);
+                              selectGroup(n.groupId);
                             }}
                             className={`w-full text-left p-2.5 rounded-2xl transition flex items-start gap-2.5 ${
                               n.isRead ? 'bg-white hover:bg-slate-50' : 'bg-blue-50/80 hover:bg-blue-50'
@@ -1024,7 +1029,7 @@ export default function CommunitiesHub({
           onClose={() => setShowCreateModal(false)}
           onCreated={(created) => {
             setShowCreateModal(false);
-            setSelectedGroupId(created.id);
+            selectGroup(created.id);
             showToast('success', `Communauté « ${created.name} » créée !`);
           }}
         />

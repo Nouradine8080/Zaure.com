@@ -8,7 +8,8 @@ import {
   deleteDoc,
   query,
   orderBy,
-  limit
+  limit,
+  where
 } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
@@ -37,7 +38,9 @@ import {
   GroupReport,
   Conversation,
   Message,
-  SupportTicket
+  SupportTicket,
+  CircleMember,
+  CommunityMember
 } from '../../types';
 import {
   AdminAccount,
@@ -1544,5 +1547,149 @@ export const adminService = {
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `support_tickets/${ticket.id}`);
     }
+  },
+
+  updateUserProfileAdmin: async (
+    session: AdminSessionContext,
+    user: UserProfile,
+    updates: Partial<
+      Pick<
+        UserProfile,
+        | 'nom'
+        | 'username'
+        | 'email'
+        | 'phone'
+        | 'bio'
+        | 'profession'
+        | 'formation'
+        | 'localisation'
+        | 'site_web'
+        | 'infos_complementaires'
+        | 'langue_preferee'
+        | 'role'
+      >
+    >
+  ): Promise<void> => {
+    if (!dbFirestore) return;
+    if (
+      (!session.permissions.manageUsers && session.role !== 'SUPER_ADMIN') ||
+      (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN')
+    ) {
+      throw new Error("Permission manageUsers et rôle ADMIN requis pour modifier un profil utilisateur.");
+    }
+
+    const privatePatch: Record<string, unknown> = {};
+    const publicPatch: Record<string, unknown> = {};
+
+    if (typeof updates.nom === 'string') {
+      const cleanNom = updates.nom.trim().slice(0, 120);
+      if (cleanNom.length < 1) throw new Error('Le nom complet ne peut pas être vide.');
+      privatePatch.nom = cleanNom;
+      publicPatch.nom = cleanNom;
+    }
+    if (typeof updates.username === 'string') {
+      const cleanUsername = updates.username.trim().replace(/^@+/, '').slice(0, 40);
+      privatePatch.username = cleanUsername;
+      publicPatch.username = cleanUsername;
+    }
+    if (typeof updates.email === 'string') {
+      privatePatch.email = updates.email.trim().slice(0, 200);
+    }
+    if (typeof updates.phone === 'string') {
+      privatePatch.phone = updates.phone.trim().slice(0, 32);
+    }
+    if (updates.bio !== undefined) {
+      const cleanBio = updates.bio === null ? null : String(updates.bio).trim().slice(0, 1000);
+      privatePatch.bio = cleanBio;
+      publicPatch.bio = cleanBio;
+    }
+    if (typeof updates.profession === 'string') {
+      const val = updates.profession.trim().slice(0, 120);
+      privatePatch.profession = val;
+      publicPatch.profession = val;
+    }
+    if (typeof updates.formation === 'string') {
+      const val = updates.formation.trim().slice(0, 160);
+      privatePatch.formation = val;
+      publicPatch.formation = val;
+    }
+    if (typeof updates.localisation === 'string') {
+      const val = updates.localisation.trim().slice(0, 120);
+      privatePatch.localisation = val;
+      publicPatch.localisation = val;
+    }
+    if (typeof updates.site_web === 'string') {
+      const val = updates.site_web.trim().slice(0, 300);
+      privatePatch.site_web = val;
+      publicPatch.site_web = val;
+    }
+    if (typeof updates.infos_complementaires === 'string') {
+      const val = updates.infos_complementaires.trim().slice(0, 1000);
+      privatePatch.infos_complementaires = val;
+      publicPatch.infos_complementaires = val;
+    }
+    if (updates.langue_preferee && ['fr', 'ha', 'en'].includes(updates.langue_preferee)) {
+      privatePatch.langue_preferee = updates.langue_preferee;
+      publicPatch.langue_preferee = updates.langue_preferee;
+    }
+    if (updates.role && ['utilisateur', 'mentor', 'verifie'].includes(updates.role)) {
+      privatePatch.role = updates.role;
+      publicPatch.role = updates.role;
+    }
+
+    if (Object.keys(privatePatch).length === 0) return;
+
+    try {
+      await updateDoc(doc(dbFirestore, 'users', user.id), privatePatch);
+      if (Object.keys(publicPatch).length > 0) {
+        try {
+          await updateDoc(doc(dbFirestore, 'public_profiles', user.id), publicPatch);
+        } catch {
+          // public_profiles document may not exist yet for legacy users
+        }
+      }
+      await adminService.recordAuditLog(session, {
+        action: 'UPDATE_USER_PROFILE_ADMIN',
+        module: 'users',
+        targetType: 'user',
+        targetId: user.id,
+        details: `Modification administrative du profil de "${privatePatch.nom || user.nom}" (champs: ${Object.keys(privatePatch).join(', ')}).`
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.id}`);
+    }
+  },
+
+  getUserJoinedCommunitiesAdmin: async (userId: string): Promise<{
+    communityMembers: CommunityMember[];
+    circleMembers: CircleMember[];
+  }> => {
+    if (!dbFirestore || !userId) {
+      return { communityMembers: [], circleMembers: [] };
+    }
+    let communityMembers: CommunityMember[] = [];
+    let circleMembers: CircleMember[] = [];
+
+    try {
+      const snap = await getDocs(
+        query(collection(dbFirestore, 'group_members'), where('userId', '==', userId))
+      );
+      communityMembers = snap.docs
+        .map((d) => d.data() as CommunityMember)
+        .sort((a, b) => (b.joinedAt || '').localeCompare(a.joinedAt || ''));
+    } catch {
+      // Restricted for non-admin or missing index
+    }
+
+    try {
+      const snap = await getDocs(
+        query(collection(dbFirestore, 'circle_members'), where('user_id', '==', userId))
+      );
+      circleMembers = snap.docs.map((d) => d.data() as CircleMember);
+    } catch {
+      // Restricted for non-admin
+    }
+
+    return { communityMembers, circleMembers };
   }
 };

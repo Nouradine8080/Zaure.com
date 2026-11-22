@@ -78,14 +78,14 @@ export const CirclesManagementModule: React.FC<CirclesModuleProps> = ({
   }, [search, privacyFilter]);
 
   const filteredGroups = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return groups.filter((g) => {
       if (privacyFilter !== 'all' && g.privacy !== privacyFilter) return false;
       if (!q) return true;
       return (
-        g.name.toLowerCase().includes(q) ||
-        g.category.toLowerCase().includes(q) ||
-        g.id.toLowerCase().includes(q)
+        String(g.name ?? '').toLowerCase().includes(q) ||
+        String(g.category ?? '').toLowerCase().includes(q) ||
+        String(g.id ?? '').toLowerCase().includes(q)
       );
     });
   }, [groups, search, privacyFilter]);
@@ -98,12 +98,12 @@ export const CirclesManagementModule: React.FC<CirclesModuleProps> = ({
   }, [filteredGroups, safePage]);
 
   const filteredLegacy = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return legacyCircles.filter(
       (c) =>
         !q ||
-        c.nom.toLowerCase().includes(q) ||
-        c.categorie.toLowerCase().includes(q)
+        String(c.nom ?? '').toLowerCase().includes(q) ||
+        String(c.categorie ?? '').toLowerCase().includes(q)
     );
   }, [legacyCircles, search]);
 
@@ -616,43 +616,44 @@ export const ReportsManagementModule: React.FC<ReportsModuleProps> = ({
   }, [initialSearch]);
 
   const filteredGroupReports = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return groupReports.filter((r) => {
       if (statusFilter === 'pending' && r.status !== 'pending') return false;
       if (statusFilter === 'resolved' && r.status === 'pending') return false;
       if (!q) return true;
       return (
-        r.reason.toLowerCase().includes(q) ||
-        r.targetPreview.toLowerCase().includes(q) ||
-        r.reporterName.toLowerCase().includes(q)
+        String(r.reason ?? '').toLowerCase().includes(q) ||
+        String(r.targetPreview ?? '').toLowerCase().includes(q) ||
+        String(r.reporterName ?? '').toLowerCase().includes(q)
       );
     });
   }, [groupReports, statusFilter, search]);
 
   const filteredUserReports = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return userReports.filter((r) => {
       if (statusFilter === 'pending' && r.status !== 'en_attente') return false;
       if (statusFilter === 'resolved' && r.status === 'en_attente') return false;
       if (!q) return true;
       return (
-        r.reason.toLowerCase().includes(q) ||
-        (r.details || '').toLowerCase().includes(q) ||
-        r.reporter_nom.toLowerCase().includes(q)
+        String(r.reason ?? '').toLowerCase().includes(q) ||
+        String(r.details ?? '').toLowerCase().includes(q) ||
+        String(r.reporter_nom ?? '').toLowerCase().includes(q) ||
+        String(r.reported_user_id ?? '').toLowerCase().includes(q)
       );
     });
   }, [userReports, statusFilter, search]);
 
   const filteredTickets = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return supportTickets.filter((t) => {
       if (statusFilter === 'pending' && t.status === 'resolved') return false;
       if (statusFilter === 'resolved' && t.status !== 'resolved') return false;
       if (!q) return true;
       return (
-        t.subject.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        t.userName.toLowerCase().includes(q)
+        String(t.subject ?? '').toLowerCase().includes(q) ||
+        String(t.description ?? '').toLowerCase().includes(q) ||
+        String(t.userName ?? '').toLowerCase().includes(q)
       );
     });
   }, [supportTickets, statusFilter, search]);

@@ -142,16 +142,16 @@ export const FilesManagementModule: React.FC<FilesModuleProps> = ({
   }, [previewFile]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return files.filter((f) => {
       if (originFilter !== 'all' && f.origin !== originFilter) return false;
       if (typeFilter !== 'all' && f.mediaType !== typeFilter) return false;
       if (!q) return true;
       return (
-        f.name.toLowerCase().includes(q) ||
-        f.ownerName.toLowerCase().includes(q) ||
-        f.originLabel.toLowerCase().includes(q) ||
-        f.contextTitle.toLowerCase().includes(q)
+        String(f.name ?? '').toLowerCase().includes(q) ||
+        String(f.ownerName ?? '').toLowerCase().includes(q) ||
+        String(f.originLabel ?? '').toLowerCase().includes(q) ||
+        String(f.contextTitle ?? '').toLowerCase().includes(q)
       );
     });
   }, [files, search, originFilter, typeFilter]);
@@ -934,7 +934,7 @@ export const GoogleDriveModule: React.FC<GoogleDriveModuleProps> = ({
         return false;
       }
       if (!q) return true;
-      return item.name.toLowerCase().includes(q);
+      return String(item.name ?? '').toLowerCase().includes(q);
     });
   }, [driveItems, searchQuery, typeFilter]);
 
