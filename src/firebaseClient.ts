@@ -17,11 +17,15 @@ import {
   signInWithPhoneNumber,
   fetchSignInMethodsForEmail,
   EmailAuthProvider,
-  reauthenticateWithCredential
+  reauthenticateWithCredential,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { 
   initializeFirestore,
   getFirestore, 
+  persistentLocalCache,
+  persistentMultipleTabManager,
   setLogLevel,
   doc, 
   getDoc, 
@@ -66,13 +70,14 @@ import {
 } from './types';
 
 // Firebase Project Config
+const viteEnv: Record<string, string | undefined> = (import.meta as any)?.env || {};
 const firebaseConfig = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || 'AIzaSyDhuMBmcKHsoESsknVacAy5haI6PmK6aw8',
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || 'zaure-com.firebaseapp.com',
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || 'zaure-com',
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || 'zaure-com.firebasestorage.app',
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || '893077823490',
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || '1:893077823490:web:af344c02ef2e2ab492071b'
+  apiKey: viteEnv.VITE_FIREBASE_API_KEY || 'AIzaSyDhuMBmcKHsoESsknVacAy5haI6PmK6aw8',
+  authDomain: viteEnv.VITE_FIREBASE_AUTH_DOMAIN || 'zaure-com.firebaseapp.com',
+  projectId: viteEnv.VITE_FIREBASE_PROJECT_ID || 'zaure-com',
+  storageBucket: viteEnv.VITE_FIREBASE_STORAGE_BUCKET || 'zaure-com.firebasestorage.app',
+  messagingSenderId: viteEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || '893077823490',
+  appId: viteEnv.VITE_FIREBASE_APP_ID || '1:893077823490:web:af344c02ef2e2ab492071b'
 };
 
 export const isFirebaseConfigured = !!(
@@ -85,16 +90,28 @@ export let auth: any = null;
 export let dbFirestore: any = null;
 export let storage: any = null;
 
+let authSettled = false;
+
 if (isFirebaseConfigured) {
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
     try {
       dbFirestore = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager()
+        }),
         experimentalAutoDetectLongPolling: true
       });
     } catch {
-      dbFirestore = getFirestore(app);
+      try {
+        dbFirestore = initializeFirestore(app, {
+          experimentalAutoDetectLongPolling: true
+        });
+      } catch {
+        dbFirestore = getFirestore(app);
+      }
     }
     try {
       storage = getStorage(app);
@@ -105,6 +122,29 @@ if (isFirebaseConfigured) {
   } catch (error) {
     console.warn('Info - initialisation Firebase:', error);
   }
+}
+
+export function isFirebaseAuthSettled(): boolean {
+  return authSettled || !auth;
+}
+
+export async function waitForFirebaseAuth(): Promise<any> {
+  if (!auth) {
+    authSettled = true;
+    return null;
+  }
+  if (typeof auth.authStateReady === 'function') {
+    await auth.authStateReady();
+    authSettled = true;
+    return auth.currentUser;
+  }
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      authSettled = true;
+      unsub();
+      resolve(u);
+    });
+  });
 }
 
 let currentUser: UserProfile | null = null;
@@ -325,17 +365,40 @@ export const zaureService = {
 
   onAuthStateChangedListener: (callback: (user: UserProfile | null) => void): (() => void) => {
     if (!auth) {
+      authSettled = true;
       callback(null);
       return () => {};
     }
     return onAuthStateChanged(auth, async (firebaseUser) => {
+      authSettled = true;
       if (firebaseUser && dbFirestore) {
+        let cachedMatch: UserProfile | null = null;
+        try {
+          const rawCache = localStorage.getItem('zaure_user_session_cache');
+          if (rawCache) {
+            const parsed = JSON.parse(rawCache) as UserProfile;
+            if (parsed && parsed.id === firebaseUser.uid) {
+              cachedMatch = parsed;
+            }
+          }
+        } catch {
+          cachedMatch = null;
+        }
+
+        // Emit cached profile synchronously once Firebase Auth confirms firebaseUser,
+        // so authenticated Firestore listeners & queries fire immediately with zero blocking network wait.
+        if (cachedMatch) {
+          currentUser = cachedMatch;
+          callback(cachedMatch);
+        }
+
         try {
           const userDoc = await getDoc(doc(dbFirestore, 'users', firebaseUser.uid));
+          let freshUser: UserProfile;
           if (userDoc.exists()) {
-            currentUser = userDoc.data() as UserProfile;
+            freshUser = userDoc.data() as UserProfile;
           } else {
-            currentUser = {
+            freshUser = {
               id: firebaseUser.uid,
               nom: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Membre',
               email: firebaseUser.email || '',
@@ -345,16 +408,70 @@ export const zaureService = {
               langue_preferee: 'fr',
               created_at: new Date().toISOString()
             };
-            await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), currentUser);
+            await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), freshUser);
           }
-          await syncPublicProfile(currentUser);
+
+          currentUser = freshUser;
+          try {
+            localStorage.setItem('zaure_user_session_cache', JSON.stringify(freshUser));
+          } catch {
+            // ignore storage errors
+          }
+
+          // Background public profile sync without blocking UI hydration
+          const needsPublicSync =
+            !cachedMatch ||
+            cachedMatch.nom !== freshUser.nom ||
+            cachedMatch.avatar_url !== freshUser.avatar_url ||
+            cachedMatch.username !== freshUser.username ||
+            cachedMatch.role !== freshUser.role;
+          if (needsPublicSync) {
+            void syncPublicProfile(freshUser).catch(() => {});
+          }
+
+          const hasMeaningfulChange =
+            !cachedMatch ||
+            cachedMatch.nom !== freshUser.nom ||
+            cachedMatch.username !== freshUser.username ||
+            cachedMatch.email !== freshUser.email ||
+            cachedMatch.avatar_url !== freshUser.avatar_url ||
+            cachedMatch.cover_url !== freshUser.cover_url ||
+            cachedMatch.bio !== freshUser.bio ||
+            cachedMatch.role !== freshUser.role ||
+            cachedMatch.langue_preferee !== freshUser.langue_preferee ||
+            cachedMatch.availability !== freshUser.availability ||
+            JSON.stringify(cachedMatch.privacy_settings || null) !==
+              JSON.stringify(freshUser.privacy_settings || null);
+
+          if (hasMeaningfulChange) {
+            callback(freshUser);
+          }
         } catch (e) {
           console.warn('Erreur lors de la récupération du profil utilisateur:', e);
+          if (!cachedMatch) {
+            const fallbackUser: UserProfile = {
+              id: firebaseUser.uid,
+              nom: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Membre',
+              email: firebaseUser.email || '',
+              bio: null,
+              avatar_url: firebaseUser.photoURL || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
+              role: 'utilisateur',
+              langue_preferee: 'fr',
+              created_at: new Date().toISOString()
+            };
+            currentUser = fallbackUser;
+            callback(fallbackUser);
+          }
         }
       } else {
         currentUser = null;
+        try {
+          localStorage.removeItem('zaure_user_session_cache');
+        } catch {
+          // ignore
+        }
+        callback(null);
       }
-      callback(currentUser);
     });
   },
 
@@ -659,6 +776,53 @@ export const zaureService = {
   },
 
   // --- CIRCLES ---
+  subscribeCircles: (callback: (circles: Circle[]) => void, onError?: (err: Error) => void): (() => void) => {
+    if (!dbFirestore) {
+      callback([]);
+      return () => {};
+    }
+    const SEEDED_FICTIONAL_CIRCLE_IDS = new Set([
+      'circle-sante-premiers-secours',
+      'circle-langues-locales',
+      'circle-agri-sahel'
+    ]);
+
+    return onSnapshot(
+      collection(dbFirestore, 'circles'),
+      (querySnapshot) => {
+        const cloudCircles: Circle[] = [];
+        querySnapshot.forEach((docSnap) => {
+          const c = docSnap.data() as Circle;
+          const isFictional =
+            SEEDED_FICTIONAL_CIRCLE_IDS.has(c.id) ||
+            !c.created_by ||
+            c.id.startsWith('demo-') ||
+            c.id.startsWith('mock-') ||
+            c.id.includes('demo') ||
+            (c.nom &&
+              (c.nom.toLowerCase().includes('démo') ||
+                c.nom.toLowerCase().includes('demo') ||
+                c.nom.toLowerCase().includes('exemple')));
+
+          if (!isFictional) {
+            cloudCircles.push(c);
+          } else if (auth?.currentUser && c.created_by === auth.currentUser.uid) {
+            deleteDoc(doc(dbFirestore, 'circles', docSnap.id)).catch(() => {});
+            deleteDoc(
+              doc(dbFirestore, 'circle_members', `${auth.currentUser.uid}_${docSnap.id}`)
+            ).catch(() => {});
+          }
+        });
+
+        callback(cloudCircles.sort((a, b) => a.nom.localeCompare(b.nom)));
+      },
+      (error) => {
+        console.warn('Info - subscribeCircles:', error);
+        onError?.(error);
+      }
+    );
+  },
+
   getCircles: async (): Promise<Circle[]> => {
     if (!dbFirestore) return [];
     const SEEDED_FICTIONAL_CIRCLE_IDS = new Set([
@@ -866,47 +1030,45 @@ export const zaureService = {
   },
 
   // --- CAPSULES ---
-  getCapsules: async (circleIds?: string[]): Promise<Capsule[]> => {
+  getCapsules: async (
+    circleIds?: string[],
+    options?: { circles?: Circle[]; users?: UserProfile[] }
+  ): Promise<Capsule[]> => {
     if (!dbFirestore || !auth?.currentUser) return [];
     try {
       let capsulesData: Capsule[] = [];
 
+      const circlesPromise =
+        options?.circles && options.circles.length > 0
+          ? Promise.resolve(options.circles)
+          : zaureService.getCircles();
+
       if (circleIds && circleIds.length === 1) {
         const targetCircleId = circleIds[0];
-        
-        // Filtered Firestore query by circleId / circle_id
-        try {
-          const q1 = query(collection(dbFirestore, 'capsules'), where('circleId', '==', targetCircleId));
-          const snap1 = await getDocs(q1);
-          snap1.forEach((docSnap) => {
+
+        // Parallelize queries on circleId and circle_id
+        const [snap1Res, snap2Res] = await Promise.all([
+          getDocs(query(collection(dbFirestore, 'capsules'), where('circleId', '==', targetCircleId))).catch((e) => {
+            console.warn('Query circleId:', e);
+            return null;
+          }),
+          getDocs(query(collection(dbFirestore, 'capsules'), where('circle_id', '==', targetCircleId))).catch((e) => {
+            console.warn('Query circle_id:', e);
+            return null;
+          })
+        ]);
+
+        const seenCapsuleIds = new Set<string>();
+        snap1Res?.forEach((docSnap) => {
+          seenCapsuleIds.add(docSnap.id);
+          capsulesData.push({ id: docSnap.id, ...docSnap.data() } as Capsule);
+        });
+        snap2Res?.forEach((docSnap) => {
+          if (!seenCapsuleIds.has(docSnap.id)) {
+            seenCapsuleIds.add(docSnap.id);
             capsulesData.push({ id: docSnap.id, ...docSnap.data() } as Capsule);
-          });
-        } catch (e) {
-          console.warn('Query circleId:', e);
-        }
-
-        try {
-          const q2 = query(collection(dbFirestore, 'capsules'), where('circle_id', '==', targetCircleId));
-          const snap2 = await getDocs(q2);
-          snap2.forEach((docSnap) => {
-            if (!capsulesData.some(c => c.id === docSnap.id)) {
-              capsulesData.push({ id: docSnap.id, ...docSnap.data() } as Capsule);
-            }
-          });
-        } catch (e) {
-          console.warn('Query circle_id:', e);
-        }
-
-        // Fallback filter if no direct query match
-        if (capsulesData.length === 0) {
-          const allSnap = await getDocs(collection(dbFirestore, 'capsules'));
-          allSnap.forEach((docSnap) => {
-            const data = docSnap.data() as any;
-            if (data.circle_id === targetCircleId || data.circleId === targetCircleId) {
-              capsulesData.push({ id: docSnap.id, ...data } as Capsule);
-            }
-          });
-        }
+          }
+        });
       } else {
         const querySnapshot = await getDocs(collection(dbFirestore, 'capsules'));
         querySnapshot.forEach((docSnap) => {
@@ -950,39 +1112,54 @@ export const zaureService = {
       // Sort descending by date
       capsulesData.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
-      const circlesData = await zaureService.getCircles();
-      const finalCapsules: Capsule[] = [];
+      // Reuse provided user profiles and batch-fetch any missing unique author profiles in parallel
+      const authorMap = new Map<string, UserProfile>();
+      (options?.users || []).forEach((u) => {
+        if (u?.id) authorMap.set(u.id, u);
+      });
 
-      for (const c of capsulesData) {
-        let auteurNom = c.auteur_nom || 'Auteur inconnu';
-        let auteurRole = c.auteur_role || 'utilisateur';
-        let auteurAvatar = c.auteur_avatar || '';
+      const missingAuthorIds = Array.from(
+        new Set(
+          capsulesData
+            .map((c) => c.auteur_id)
+            .filter((uid): uid is string => Boolean(uid) && !authorMap.has(uid))
+        )
+      );
 
-        try {
-          const uDoc = await getDoc(doc(dbFirestore, 'public_profiles', c.auteur_id));
-          if (uDoc.exists()) {
-            const profile = uDoc.data() as UserProfile;
-            auteurNom = profile.nom;
-            auteurRole = profile.role;
-            auteurAvatar = profile.avatar_url || '';
-          }
-        } catch (e) {
-          // ignore profile fetch error
-        }
+      const [circlesData] = await Promise.all([
+        circlesPromise,
+        Promise.all(
+          missingAuthorIds.map(async (uid) => {
+            try {
+              const uDoc = await getDoc(doc(dbFirestore, 'public_profiles', uid));
+              if (uDoc.exists()) {
+                authorMap.set(uid, mapPublicProfileData(uDoc.id, uDoc.data()));
+              }
+            } catch {
+              // ignore individual profile fetch error
+            }
+          })
+        )
+      ]);
 
+      const circleNameById = new Map<string, string>();
+      circlesData.forEach((circ) => circleNameById.set(circ.id, circ.nom));
+
+      const finalCapsules: Capsule[] = capsulesData.map((c) => {
+        const profile = c.auteur_id ? authorMap.get(c.auteur_id) : undefined;
         const cid = c.circle_id || (c as any).circleId || 'public';
-        finalCapsules.push({
+        return {
           ...c,
           circle_id: cid,
-          auteur_nom: auteurNom,
-          auteur_role: auteurRole,
-          auteur_avatar: auteurAvatar,
+          auteur_nom: profile?.nom || c.auteur_nom || 'Auteur inconnu',
+          auteur_role: profile?.role || c.auteur_role || 'utilisateur',
+          auteur_avatar: profile?.avatar_url ?? c.auteur_avatar ?? '',
           circle_nom:
             cid === 'public'
               ? 'Fil public'
-              : circlesData.find(circ => circ.id === cid)?.nom || c.circle_nom || 'Cercle'
-        });
-      }
+              : circleNameById.get(cid) || c.circle_nom || 'Cercle'
+        };
+      });
 
       return finalCapsules.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     } catch (e) {

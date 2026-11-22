@@ -327,7 +327,7 @@ export const notificationService = {
 
   subscribeUnifiedNotifications: (
     user: UserProfile,
-    allUsers: UserProfile[],
+    allUsersOrGetter: UserProfile[] | (() => UserProfile[]),
     onUpdate: (data: {
       notifications: UnifiedNotification[];
       settings: UserSettings;
@@ -351,12 +351,17 @@ export const notificationService = {
     const seenIds = new Set<string>();
     let initialEmissionDone = false;
 
-    const usersByName = new Map<string, UserProfile>();
-    allUsers.forEach((u) => {
-      if (u.nom) usersByName.set(u.nom.trim().toLowerCase(), u);
-    });
+    const getUsersByName = () => {
+      const list = typeof allUsersOrGetter === 'function' ? allUsersOrGetter() : allUsersOrGetter;
+      const map = new Map<string, UserProfile>();
+      list.forEach((u) => {
+        if (u.nom) map.set(u.nom.trim().toLowerCase(), u);
+      });
+      return map;
+    };
 
     const emit = () => {
+      const usersByName = getUsersByName();
       const readPlatformIds = new Set(userSettings.read_platform_notification_ids || []);
       const dismissedPlatformIds = new Set(userSettings.dismissed_platform_notification_ids || []);
       const pendingInvitationByGroup = new Map<string, GroupInvitation>();

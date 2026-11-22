@@ -299,12 +299,38 @@ export const AdminPortalRoot: React.FC = () => {
       return;
     }
     const unsub = onAuthStateChanged(auth, async (user) => {
+      // Fast-path cached authorized admin session once Firebase Auth confirms matching uid
+      let usedCachedFastPath = false;
+      if (user && cachedAdminSession && cachedAdminSession.uid === user.uid && cachedAdminSession.isAuthorized) {
+        usedCachedFastPath = true;
+        setSession(cachedAdminSession);
+        setIsAuthSettled(true);
+        setIsCheckingAuth(false);
+      }
+
       const resolved = await adminService.resolveAdminSession(user);
-      setSession(resolved);
+      const changed =
+        !usedCachedFastPath ||
+        !resolved ||
+        resolved.isAuthorized !== cachedAdminSession?.isAuthorized ||
+        resolved.role !== cachedAdminSession?.role ||
+        JSON.stringify(resolved.permissions) !== JSON.stringify(cachedAdminSession?.permissions);
+
+      if (changed) {
+        setSession(resolved);
+      }
       if (resolved?.isAuthorized) {
-        localStorage.setItem('zaure_admin_session_cache', JSON.stringify(resolved));
+        try {
+          localStorage.setItem('zaure_admin_session_cache', JSON.stringify(resolved));
+        } catch {
+          // ignore
+        }
       } else {
-        localStorage.removeItem('zaure_admin_session_cache');
+        try {
+          localStorage.removeItem('zaure_admin_session_cache');
+        } catch {
+          // ignore
+        }
       }
       setIsAuthSettled(true);
       setIsCheckingAuth(false);
@@ -364,12 +390,30 @@ export const AdminPortalRoot: React.FC = () => {
     } finally {
       setIsLoadingData(false);
     }
-  }, [session, showToast]);
+  }, [session?.uid, session?.role, session?.isAuthorized, showToast]);
 
   useEffect(() => {
     if (session?.isAuthorized && isAuthSettled) {
       loadAllAdminData();
     }
+  }, [session?.isAuthorized, isAuthSettled, loadAllAdminData]);
+
+  useEffect(() => {
+    if (!session?.isAuthorized || !isAuthSettled) return;
+    let lastWakeSync = Date.now();
+    const onWakeOrReconnect = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastWakeSync < 30000) return;
+      lastWakeSync = now;
+      loadAllAdminData();
+    };
+    window.addEventListener('online', onWakeOrReconnect);
+    document.addEventListener('visibilitychange', onWakeOrReconnect);
+    return () => {
+      window.removeEventListener('online', onWakeOrReconnect);
+      document.removeEventListener('visibilitychange', onWakeOrReconnect);
+    };
   }, [session?.isAuthorized, isAuthSettled, loadAllAdminData]);
 
   const navigateModule = (id: AdminModuleId, seedQuery?: string) => {

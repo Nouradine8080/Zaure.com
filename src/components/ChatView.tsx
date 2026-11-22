@@ -385,7 +385,7 @@ export default function ChatView({
   // 3. Subscribe to Active Conversation Messages & Apply Soft-Clear Filter
   // --------------------------------------------------------------------------
   useEffect(() => {
-    if (!activeConvId) {
+    if (!activeConvId || !currentUser?.id) {
       setRawMessages([]);
       return;
     }
@@ -395,7 +395,7 @@ export default function ChatView({
       zaureService.markConversationAsRead(activeConvId);
     });
     return () => unsubscribe();
-  }, [activeConvId]);
+  }, [activeConvId, currentUser?.id]);
 
   const messages = useMemo(() => {
     if (!currentUser || !activeConversation?.cleared_at?.[currentUser.id]) return rawMessages;

@@ -51,7 +51,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { compressImageFile } from './utils/imageCompressor';
-import { zaureService } from './firebaseClient';
+import { isFirebaseAuthSettled, zaureService } from './firebaseClient';
 import { communityService, PUBLIC_FEED_GROUP } from './services/communityService';
 import { notificationService } from './services/notificationService';
 import { settingsService } from './services/settingsService';
@@ -174,6 +174,16 @@ export default function App() {
   const [capsules, setCapsules] = useState<Capsule[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
+
+  const currentUserRef = useRef<UserProfile | null>(currentUser);
+  const circlesRef = useRef<Circle[]>(circles);
+  const allUsersRef = useRef<UserProfile[]>(allUsers);
+  const capsulesRef = useRef<Capsule[]>(capsules);
+  const lastCapsulesScopeRef = useRef<string>('');
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { circlesRef.current = circles; }, [circles]);
+  useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
+  useEffect(() => { capsulesRef.current = capsules; }, [capsules]);
   
   // Real-time Notifications & Settings sync state
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
@@ -275,7 +285,8 @@ export default function App() {
   const [isPublishingCapsule, setIsPublishingCapsule] = useState(false);
   const [capsulePublishError, setCapsulePublishError] = useState<string | null>(null);
 
-  const [isAuthResolving, setIsAuthResolving] = useState<boolean>(!cachedUserSession);
+  // Wait for Firebase Auth SDK to restore auth.currentUser before mounting authenticated views & Firestore queries
+  const [isAuthResolving, setIsAuthResolving] = useState<boolean>(() => !isFirebaseAuthSettled());
 
   // Persistence of bookmarks
   const toggleBookmark = (id: string) => {
@@ -291,60 +302,107 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribe = zaureService.onAuthStateChangedListener((user) => {
+    let settled = false;
+    const safetyTimer = window.setTimeout(() => {
+      if (!settled) {
+        setIsAuthResolving(false);
+      }
+    }, 4500);
+
+    const unsubscribeAuth = zaureService.onAuthStateChangedListener((user) => {
+      settled = true;
+      window.clearTimeout(safetyTimer);
       setCurrentUser(user);
       setIsAuthResolving(false);
-      if (user) {
-        localStorage.setItem('zaure_user_session_cache', JSON.stringify(user));
-        zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
-        zaureService.getAvailableUsers().then(setAllUsers).catch(() => {});
-        zaureService.getCircles().then((freshCircles) => {
-          setCircles(freshCircles);
-          setCirclesLoaded(true);
-          if (freshCircles.length > 0) {
-            setNewCapsuleCircleId((prev) => prev || freshCircles[0].id);
-          }
-        }).catch(() => {
-          setCirclesLoaded(true);
-        });
-      } else {
-        localStorage.removeItem('zaure_user_session_cache');
+      if (!user) {
         setJoinedCircleIds([]);
         setAllUsers([]);
         setCapsules([]);
+        lastCapsulesScopeRef.current = '';
       }
     });
 
-    loadInitialData();
-
-    // Auto-sync circles across user sessions
-    const syncInterval = setInterval(async () => {
-      try {
-        const freshCircles = await zaureService.getCircles();
+    // Real-time circles listener (hydrates immediately from IndexedDB cache & stays synced across tabs)
+    const unsubscribeCircles = zaureService.subscribeCircles(
+      (freshCircles) => {
         setCircles(freshCircles);
-      } catch {
-        // silent sync
+        setCirclesLoaded(true);
+        if (freshCircles.length > 0) {
+          setNewCapsuleCircleId((prev) => prev || 'public');
+        }
+      },
+      () => {
+        setCirclesLoaded(true);
       }
-    }, 4000);
+    );
 
     return () => {
-      unsubscribe();
-      clearInterval(syncInterval);
+      window.clearTimeout(safetyTimer);
+      unsubscribeAuth();
+      unsubscribeCircles();
     };
   }, []);
 
-  // Reload feed whenever user, filters or joined circles change
+  // Hydrate authenticated user directory & circle memberships once auth.currentUser is settled
+  const currentUserId = currentUser?.id || null;
   useEffect(() => {
-    if (currentUser) {
-      loadCapsules();
-    } else {
-      setCapsules([]);
+    if (isAuthResolving || !currentUserId) return;
+
+    let active = true;
+    const hydrateUserScope = () => {
+      Promise.all([
+        zaureService.getJoinedCircleIds(currentUserId).catch(() => [] as string[]),
+        zaureService.getAvailableUsers().catch(() => [] as UserProfile[])
+      ]).then(([joined, users]) => {
+        if (!active) return;
+        setJoinedCircleIds(joined);
+        if (users.length > 0) {
+          setAllUsers(users);
+        }
+      });
+    };
+
+    hydrateUserScope();
+
+    let lastResyncAt = Date.now();
+    const resyncOnWake = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastResyncAt < 15000) return;
+      lastResyncAt = now;
+      hydrateUserScope();
+      loadCapsules({ silent: true });
+    };
+
+    window.addEventListener('online', resyncOnWake);
+    document.addEventListener('visibilitychange', resyncOnWake);
+    return () => {
+      active = false;
+      window.removeEventListener('online', resyncOnWake);
+      document.removeEventListener('visibilitychange', resyncOnWake);
+    };
+  }, [isAuthResolving, currentUserId]);
+
+  const joinedCircleIdsKey = useMemo(() => joinedCircleIds.join(','), [joinedCircleIds]);
+
+  // Reload capsules cleanly when auth settles, filters or circle selection change
+  useEffect(() => {
+    if (isAuthResolving || !currentUserId) {
+      if (!currentUserId) setCapsules([]);
+      return;
     }
-  }, [currentUser, joinedCircleIds, selectedCircleId, feedFilter]);
+    loadCapsules();
+  }, [
+    isAuthResolving,
+    currentUserId,
+    selectedCircleId,
+    feedFilter,
+    feedFilter === 'joined' ? joinedCircleIdsKey : ''
+  ]);
 
   // Real-time subscription to Facebook-style public feed posts (groupId === 'public')
   useEffect(() => {
-    if (!currentUser) {
+    if (isAuthResolving || !currentUserId) {
       setPublicPosts([]);
       setPublicPostComments([]);
       setPublicPostReactions([]);
@@ -358,21 +416,23 @@ export default function App() {
       unsubReactions();
       unsubComments();
     };
-  }, [currentUser]);
+  }, [isAuthResolving, currentUserId]);
 
-  // Real-time unified notifications listener & user_settings sync
+  // Real-time unified notifications listener & user_settings sync (stable per user session)
   useEffect(() => {
-    if (!currentUser) {
+    if (isAuthResolving || !currentUserId || !currentUserRef.current) {
       setNotifications([]);
       setNotificationSettings(DEFAULT_USER_SETTINGS);
       hydratedSettingsUserRef.current = null;
       return;
     }
 
+    const activeUser = currentUserRef.current;
+
     // Register current device session and listen for remote session revocation
-    settingsService.registerCurrentSession(currentUser.id).catch(() => {});
+    settingsService.registerCurrentSession(activeUser.id).catch(() => {});
     const unsubSessionRevoke = settingsService.watchCurrentSessionRevocation(
-      currentUser.id,
+      activeUser.id,
       () => {
         setSessionRevokedNotice(
           'Cette session a été déconnectée à distance depuis vos paramètres de sécurité.'
@@ -383,20 +443,20 @@ export default function App() {
 
     let pulseTimer: ReturnType<typeof setTimeout> | null = null;
     const unsub = notificationService.subscribeUnifiedNotifications(
-      currentUser,
-      allUsers,
+      activeUser,
+      () => allUsersRef.current,
       ({ notifications: nextNotifs, settings: nextSettings, newArrivals }) => {
         setNotifications(nextNotifs);
         setNotificationSettings(nextSettings);
 
         const prefs = extractAppearancePreferences(nextSettings);
-        applyAndPersistAppearancePreferences(prefs, currentUser.id, () => {
+        applyAndPersistAppearancePreferences(prefs, activeUser.id, () => {
           setReducedMotionPref(Boolean(prefs.animations_reduites));
         });
 
         // Sync interface language on initial sign-in hydration so user preference persists across devices/reconnections
-        if (hydratedSettingsUserRef.current !== currentUser.id) {
-          hydratedSettingsUserRef.current = currentUser.id;
+        if (hydratedSettingsUserRef.current !== activeUser.id) {
+          hydratedSettingsUserRef.current = activeUser.id;
           const serverLang = nextSettings.langue_interface || nextSettings.langue_preferee;
           if (serverLang === 'fr' || serverLang === 'ha' || serverLang === 'en') {
             setLanguage(serverLang);
@@ -416,30 +476,7 @@ export default function App() {
       unsubSessionRevoke();
       if (pulseTimer) clearTimeout(pulseTimer);
     };
-  }, [currentUser, allUsers]);
-
-  const loadInitialData = async () => {
-    try {
-      const allCircles = await zaureService.getCircles();
-      setCircles(allCircles);
-      setCirclesLoaded(true);
-
-      if (allCircles.length > 0) {
-        setNewCapsuleCircleId((prev) => prev || 'public');
-      }
-
-      const user = zaureService.getCurrentUser();
-      if (user) {
-        const users = await zaureService.getAvailableUsers();
-        setAllUsers(users);
-        const joined = await zaureService.getJoinedCircleIds(user.id);
-        setJoinedCircleIds(joined);
-      }
-    } catch (e) {
-      console.error(e);
-      setCirclesLoaded(true);
-    }
-  };
+  }, [isAuthResolving, currentUserId]);
 
   // Reset progressive feed pagination on filter/search changes & track scroll for Back-to-Top
   useEffect(() => {
@@ -454,13 +491,22 @@ export default function App() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const loadCapsules = async () => {
-    if (!currentUser) {
+  const loadCapsules = async (opts?: { silent?: boolean }) => {
+    const activeUser = currentUserRef.current;
+    if (!activeUser) {
       setCapsules([]);
       setIsFeedLoading(false);
       return;
     }
-    setIsFeedLoading(true);
+    const scopeKey = `${activeUser.id}|${selectedCircleId}|${feedFilter}|${
+      feedFilter === 'joined' ? joinedCircleIds.join(',') : ''
+    }`;
+    const shouldShowLoader =
+      !opts?.silent && (lastCapsulesScopeRef.current !== scopeKey || capsulesRef.current.length === 0);
+    lastCapsulesScopeRef.current = scopeKey;
+    if (shouldShowLoader) {
+      setIsFeedLoading(true);
+    }
     try {
       let filteredIds: string[] = [];
 
@@ -470,7 +516,10 @@ export default function App() {
         filteredIds = joinedCircleIds;
       }
 
-      const list = await zaureService.getCapsules(filteredIds);
+      const list = await zaureService.getCapsules(filteredIds, {
+        circles: circlesRef.current,
+        users: allUsersRef.current
+      });
       setCapsules(list);
     } catch (e) {
       console.error(e);
@@ -1025,12 +1074,13 @@ export default function App() {
 
   // Resolve `/profile` and `/profile/:identifier` directly on initial load, refresh, or history navigation
   useEffect(() => {
-    if (!currentUser || activeTab !== 'profile') {
+    const activeUser = currentUserRef.current;
+    if (isAuthResolving || !activeUser || activeTab !== 'profile') {
       return;
     }
 
     if (!urlProfileIdentifier) {
-      setViewedProfileUser(currentUser);
+      setViewedProfileUser(activeUser);
       setProfileLookupStatus('ready');
       return;
     }
@@ -1039,15 +1089,15 @@ export default function App() {
     const cleanLower = clean.toLowerCase();
 
     if (
-      clean === currentUser.id ||
-      (currentUser.username && currentUser.username.toLowerCase() === cleanLower)
+      clean === activeUser.id ||
+      (activeUser.username && activeUser.username.toLowerCase() === cleanLower)
     ) {
-      setViewedProfileUser(currentUser);
+      setViewedProfileUser(activeUser);
       setProfileLookupStatus('ready');
       return;
     }
 
-    const localMatch = allUsers.find(
+    const localMatch = allUsersRef.current.find(
       (u) => u.id === clean || (u.username && u.username.toLowerCase() === cleanLower)
     );
     if (localMatch) {
@@ -1079,7 +1129,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [activeTab, urlProfileIdentifier, currentUser, allUsers]);
+  }, [isAuthResolving, activeTab, urlProfileIdentifier, currentUserId]);
 
   // Navigate directly to private chat with a selected user (syncs URL `/messages/:convId`)
   const handleOpenChatWithUser = (user: UserProfile) => {

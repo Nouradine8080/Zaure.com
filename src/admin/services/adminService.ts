@@ -164,24 +164,20 @@ export const adminService = {
       email === BOOTSTRAP_OWNER_EMAIL.toLowerCase() && firebaseUser.emailVerified === true;
 
     let claimsRole: AdminRole = 'USER';
-    try {
-      const tokenRes = await firebaseUser.getIdTokenResult();
-      const rawClaim = tokenRes.claims?.zaureRole;
-      if (rawClaim === 'SUPER_ADMIN' || rawClaim === 'ADMIN' || rawClaim === 'MODERATOR') {
-        claimsRole = rawClaim;
-      }
-    } catch {
-      claimsRole = 'USER';
+    let adminAccount: AdminAccount | null = null;
+
+    const [tokenResult, adminSnapResult] = await Promise.all([
+      firebaseUser.getIdTokenResult().catch(() => null),
+      getDoc(doc(dbFirestore, 'admins', firebaseUser.uid)).catch(() => null)
+    ]);
+
+    const rawClaim = tokenResult?.claims?.zaureRole;
+    if (rawClaim === 'SUPER_ADMIN' || rawClaim === 'ADMIN' || rawClaim === 'MODERATOR') {
+      claimsRole = rawClaim;
     }
 
-    let adminAccount: AdminAccount | null = null;
-    try {
-      const adminSnap = await getDoc(doc(dbFirestore, 'admins', firebaseUser.uid));
-      if (adminSnap.exists()) {
-        adminAccount = adminSnap.data() as AdminAccount;
-      }
-    } catch {
-      adminAccount = null;
+    if (adminSnapResult && adminSnapResult.exists()) {
+      adminAccount = adminSnapResult.data() as AdminAccount;
     }
 
     if (adminAccount && adminAccount.isActive) {
