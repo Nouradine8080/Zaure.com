@@ -169,11 +169,47 @@ export default function App() {
     }
   }, []);
 
+  const cachedCircles = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('zaure_circles_cache');
+      return raw ? (JSON.parse(raw) as Circle[]) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const cachedCapsules = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('zaure_capsules_cache');
+      return raw ? (JSON.parse(raw) as Capsule[]) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const cachedUsers = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('zaure_users_cache');
+      return raw ? (JSON.parse(raw) as UserProfile[]) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const cachedJoinedCircles = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('zaure_joined_circles_cache');
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(cachedUserSession);
-  const [circles, setCircles] = useState<Circle[]>([]);
-  const [capsules, setCapsules] = useState<Capsule[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
+  const [circles, setCircles] = useState<Circle[]>(cachedCircles);
+  const [capsules, setCapsules] = useState<Capsule[]>(cachedCapsules);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(cachedUsers);
+  const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>(cachedJoinedCircles);
 
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   const circlesRef = useRef<Circle[]>(circles);
@@ -184,6 +220,30 @@ export default function App() {
   useEffect(() => { circlesRef.current = circles; }, [circles]);
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
   useEffect(() => { capsulesRef.current = capsules; }, [capsules]);
+
+  useEffect(() => {
+    try {
+      if (circles.length > 0) localStorage.setItem('zaure_circles_cache', JSON.stringify(circles));
+    } catch {}
+  }, [circles]);
+
+  useEffect(() => {
+    try {
+      if (capsules.length > 0) localStorage.setItem('zaure_capsules_cache', JSON.stringify(capsules));
+    } catch {}
+  }, [capsules]);
+
+  useEffect(() => {
+    try {
+      if (allUsers.length > 0) localStorage.setItem('zaure_users_cache', JSON.stringify(allUsers));
+    } catch {}
+  }, [allUsers]);
+
+  useEffect(() => {
+    try {
+      if (joinedCircleIds.length > 0) localStorage.setItem('zaure_joined_circles_cache', JSON.stringify(joinedCircleIds));
+    } catch {}
+  }, [joinedCircleIds]);
   
   // Real-time Notifications & Settings sync state
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
@@ -205,7 +265,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [isFeedLoading, setIsFeedLoading] = useState<boolean>(true);
+  const [isFeedLoading, setIsFeedLoading] = useState<boolean>(cachedCapsules.length === 0);
   const [visibleFeedCount, setVisibleFeedCount] = useState<number>(10);
   const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
 

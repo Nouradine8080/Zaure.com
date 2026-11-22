@@ -734,7 +734,7 @@ export const zaureService = {
   },
 
   getAvailableUsers: async (): Promise<UserProfile[]> => {
-    if (!dbFirestore || !auth?.currentUser) return [];
+    if (!dbFirestore) return [];
     try {
       const snap = await getDocs(collection(dbFirestore, 'public_profiles'));
       const list: UserProfile[] = [];
@@ -752,7 +752,7 @@ export const zaureService = {
   },
 
   subscribePublicProfilesPresence: (callback: (users: UserProfile[]) => void): (() => void) => {
-    if (!dbFirestore || !auth?.currentUser) {
+    if (!dbFirestore) {
       callback([]);
       return () => {};
     }
@@ -1034,7 +1034,7 @@ export const zaureService = {
     circleIds?: string[],
     options?: { circles?: Circle[]; users?: UserProfile[] }
   ): Promise<Capsule[]> => {
-    if (!dbFirestore || !auth?.currentUser) return [];
+    if (!dbFirestore) return [];
     try {
       let capsulesData: Capsule[] = [];
 
