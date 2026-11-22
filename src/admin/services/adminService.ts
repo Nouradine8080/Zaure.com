@@ -36,7 +36,8 @@ import {
   UserReport,
   GroupReport,
   Conversation,
-  Message
+  Message,
+  SupportTicket
 } from '../../types';
 import {
   AdminAccount,
@@ -1388,6 +1389,160 @@ export const adminService = {
       return clean;
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'platform_settings/global');
+    }
+  },
+
+  banUserAccount: async (
+    session: AdminSessionContext,
+    user: UserProfile,
+    reason: string
+  ): Promise<{ moderation: UserModeration; authDisabled: boolean; authMessage?: string }> => {
+    if (!dbFirestore || !auth?.currentUser) throw new Error('Firestore indisponible');
+    if (!session.permissions.manageUsers && session.role !== 'SUPER_ADMIN') {
+      throw new Error('Permission manageUsers requise pour bannir un utilisateur.');
+    }
+    const cleanReason = reason.trim()
+      ? `[BANNISSEMENT] ${reason.trim().slice(0, 460)}`
+      : '[BANNISSEMENT] Compte banni par décision administrative';
+
+    const record: UserModeration = {
+      userId: user.id,
+      status: 'suspended',
+      reason: cleanReason.slice(0, 500),
+      updatedBy: auth.currentUser.uid,
+      updatedAt: nowIso()
+    };
+
+    try {
+      await setDoc(doc(dbFirestore, 'user_moderation', user.id), record);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `user_moderation/${user.id}`);
+    }
+
+    const authRes = await adminService.toggleAuthUserDisabled(user.id, true);
+    await adminService.recordAuditLog(session, {
+      action: 'BAN_USER_ACCOUNT',
+      module: 'users',
+      targetType: 'user',
+      targetId: user.id,
+      details: `Bannissement de "${user.nom}" (${user.id}) — Auth désactivé: ${authRes.ok ? 'oui' : 'IAM requis'} — Motif: ${record.reason}`
+    });
+
+    return {
+      moderation: record,
+      authDisabled: authRes.ok,
+      authMessage: authRes.message
+    };
+  },
+
+  updateGroupPostAdmin: async (
+    session: AdminSessionContext,
+    post: GroupPost,
+    updates: Partial<Pick<GroupPost, 'content' | 'status' | 'isPinned'>>
+  ): Promise<void> => {
+    if (!dbFirestore) return;
+    if (!session.permissions.managePosts && !session.permissions.moderateContent && session.role !== 'SUPER_ADMIN') {
+      throw new Error('Permission insuffisante pour modifier cette publication.');
+    }
+    const payload: Record<string, unknown> = { updatedAt: nowIso() };
+    if (typeof updates.content === 'string') payload.content = updates.content.slice(0, 10000);
+    if (updates.status) payload.status = updates.status;
+    if (typeof updates.isPinned === 'boolean') payload.isPinned = updates.isPinned;
+
+    try {
+      await updateDoc(doc(dbFirestore, 'group_posts', post.id), payload);
+      await adminService.recordAuditLog(session, {
+        action: 'UPDATE_GROUP_POST_ADMIN',
+        module: 'posts',
+        targetType: 'group_post',
+        targetId: post.id,
+        details: `Mise à jour administrative de la publication de ${post.authorName} (champs: ${Object.keys(updates).join(', ')}).`
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `group_posts/${post.id}`);
+    }
+  },
+
+  updateCommunityGroupDetailsAdmin: async (
+    session: AdminSessionContext,
+    group: CommunityGroup,
+    patch: Partial<
+      Pick<
+        CommunityGroup,
+        | 'name'
+        | 'description'
+        | 'category'
+        | 'privacy'
+        | 'postPermission'
+        | 'requirePostApproval'
+        | 'requireMemberApproval'
+        | 'allowAnonymousPosts'
+      >
+    >
+  ): Promise<void> => {
+    if (!dbFirestore) return;
+    if (!session.permissions.manageCircles && session.role !== 'SUPER_ADMIN') {
+      throw new Error('Permission manageCircles requise.');
+    }
+    const cleanPatch: Record<string, unknown> = { updatedAt: nowIso() };
+    if (typeof patch.name === 'string') cleanPatch.name = patch.name.trim().slice(0, 120);
+    if (typeof patch.description === 'string') cleanPatch.description = patch.description.trim().slice(0, 2000);
+    if (typeof patch.category === 'string') cleanPatch.category = patch.category.trim().slice(0, 60);
+    if (patch.privacy) cleanPatch.privacy = patch.privacy;
+    if (patch.postPermission) cleanPatch.postPermission = patch.postPermission;
+    if (typeof patch.requirePostApproval === 'boolean') cleanPatch.requirePostApproval = patch.requirePostApproval;
+    if (typeof patch.requireMemberApproval === 'boolean') cleanPatch.requireMemberApproval = patch.requireMemberApproval;
+    if (typeof patch.allowAnonymousPosts === 'boolean') cleanPatch.allowAnonymousPosts = patch.allowAnonymousPosts;
+
+    try {
+      await updateDoc(doc(dbFirestore, 'groups', group.id), cleanPatch);
+      await adminService.recordAuditLog(session, {
+        action: 'UPDATE_COMMUNITY_DETAILS',
+        module: 'circles',
+        targetType: 'group',
+        targetId: group.id,
+        details: `Mise à jour communauté "${cleanPatch.name || group.name}" (${Object.keys(patch).join(', ')}).`
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `groups/${group.id}`);
+    }
+  },
+
+  getSupportTicketsAdmin: async (): Promise<SupportTicket[]> => {
+    if (!dbFirestore) return [];
+    try {
+      const snap = await getDocs(collection(dbFirestore, 'support_tickets'));
+      return snap.docs
+        .map((d) => d.data() as SupportTicket)
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    } catch {
+      return [];
+    }
+  },
+
+  updateSupportTicketStatusAdmin: async (
+    session: AdminSessionContext,
+    ticket: SupportTicket,
+    status: 'open' | 'in_review' | 'resolved'
+  ): Promise<void> => {
+    if (!dbFirestore) return;
+    if (!session.permissions.manageReports && session.role !== 'SUPER_ADMIN') {
+      throw new Error('Permission manageReports requise pour traiter les tickets.');
+    }
+    try {
+      await updateDoc(doc(dbFirestore, 'support_tickets', ticket.id), {
+        status,
+        updatedAt: nowIso()
+      });
+      await adminService.recordAuditLog(session, {
+        action: `SUPPORT_TICKET_${status.toUpperCase()}`,
+        module: 'reports',
+        targetType: 'support_ticket',
+        targetId: ticket.id,
+        details: `Ticket support "${ticket.subject}" (${ticket.userName}) marqué "${status}".`
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `support_tickets/${ticket.id}`);
     }
   }
 };

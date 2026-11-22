@@ -9,6 +9,22 @@ import { IndexedZaureFile } from '../types';
 
 export const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive'];
 
+export interface DrivePermission {
+  id: string;
+  type?: string;
+  role?: string;
+  emailAddress?: string;
+  displayName?: string;
+}
+
+export interface DriveFileDetails extends DriveFileItem {
+  createdTime?: string;
+  thumbnailLink?: string;
+  shared?: boolean;
+  owners?: Array<{ displayName?: string; emailAddress?: string; photoLink?: string }>;
+  permissions?: DrivePermission[];
+}
+
 export interface DriveFileItem {
   id: string;
   name: string;
@@ -265,5 +281,26 @@ export const driveStorageService = {
       const errBody = await res.json().catch(() => ({}));
       throw new Error(errBody?.error?.message || `Erreur suppression Drive (${res.status})`);
     }
+  },
+
+  getFileDetails: async (fileId: string): Promise<DriveFileDetails> => {
+    const token = cachedDriveAccessToken;
+    if (!token) throw new Error('Connexion Google Drive requise.');
+
+    const fields = encodeURIComponent(
+      'id,name,mimeType,size,createdTime,modifiedTime,webViewLink,thumbnailLink,iconLink,parents,trashed,shared,owners(displayName,emailAddress,photoLink),permissions(id,type,role,emailAddress,displayName)'
+    );
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=${fields}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) {
+      if (res.status === 401) {
+        cachedDriveAccessToken = null;
+      }
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `Impossible de lire les détails Drive (${res.status})`);
+    }
+    return (await res.json()) as DriveFileDetails;
   }
 };
