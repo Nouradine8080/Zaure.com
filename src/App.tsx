@@ -286,7 +286,7 @@ export default function App() {
   const [capsulePublishError, setCapsulePublishError] = useState<string | null>(null);
 
   // Wait for Firebase Auth SDK to restore auth.currentUser before mounting authenticated views & Firestore queries
-  const [isAuthResolving, setIsAuthResolving] = useState<boolean>(() => !isFirebaseAuthSettled());
+  const [isAuthResolving, setIsAuthResolving] = useState<boolean>(() => !cachedUserSession);
 
   // Persistence of bookmarks
   const toggleBookmark = (id: string) => {
