@@ -49,11 +49,17 @@ import {
   ArrowUp,
   ChevronDown
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { compressImageFile } from './utils/imageCompressor';
 import { zaureService } from './firebaseClient';
 import { communityService, PUBLIC_FEED_GROUP } from './services/communityService';
 import { notificationService } from './services/notificationService';
+import { settingsService } from './services/settingsService';
+import {
+  applyAndPersistAppearancePreferences,
+  extractAppearancePreferences,
+  loadStoredAppearancePreferences
+} from './utils/appearancePreferences';
 import {
   Circle,
   Capsule,
@@ -164,11 +170,16 @@ export default function App() {
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>([]);
   const [selectedCircleId, setSelectedCircleId] = useState<string>('all');
   
-  // Real-time Notifications state
+  // Real-time Notifications & Settings sync state
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [notifBadgePulse, setNotifBadgePulse] = useState(false);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [reducedMotionPref, setReducedMotionPref] = useState<boolean>(() =>
+    Boolean(loadStoredAppearancePreferences().animations_reduites)
+  );
+  const [sessionRevokedNotice, setSessionRevokedNotice] = useState<string | null>(null);
+  const hydratedSettingsUserRef = useRef<string | null>(null);
   const unreadNotificationsCount = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
     [notifications]
@@ -345,13 +356,26 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Real-time unified notifications listener (Firestore sync across social, community & platform alerts)
+  // Real-time unified notifications listener & user_settings sync
   useEffect(() => {
     if (!currentUser) {
       setNotifications([]);
       setNotificationSettings(DEFAULT_USER_SETTINGS);
+      hydratedSettingsUserRef.current = null;
       return;
     }
+
+    // Register current device session and listen for remote session revocation
+    settingsService.registerCurrentSession(currentUser.id).catch(() => {});
+    const unsubSessionRevoke = settingsService.watchCurrentSessionRevocation(
+      currentUser.id,
+      () => {
+        setSessionRevokedNotice(
+          'Cette session a été déconnectée à distance depuis vos paramètres de sécurité.'
+        );
+        executeSignOut();
+      }
+    );
 
     let pulseTimer: ReturnType<typeof setTimeout> | null = null;
     const unsub = notificationService.subscribeUnifiedNotifications(
@@ -360,6 +384,21 @@ export default function App() {
       ({ notifications: nextNotifs, settings: nextSettings, newArrivals }) => {
         setNotifications(nextNotifs);
         setNotificationSettings(nextSettings);
+
+        const prefs = extractAppearancePreferences(nextSettings);
+        applyAndPersistAppearancePreferences(prefs, currentUser.id, () => {
+          setReducedMotionPref(Boolean(prefs.animations_reduites));
+        });
+
+        // Sync interface language on initial sign-in hydration so user preference persists across devices/reconnections
+        if (hydratedSettingsUserRef.current !== currentUser.id) {
+          hydratedSettingsUserRef.current = currentUser.id;
+          const serverLang = nextSettings.langue_interface || nextSettings.langue_preferee;
+          if (serverLang === 'fr' || serverLang === 'ha' || serverLang === 'en') {
+            setLanguage(serverLang);
+          }
+        }
+
         if (newArrivals.length > 0) {
           setNotifBadgePulse(true);
           if (pulseTimer) clearTimeout(pulseTimer);
@@ -370,6 +409,7 @@ export default function App() {
 
     return () => {
       unsub();
+      unsubSessionRevoke();
       if (pulseTimer) clearTimeout(pulseTimer);
     };
   }, [currentUser, allUsers]);
@@ -1101,12 +1141,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] text-slate-900 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900" id="main-app-container">
+    <MotionConfig reducedMotion={reducedMotionPref ? 'always' : 'user'}>
+      <div className="min-h-screen bg-[#F0F2F5] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900" id="main-app-container">
       
       {/* ============================================================ */}
       {/* 1. TOP NAVBAR (FIXED, FACEBOOK-STYLE ERGONOMIC APP BAR) */}
       {/* ============================================================ */}
-      <header className="bg-white border-b border-slate-200/90 sticky top-0 z-40 shadow-xs h-14 sm:h-16 w-full" id="header-navbar">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-40 shadow-xs h-14 sm:h-16 w-full" id="header-navbar">
         <div className="max-w-[1520px] w-full mx-auto px-3 sm:px-4 lg:px-6 h-full flex items-center justify-between gap-2 sm:gap-4">
           
           {/* ZONE GAUCHE : Logo & Search Bar */}
@@ -1126,10 +1167,10 @@ export default function App() {
                 Z
               </div>
               <div className="hidden sm:block text-left leading-none">
-                <span className="text-lg font-black tracking-tight text-slate-950 group-hover:text-blue-600 transition-colors">
+                <span className="text-lg font-black tracking-tight text-slate-950 dark:text-white group-hover:text-blue-600 transition-colors">
                   Zaure
                 </span>
-                <p className="text-[10px] text-red-600 font-semibold uppercase tracking-wider mt-0.5">
+                <p className="text-[10px] text-red-600 dark:text-red-400 font-semibold uppercase tracking-wider mt-0.5">
                   Savoirs du Sahel
                 </p>
               </div>
@@ -1144,8 +1185,8 @@ export default function App() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher savoirs, cercles, auteurs..."
-                className="w-full bg-[#F0F2F5] hover:bg-slate-200/70 focus:bg-white text-slate-900 text-xs pl-9 pr-8 py-2 rounded-full border border-transparent focus:border-blue-500 focus:outline-none transition"
+                placeholder={t('common.search_placeholder')}
+                className="w-full bg-[#F0F2F5] dark:bg-slate-800 hover:bg-slate-200/70 dark:hover:bg-slate-700 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs pl-9 pr-8 py-2 rounded-full border border-transparent focus:border-blue-500 focus:outline-none transition"
               />
               {searchQuery && (
                 <button
@@ -1182,13 +1223,13 @@ export default function App() {
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
-              title="Fil d'actualité"
+              title={t('nav.feed')}
             >
               <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Actualité</span>
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.feed')}</span>
               {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
@@ -1204,8 +1245,8 @@ export default function App() {
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'feed' && feedSection === 'circles' && selectedCircleId === 'all'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
               title="Découvrir les Cercles"
             >
@@ -1224,13 +1265,13 @@ export default function App() {
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'communities'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
-              title="Communautés"
+              title={t('nav.circles')}
             >
               <UsersRound className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Communautés</span>
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.circles')}</span>
               {activeTab === 'communities' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
@@ -1246,13 +1287,13 @@ export default function App() {
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'chat'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
-              title="Messagerie"
+              title={t('nav.chat')}
             >
               <MessageCircle className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Messages</span>
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.chat')}</span>
               {activeTab === 'chat' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
@@ -1267,10 +1308,10 @@ export default function App() {
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group rounded-xl ${
                 activeTab === 'notifications'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70'
               }`}
-              title="Notifications"
+              title={t('nav.notifications')}
             >
               <div className="relative">
                 <motion.div
@@ -1291,7 +1332,7 @@ export default function App() {
                   </motion.span>
                 )}
               </div>
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Alertes</span>
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.notifications')}</span>
               {activeTab === 'notifications' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
@@ -1309,46 +1350,65 @@ export default function App() {
               }}
               className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
                 activeTab === 'profile'
-                  ? 'text-blue-600 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl'
+                  ? 'text-blue-600 dark:text-blue-400 font-bold'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
               }`}
-              title="Mon profil Zaure"
+              title={t('nav.profile')}
             >
               <CircleUserRound className={`w-5 h-5 ${activeTab === 'profile' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Profil</span>
+              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.profile')}</span>
               {activeTab === 'profile' && (
                 <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
               )}
             </button>
           </nav>
 
-          {/* ZONE DROITE : Installer PWA + Langue + Bouton Créer + Profil Utilisateur */}
+          {/* ZONE DROITE : Installer PWA + Langue + Paramètres + Bouton Créer + Profil Utilisateur */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             
             {/* In-App PWA Install Button */}
             <PWAInstallButton compact />
 
             {/* Language Switcher */}
-            <div className="flex items-center gap-1 bg-[#F0F2F5] hover:bg-slate-200/80 px-2 py-1.5 rounded-full text-xs text-slate-700 transition">
-              <Languages className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <div className="flex items-center gap-1 bg-[#F0F2F5] dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 px-2 py-1.5 rounded-full text-xs text-slate-700 dark:text-slate-200 transition">
+              <Languages className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as 'fr' | 'ha' | 'en')}
-                className="bg-transparent font-bold text-xs focus:outline-none cursor-pointer pr-1 text-slate-800"
+                className="bg-transparent font-bold text-xs focus:outline-none cursor-pointer pr-1 text-slate-800 dark:text-slate-100"
                 aria-label="Sélectionner la langue"
               >
-                <option value="fr">FR</option>
-                <option value="ha">HA (Hausa)</option>
-                <option value="en">EN</option>
+                <option value="fr" className="dark:bg-slate-900">FR</option>
+                <option value="ha" className="dark:bg-slate-900">HA (Hausa)</option>
+                <option value="en" className="dark:bg-slate-900">EN</option>
               </select>
             </div>
+
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('settings');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`p-2 rounded-full transition ${
+                  activeTab === 'settings'
+                    ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                title={t('nav.settings')}
+                aria-label={t('nav.settings')}
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Quick Action: New Circle (Desktop shortcut) */}
             {currentUser && (
               <button
                 type="button"
                 onClick={() => setShowCreateCircle(true)}
-                className="hidden xl:flex items-center gap-1.5 min-h-[38px] px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-xs rounded-full transition"
+                className="hidden xl:flex items-center gap-1.5 min-h-[38px] px-3 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-bold text-xs rounded-full transition"
                 title="Créer un nouveau cercle de savoir"
               >
                 <Plus className="w-3.5 h-3.5 text-red-500 stroke-[2.5]" />
@@ -1362,8 +1422,8 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => openUserProfile(currentUser)}
-                  className="flex items-center gap-2 p-1 hover:bg-[#F0F2F5] rounded-full transition pr-2"
-                  title="Mon profil Zaure"
+                  className="flex items-center gap-2 p-1 hover:bg-[#F0F2F5] dark:hover:bg-slate-800 rounded-full transition pr-2"
+                  title={t('nav.profile')}
                 >
                   <div className="relative">
                     {currentUser.avatar_url ? (
@@ -1379,14 +1439,14 @@ export default function App() {
                       </div>
                     )}
                     {currentUser.role === 'verifie' && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-600 border-2 border-white rounded-full" title="Professionnel vérifié" />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-600 border-2 border-white dark:border-slate-900 rounded-full" title="Professionnel vérifié" />
                     )}
                     {currentUser.role === 'mentor' && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 border-2 border-white rounded-full" title="Mentor" />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 border-2 border-white dark:border-slate-900 rounded-full" title="Mentor" />
                     )}
                   </div>
                   
-                  <span className="hidden sm:inline font-bold text-xs text-slate-800 max-w-[100px] truncate">
+                  <span className="hidden sm:inline font-bold text-xs text-slate-800 dark:text-slate-100 max-w-[100px] truncate">
                     {currentUser.nom.split(' ')[0]}
                   </span>
                 </button>
@@ -1511,7 +1571,7 @@ export default function App() {
           )}
 
           {/* Navigation Links Menu (Facebook style menu) */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-2 shadow-xs space-y-0.5">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-2 shadow-xs space-y-0.5">
             <button
               type="button"
               onClick={() => {
@@ -1682,17 +1742,17 @@ export default function App() {
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                 activeTab === 'settings'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 font-bold'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Settings className="w-4 h-4 text-slate-500" />
-              <span>Paramètres du profil</span>
+              <Settings className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <span>{t('nav.settings')}</span>
             </button>
           </div>
 
           {/* Raccourcis vers vos Cercles (Facebook-style Shortcuts) */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 shadow-xs">
             <div className="flex items-center justify-between mb-2 px-1">
               <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
                 Vos Cercles de Savoir
@@ -1911,14 +1971,25 @@ export default function App() {
                     setAllUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
                   }}
                   onOpenOwnProfile={() => openUserProfile(currentUser)}
+                  onOpenUserProfile={(uid) => openUserProfile(uid)}
+                  onOpenCircles={() => {
+                    setActiveTab('feed');
+                    setFeedSection('circles');
+                    setSelectedCircleId('all');
+                  }}
+                  onPreferencesApplied={(_, patch) => {
+                    if (typeof patch.animations_reduites === 'boolean') {
+                      setReducedMotionPref(patch.animations_reduites);
+                    }
+                  }}
                   onSignOut={requestSignOut}
                   onImmediateSignOut={executeSignOut}
                 />
               ) : (
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-8 text-center shadow-xs">
-                  <Settings className="w-12 h-12 text-slate-300 mx-auto mb-3 stroke-1" />
-                  <h3 className="font-bold text-slate-900 text-base">Identifiez-vous pour vos réglages</h3>
-                  <p className="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-8 text-center shadow-xs">
+                  <Settings className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3 stroke-1" />
+                  <h3 className="font-bold text-slate-900 dark:text-white text-base">Identifiez-vous pour vos réglages</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
                     Connectez-vous pour personnaliser votre profil, modifier votre biographie et choisir vos langues préférées.
                   </p>
                   <button
@@ -2895,7 +2966,7 @@ export default function App() {
       {/* ============================================================ */}
       {/* 3. FIXED MOBILE BOTTOM NAVIGATION BAR (< 768px) */}
       {/* ============================================================ */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg z-50 px-1 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 shadow-lg z-50 px-1 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
         
         {/* Actualité */}
         <button
@@ -3925,32 +3996,32 @@ export default function App() {
           onClick={() => !isLoggingOut && setShowLogoutConfirm(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200/90 animate-slideUp"
+            className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200/90 dark:border-slate-800 animate-slideUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
                 <LogOut className="w-6 h-6" />
               </div>
               <button
                 type="button"
                 disabled={isLoggingOut}
                 onClick={() => setShowLogoutConfirm(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition disabled:opacity-50"
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <h3 className="text-lg font-extrabold text-slate-950">
+            <h3 className="text-lg font-extrabold text-slate-950 dark:text-white">
               Confirmer la déconnexion
             </h3>
-            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
               Voulez-vous vraiment vous déconnecter de votre compte Zaure ? Vous pourrez vous reconnecter à tout moment.
             </p>
 
             {currentUser && (
-              <div className="mt-4 p-3 rounded-2xl bg-[#F0F2F5] border border-slate-200/80 flex items-center gap-3">
+              <div className="mt-4 p-3 rounded-2xl bg-[#F0F2F5] dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center gap-3">
                 {currentUser.avatar_url ? (
                   <img
                     src={currentUser.avatar_url}
@@ -3964,8 +4035,8 @@ export default function App() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-extrabold text-slate-900 truncate">{currentUser.nom}</p>
-                  <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                  <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate">{currentUser.nom}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{currentUser.email}</p>
                 </div>
               </div>
             )}
@@ -3975,7 +4046,7 @@ export default function App() {
                 type="button"
                 disabled={isLoggingOut}
                 onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition disabled:opacity-50"
+                className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition disabled:opacity-50"
               >
                 Annuler
               </button>
@@ -4002,6 +4073,23 @@ export default function App() {
         </div>
       )}
 
+      {/* Remote Session Revoked Notice */}
+      {sessionRevokedNotice && (
+        <div className="fixed bottom-20 md:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-slate-900 text-white border border-slate-700 rounded-2xl p-4 shadow-2xl flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs leading-relaxed flex-1">
+            {sessionRevokedNotice}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSessionRevokedNotice(null)}
+            className="text-slate-400 hover:text-white p-1"
+            aria-label="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Floating Back-to-Top Button */}
       <AnimatePresence>
@@ -4022,6 +4110,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-    </div>
+      </div>
+    </MotionConfig>
   );
 }

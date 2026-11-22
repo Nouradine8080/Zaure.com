@@ -1,5 +1,8 @@
 export type PrivacyAudience = 'public' | 'followers' | 'cercles' | 'private';
 export type MessageAudience = 'tous' | 'followers' | 'cercles' | 'mentors' | 'personne';
+export type InteractionAudience = 'tous' | 'followers' | 'cercles' | 'personne';
+export type ThemeMode = 'light' | 'dark' | 'system';
+export type DisplayDensity = 'confort' | 'compact';
 
 export interface UserPrivacySettings {
   profileMode: 'public' | 'private';
@@ -9,6 +12,8 @@ export interface UserPrivacySettings {
   followingVisibility: PrivacyAudience;
   communitiesVisibility: PrivacyAudience;
   allowMessages: MessageAudience;
+  allowComments: InteractionAudience;
+  allowMentions: InteractionAudience;
 }
 
 export const DEFAULT_PRIVACY_SETTINGS: UserPrivacySettings = {
@@ -18,7 +23,9 @@ export const DEFAULT_PRIVACY_SETTINGS: UserPrivacySettings = {
   followersVisibility: 'public',
   followingVisibility: 'public',
   communitiesVisibility: 'public',
-  allowMessages: 'tous'
+  allowMessages: 'tous',
+  allowComments: 'tous',
+  allowMentions: 'tous'
 };
 
 export interface UserProfile {
@@ -27,6 +34,7 @@ export interface UserProfile {
   username?: string;
   email: string;
   phone?: string;
+  date_naissance?: string;
   bio: string | null;
   avatar_url: string | null;
   cover_url?: string | null;
@@ -205,10 +213,13 @@ export interface Mentorship {
 export interface UserSettings {
   // 1. Compte
   nom: string;
+  username?: string;
   bio: string;
   avatar_url: string;
   langue_preferee: 'fr' | 'ha' | 'en';
   email: string;
+  telephone?: string;
+  date_naissance?: string;
 
   // 2. Confidentialité
   profil_visibilite: 'public' | 'cercles' | 'mentors';
@@ -241,17 +252,55 @@ export interface UserSettings {
   // 5. Cercles
   masquer_suggestions: boolean;
 
-  // 6. Accessibilité / data
+  // 6. Apparence & Accessibilité / data
+  theme_mode?: ThemeMode;
+  densite_affichage?: DisplayDensity;
   mode_faible_consommation: boolean;
   taille_texte: 'normal' | 'grand' | 'tres_grand';
+  contraste_eleve?: boolean;
+  animations_reduites?: boolean;
+  lisibilite_amelioree?: boolean;
+}
+
+export interface UserSessionRecord {
+  id: string;
+  userId: string;
+  deviceId: string;
+  deviceName: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet';
+  os: string;
+  browser: string;
+  createdAt: string;
+  lastActiveAt: string;
+  revoked: boolean;
+  revokedAt?: string;
+}
+
+export type SupportTicketCategory = 'bug' | 'contact' | 'securite' | 'confidentialite' | 'autre';
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  category: SupportTicketCategory;
+  subject: string;
+  description: string;
+  deviceInfo?: string;
+  status: 'open' | 'in_review' | 'resolved';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   nom: '',
+  username: '',
   bio: '',
   avatar_url: '',
   langue_preferee: 'fr',
   email: '',
+  telephone: '',
+  date_naissance: '',
   profil_visibilite: 'public',
   capsules_visibilite: 'public',
   messages_autorises: 'tous',
@@ -275,8 +324,13 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   traduction_auto: true,
   telechargement_hors_ligne: false,
   masquer_suggestions: false,
+  theme_mode: 'light',
+  densite_affichage: 'confort',
   mode_faible_consommation: false,
-  taille_texte: 'normal'
+  taille_texte: 'normal',
+  contraste_eleve: false,
+  animations_reduites: false,
+  lisibilite_amelioree: false
 };
 
 // ============================================================

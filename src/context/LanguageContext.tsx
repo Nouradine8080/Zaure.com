@@ -3,27 +3,103 @@ import { UserProfile } from '../types';
 
 export type Language = 'fr' | 'ha' | 'en';
 
+export interface LanguageMetadata {
+  code: Language;
+  nativeName: string;
+  frenchName: string;
+  regionLabel: string;
+  coverage: 'complete' | 'partial';
+  coverageLabelFr: string;
+  coverageLabelEn: string;
+  coverageLabelHa: string;
+  scopeDescriptionFr: string;
+  scopeDescriptionEn: string;
+  scopeDescriptionHa: string;
+}
+
+export const LANGUAGE_CATALOG: LanguageMetadata[] = [
+  {
+    code: 'fr',
+    nativeName: 'Français',
+    frenchName: 'Français',
+    regionLabel: 'Langue par défaut',
+    coverage: 'complete',
+    coverageLabelFr: 'Disponible intégralement',
+    coverageLabelEn: 'Fully available',
+    coverageLabelHa: 'Cikakke',
+    scopeDescriptionFr:
+      'Navigation, fil d’actualité, communautés, messagerie, notifications et tous les paramètres sont traduits.',
+    scopeDescriptionEn:
+      'Navigation, feed, communities, messaging, notifications and all settings are fully translated.',
+    scopeDescriptionHa:
+      'Dukkan sassan dandalin Zaure suna samuwa gaba ɗaya cikin harshen Faransanci.'
+  },
+  {
+    code: 'en',
+    nativeName: 'English',
+    frenchName: 'Anglais',
+    regionLabel: 'International',
+    coverage: 'partial',
+    coverageLabelFr: 'Traduction partielle (interface principale & paramètres)',
+    coverageLabelEn: 'Partial (main navigation & settings translated)',
+    coverageLabelHa: 'Sashe ne aka fassara (babban shafi da saituna)',
+    scopeDescriptionFr:
+      'Barre de navigation, paramètres complets, capsules de base et formulaires traduits ; certains libellés de modération ou messages publiés par les membres restent en français.',
+    scopeDescriptionEn:
+      'Navigation, complete settings, core feed actions and auth forms are translated; some moderation labels and member-generated text remain in French.',
+    scopeDescriptionHa:
+      'Babban menu, saituna da asalin dandalin an fassara su zuwa Turanci.'
+  },
+  {
+    code: 'ha',
+    nativeName: 'Hausa',
+    frenchName: 'Haoussa',
+    regionLabel: 'Afrique de l’Ouest',
+    coverage: 'partial',
+    coverageLabelFr: 'Traduction partielle (navigation, capsules & paramètres)',
+    coverageLabelEn: 'Partial (navigation, capsules & settings)',
+    coverageLabelHa: 'Sashe ne aka fassara (babban menu, kapsul da saituna)',
+    scopeDescriptionFr:
+      'Navigation principale, paramètres, capsules et discussions de base traduits en haoussa ; certaines sections détaillées basculent vers le français.',
+    scopeDescriptionEn:
+      'Primary navigation, settings, capsules and core chat UI are translated in Hausa; detailed secondary sections fall back to French.',
+    scopeDescriptionHa:
+      'Babban menu, saituna, kapsul da tattaunawa an fassara su zuwa Hausa; sauran ƙananan bayanai suna komawa Faransanci.'
+  }
+];
+
+const LANG_STORAGE_KEY = 'zaure_interface_lang';
+
 export const translations: Record<Language, Record<string, string>> = {
   fr: {
     // Header & Common
     'app.title': 'Zauré',
     'app.subtitle': 'La plateforme de partage de savoirs communautaires',
-    'nav.feed': 'Fil de Savoir',
-    'nav.chat': 'Discussion Directe',
+    'nav.feed': 'Actualités',
+    'nav.circles': 'Communautés',
+    'nav.chat': 'Messages',
+    'nav.notifications': 'Notifications',
+    'nav.profile': 'Profil',
     'nav.settings': 'Paramètres',
+    'nav.admin': 'Administration',
     'nav.login': 'Connexion',
     'nav.logout': 'Déconnexion',
     'nav.signup': "S'inscrire",
     'common.close': 'Fermer',
     'common.cancel': 'Annuler',
     'common.save': 'Enregistrer',
+    'common.saved': 'Enregistré',
+    'common.saving': 'Enregistrement...',
     'common.delete': 'Supprimer',
+    'common.confirm': 'Confirmer',
+    'common.back': 'Retour',
     'common.loading': 'Chargement...',
     'common.error': 'Erreur',
     'common.success': 'Succès',
     'common.all': 'Tous les cercles',
     'common.my_circles': 'Mes cercles rejoins',
     'common.public': 'Public',
+    'common.search_placeholder': 'Rechercher sur Zaure...',
 
     // Feed & Filters
     'feed.title': 'Fil des capsules de savoir',
@@ -88,15 +164,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'chat.placeholder': 'Écrivez votre message...',
     'chat.send': 'Envoyer',
 
-    // Settings
-    'settings.title': 'Paramètres & Préférences',
-    'settings.tab_account': 'Mon Compte',
-    'settings.tab_privacy': 'Confidentialité & Sécurité',
+    // Settings (10 Categories)
+    'settings.title': 'Paramètres',
+    'settings.subtitle': 'Gérez votre compte, votre confidentialité, votre sécurité et vos préférences ZAURE.',
+    'settings.tab_account': 'Mon compte',
+    'settings.tab_security': 'Sécurité',
+    'settings.tab_privacy': 'Confidentialité',
     'settings.tab_notif': 'Notifications',
-    'settings.tab_content': 'Contenu & Langues',
+    'settings.tab_appearance': 'Apparence',
+    'settings.tab_content': 'Langue',
+    'settings.tab_access': 'Accessibilité',
+    'settings.tab_blocked': 'Utilisateurs bloqués',
+    'settings.tab_help': 'Aide et assistance',
+    'settings.tab_about': 'À propos de ZAURE',
     'settings.tab_circles': 'Cercles & Communauté',
-    'settings.tab_access': 'Accessibilité & Données',
-    'settings.tab_about': 'À propos & Aide',
+    'settings.mobile_categories_hint': 'Sélectionnez une catégorie pour personnaliser votre espace',
 
     'settings.account.info': 'Informations du profil',
     'settings.account.fullname': 'Nom complet',
@@ -174,22 +256,31 @@ export const translations: Record<Language, Record<string, string>> = {
     // Header & Common
     'app.title': 'Zauré',
     'app.subtitle': "Dandali na raba ilimi da fasaha tsakanin al'umma",
-    'nav.feed': 'Filin Ilimi',
-    'nav.chat': 'Hira Kai Tsaye',
+    'nav.feed': 'Labarai',
+    'nav.circles': "Al'ummomi",
+    'nav.chat': 'Saƙonni',
+    'nav.notifications': 'Sanarwa',
+    'nav.profile': 'Bayani',
     'nav.settings': 'Saituna',
+    'nav.admin': 'Gudanarwa',
     'nav.login': 'Shiga',
     'nav.logout': 'Fita',
     'nav.signup': 'Yi Rijista',
     'common.close': 'Rufe',
     'common.cancel': 'Soke',
     'common.save': 'Ajiye',
+    'common.saved': 'An ajiye',
+    'common.saving': 'Ana ajiyewa...',
     'common.delete': 'Goge',
+    'common.confirm': 'Tabbatar',
+    'common.back': 'Koma',
     'common.loading': 'Yana lodawa...',
     'common.error': 'Kuskure',
     'common.success': 'Kammala',
     'common.all': 'Dukkan Dairori',
     'common.my_circles': 'Dairorina',
     'common.public': 'A bayyane',
+    'common.search_placeholder': 'Bincika a Zaure...',
 
     // Feed & Filters
     'feed.title': 'Labaran Ilimi da Kapsul',
@@ -254,15 +345,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'chat.placeholder': 'Rubuta saƙo...',
     'chat.send': 'Aika',
 
-    // Settings
-    'settings.title': 'Saituna da Zaɓuɓɓuka',
+    // Settings (10 Categories)
+    'settings.title': 'Saituna',
+    'settings.subtitle': 'Sarrafa asawunka, tsaro, sirri, kamanni da sauƙaƙewa akan ZAURE.',
     'settings.tab_account': 'Asawunata',
-    'settings.tab_privacy': 'Sirri da Tsaro',
+    'settings.tab_security': 'Tsaro',
+    'settings.tab_privacy': 'Sirri',
     'settings.tab_notif': 'Sanarwa',
-    'settings.tab_content': 'Abun ciki da Harshe',
+    'settings.tab_appearance': 'Kamanni',
+    'settings.tab_content': 'Harshe',
+    'settings.tab_access': 'Sauƙin amfani',
+    'settings.tab_blocked': 'Waɗanda aka toshe',
+    'settings.tab_help': 'Taimako da tallafi',
+    'settings.tab_about': 'Game da ZAURE',
     'settings.tab_circles': "Dairori da Al'umma",
-    'settings.tab_access': 'Saukaka da Bayanai',
-    'settings.tab_about': 'Game da Mu da Taimako',
+    'settings.mobile_categories_hint': 'Zaɓi sashe domin daidaita saitunanka',
 
     'settings.account.info': 'Bayanin Bayani na Kanka',
     'settings.account.fullname': 'Cikakken Suna',
@@ -340,22 +437,31 @@ export const translations: Record<Language, Record<string, string>> = {
     // Header & Common
     'app.title': 'Zauré',
     'app.subtitle': 'Community Knowledge Sharing Platform',
-    'nav.feed': 'Knowledge Feed',
-    'nav.chat': 'Direct Chat',
+    'nav.feed': 'Feed',
+    'nav.circles': 'Communities',
+    'nav.chat': 'Messages',
+    'nav.notifications': 'Notifications',
+    'nav.profile': 'Profile',
     'nav.settings': 'Settings',
+    'nav.admin': 'Admin',
     'nav.login': 'Sign In',
     'nav.logout': 'Sign Out',
     'nav.signup': 'Sign Up',
     'common.close': 'Close',
     'common.cancel': 'Cancel',
     'common.save': 'Save',
+    'common.saved': 'Saved',
+    'common.saving': 'Saving...',
     'common.delete': 'Delete',
+    'common.confirm': 'Confirm',
+    'common.back': 'Back',
     'common.loading': 'Loading...',
     'common.error': 'Error',
     'common.success': 'Success',
     'common.all': 'All Circles',
     'common.my_circles': 'My Circles',
     'common.public': 'Public',
+    'common.search_placeholder': 'Search Zaure...',
 
     // Feed & Filters
     'feed.title': 'Knowledge Capsules Feed',
@@ -420,15 +526,21 @@ export const translations: Record<Language, Record<string, string>> = {
     'chat.placeholder': 'Type your message...',
     'chat.send': 'Send',
 
-    // Settings
-    'settings.title': 'Settings & Preferences',
+    // Settings (10 Categories)
+    'settings.title': 'Settings',
+    'settings.subtitle': 'Manage your account, security, privacy, appearance, and preferences on ZAURE.',
     'settings.tab_account': 'My Account',
-    'settings.tab_privacy': 'Privacy & Security',
+    'settings.tab_security': 'Security',
+    'settings.tab_privacy': 'Privacy',
     'settings.tab_notif': 'Notifications',
-    'settings.tab_content': 'Content & Languages',
+    'settings.tab_appearance': 'Appearance',
+    'settings.tab_content': 'Language',
+    'settings.tab_access': 'Accessibility',
+    'settings.tab_blocked': 'Blocked Users',
+    'settings.tab_help': 'Help & Support',
+    'settings.tab_about': 'About ZAURE',
     'settings.tab_circles': 'Circles & Community',
-    'settings.tab_access': 'Accessibility & Data',
-    'settings.tab_about': 'About & Help',
+    'settings.mobile_categories_hint': 'Choose a category to customize your workspace',
 
     'settings.account.info': 'Profile Information',
     'settings.account.fullname': 'Full Name',
@@ -515,6 +627,25 @@ const LanguageContext = createContext<LanguageContextType>({
   t: (key: string, defaultText?: string) => defaultText || key,
 });
 
+function readStoredLanguage(): Language | null {
+  try {
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    if (saved === 'fr' || saved === 'ha' || saved === 'en') {
+      return saved;
+    }
+    const cachedUserRaw = localStorage.getItem('zaure_user_session_cache');
+    if (cachedUserRaw) {
+      const parsed = JSON.parse(cachedUserRaw);
+      if (parsed?.langue_preferee === 'fr' || parsed?.langue_preferee === 'ha' || parsed?.langue_preferee === 'en') {
+        return parsed.langue_preferee;
+      }
+    }
+  } catch {
+    // ignore storage read errors
+  }
+  return null;
+}
+
 export const LanguageProvider: React.FC<{
   currentUser?: UserProfile | null;
   children: React.ReactNode;
@@ -523,17 +654,27 @@ export const LanguageProvider: React.FC<{
     if (currentUser?.langue_preferee) {
       return currentUser.langue_preferee;
     }
-    return 'fr';
+    return readStoredLanguage() || 'fr';
   });
 
   useEffect(() => {
     if (currentUser?.langue_preferee) {
       setLanguageState(currentUser.langue_preferee);
+      try {
+        localStorage.setItem(LANG_STORAGE_KEY, currentUser.langue_preferee);
+      } catch {
+        // ignore storage error
+      }
     }
   }, [currentUser?.langue_preferee]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
+    try {
+      localStorage.setItem(LANG_STORAGE_KEY, lang);
+    } catch {
+      // ignore storage error
+    }
   };
 
   const t = (key: string, defaultText?: string): string => {

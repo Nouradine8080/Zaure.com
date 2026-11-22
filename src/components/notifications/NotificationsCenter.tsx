@@ -433,15 +433,15 @@ export default function NotificationsCenter({
   return (
     <div className="space-y-4 pb-8" id="notifications-center-page">
       {/* 1. EN-TÊTE PRINCIPAL + FILTRES */}
-      <section className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      <section className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Bell className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
-                <h1 className="text-lg sm:text-xl font-extrabold text-slate-950 tracking-tight">
+                <h1 className="text-lg sm:text-xl font-extrabold text-slate-950 dark:text-white tracking-tight">
                   Notifications
                 </h1>
                 {unreadCount > 0 && (

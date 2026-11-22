@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   DEFAULT_PRIVACY_SETTINGS,
+  InteractionAudience,
   MessageAudience,
   PrivacyAudience,
   UserPrivacySettings,
@@ -43,6 +44,13 @@ const MESSAGE_OPTIONS: { value: MessageAudience; label: string }[] = [
   { value: 'followers', label: 'Mes abonnés' },
   { value: 'cercles', label: 'Membres de mes cercles' },
   { value: 'mentors', label: 'Mentors & vérifiés' },
+  { value: 'personne', label: 'Personne' }
+];
+
+const INTERACTION_OPTIONS: { value: InteractionAudience; label: string }[] = [
+  { value: 'tous', label: 'Tout le monde' },
+  { value: 'followers', label: 'Mes abonnés' },
+  { value: 'cercles', label: 'Membres de mes cercles' },
   { value: 'personne', label: 'Personne' }
 ];
 
@@ -106,7 +114,10 @@ export default function ProfilePrivacyModal({
   };
 
   const audienceRows: {
-    key: keyof Omit<UserPrivacySettings, 'profileMode' | 'allowMessages'>;
+    key: keyof Omit<
+      UserPrivacySettings,
+      'profileMode' | 'allowMessages' | 'allowComments' | 'allowMentions'
+    >;
     label: string;
     desc: string;
     icon: React.ElementType;
@@ -272,13 +283,13 @@ export default function ProfilePrivacyModal({
               })}
 
               {/* Direct Messages Permission */}
-              <div className="p-3.5 rounded-2xl border border-slate-200/80 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                     <span>Qui peut vous envoyer des messages</span>
                   </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                     Détermine qui peut démarrer une discussion directe depuis votre profil.
                   </p>
                 </div>
@@ -290,9 +301,67 @@ export default function ProfilePrivacyModal({
                       allowMessages: e.target.value as MessageAudience
                     }))
                   }
-                  className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F0F2F5] border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 shrink-0"
+                  className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F0F2F5] dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 shrink-0"
                 >
                   {MESSAGE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Comments Permission */}
+              <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>Qui peut commenter vos publications</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    Appliqué sur vos publications publiques, cercles et capsules.
+                  </p>
+                </div>
+                <select
+                  value={privacy.allowComments}
+                  onChange={(e) =>
+                    setPrivacy((p) => ({
+                      ...p,
+                      allowComments: e.target.value as InteractionAudience
+                    }))
+                  }
+                  className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F0F2F5] dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 shrink-0"
+                >
+                  {INTERACTION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Mentions Permission */}
+              <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>Qui peut vous mentionner (@)</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    Contrôle qui peut vous identifier dans les publications et commentaires.
+                  </p>
+                </div>
+                <select
+                  value={privacy.allowMentions}
+                  onChange={(e) =>
+                    setPrivacy((p) => ({
+                      ...p,
+                      allowMentions: e.target.value as InteractionAudience
+                    }))
+                  }
+                  className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#F0F2F5] dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 shrink-0"
+                >
+                  {INTERACTION_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
@@ -307,9 +376,9 @@ export default function ProfilePrivacyModal({
                 onClose();
                 onOpenFullSettings();
               }}
-              className="w-full min-h-[42px] px-4 py-2 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-xs font-bold text-slate-700 flex items-center justify-center gap-2 transition"
+              className="w-full min-h-[42px] px-4 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 transition"
             >
-              <Settings className="w-4 h-4 text-slate-500" />
+              <Settings className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span>Accéder aux paramètres complets (compte, blocages, langue)</span>
             </button>
           </div>

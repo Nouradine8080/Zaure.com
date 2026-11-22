@@ -80,6 +80,7 @@ export default function CapsuleCard({
   const [comments, setComments] = useState<Comment[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [isSendingComment, setIsSendingComment] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
@@ -129,12 +130,13 @@ export default function CapsuleCard({
     if (!newCommentText.trim() || !currentUser || isSendingComment) return;
 
     setIsSendingComment(true);
+    setCommentError(null);
     try {
       const added = await zaureService.addComment(capsule.id, newCommentText.trim());
       setComments((prev) => [...prev, added]);
       setNewCommentText('');
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setCommentError(e?.message || 'Impossible de publier ce commentaire.');
     } finally {
       setIsSendingComment(false);
     }
@@ -212,7 +214,7 @@ export default function CapsuleCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5"
+      className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5"
       id={`capsule-card-${capsule.id}`}
     >
       {/* Author Header */}
@@ -561,14 +563,20 @@ export default function CapsuleCard({
                           {formatRelativeDate(c.created_at)}
                         </span>
                       </div>
-                      <p className="text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
-                        {c.texte}
+                      <p className="text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
+                        {c.contenu || (c as any).texte}
                       </p>
                     </div>
                   </div>
                 ))
               )}
             </div>
+
+            {commentError && (
+              <div className="px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs font-semibold text-red-700 dark:text-red-300">
+                {commentError}
+              </div>
+            )}
 
             {/* New comment input */}
             {currentUser ? (

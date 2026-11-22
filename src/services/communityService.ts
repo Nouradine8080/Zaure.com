@@ -654,9 +654,14 @@ export const communityService = {
               const pd = p.data() as UserProfile;
               candidateUsers.push({ id: pd.id, nom: pd.nom, username: pd.username });
             });
-            const mentionedIds = extractMentionedUserIds(post.content, candidateUsers);
+            const rawMentionedIds = extractMentionedUserIds(post.content, candidateUsers);
+            const { profileService } = await import('./profileService');
+            const allowedMentionIds = await profileService.filterAllowedMentionIds(
+              rawMentionedIds,
+              author.id
+            );
             await Promise.all(
-              mentionedIds
+              allowedMentionIds
                 .filter((uid) => uid !== author.id)
                 .slice(0, 15)
                 .map((uid) =>
@@ -968,6 +973,16 @@ export const communityService = {
     mentions: string[] = []
   ): Promise<PostComment> => {
     if (!dbFirestore || !auth?.currentUser) throw new Error('Non connecté.');
+
+    const { profileService } = await import('./profileService');
+    if (!post.isAnonymous && post.authorId && post.authorId !== author.id) {
+      const perm = await profileService.checkCommentPermission(post.authorId, author.id);
+      if (!perm.allowed) {
+        throw new Error(perm.reason || 'Commentaires restreints par cet auteur.');
+      }
+    }
+
+    const filteredMentions = await profileService.filterAllowedMentionIds(mentions, author.id);
     const commentId = makeId('gcom');
     const ts = nowIso();
     const comment: PostComment = {
@@ -979,7 +994,7 @@ export const communityService = {
       authorName: author.nom.slice(0, 120),
       authorAvatar: author.avatar_url || '',
       content: content.trim().slice(0, 3000),
-      mentions: mentions.slice(0, 20),
+      mentions: filteredMentions.slice(0, 20),
       likedBy: [],
       isEdited: false,
       createdAt: ts,
@@ -1058,7 +1073,7 @@ export const communityService = {
         }
       }
 
-      for (const mentionedUid of mentions) {
+      for (const mentionedUid of filteredMentions) {
         if (mentionedUid && mentionedUid !== author.id && mentionedUid !== post.authorId && mentionedUid !== parentAuthorId) {
           if (group.id === 'public') {
             await notificationService.createAppNotification({

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -20,6 +20,8 @@ import {
   PostComment,
   UserProfile
 } from '../../types';
+import { collection, getDocs } from 'firebase/firestore';
+import { dbFirestore, normalizePrivacySettings, zaureService } from '../../firebaseClient';
 import { communityService } from '../../services/communityService';
 
 interface CommunityCommentsSectionProps {
@@ -82,6 +84,37 @@ export default function CommunityCommentsSection({
   const [isSending, setIsSending] = useState(false);
   const [pendingDeleteComment, setPendingDeleteComment] = useState<PostComment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [blockedMentionIds, setBlockedMentionIds] = useState<Set<string>>(new Set());
+  const [mentionsPrivacyLoaded, setMentionsPrivacyLoaded] = useState(false);
+
+  useEffect(() => {
+    if (mentionQuery === null || mentionsPrivacyLoaded) return;
+    let active = true;
+    (async () => {
+      try {
+        const [blockedList, profilesSnap] = await Promise.all([
+          zaureService.getBlockedUserIds().catch(() => []),
+          dbFirestore ? getDocs(collection(dbFirestore, 'public_profiles')).catch(() => null) : null
+        ]);
+        if (!active) return;
+        const restricted = new Set<string>(blockedList);
+        profilesSnap?.forEach((d) => {
+          const p = d.data() as UserProfile;
+          const priv = normalizePrivacySettings(p.privacy_settings);
+          if (priv.allowMentions === 'personne') {
+            restricted.add(p.id || d.id);
+          }
+        });
+        setBlockedMentionIds(restricted);
+        setMentionsPrivacyLoaded(true);
+      } catch {
+        // non-fatal
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [mentionQuery, mentionsPrivacyLoaded]);
 
   const canModerateComments =
     currentMember?.role === 'administrateur' ||
@@ -108,9 +141,14 @@ export default function CommunityCommentsSection({
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
     return members
-      .filter((m) => m.status === 'active' && m.userName.toLowerCase().includes(q))
+      .filter(
+        (m) =>
+          m.status === 'active' &&
+          !blockedMentionIds.has(m.userId) &&
+          m.userName.toLowerCase().includes(q)
+      )
       .slice(0, 6);
-  }, [members, mentionQuery]);
+  }, [members, mentionQuery, blockedMentionIds]);
 
   const handleInputChange = (val: string) => {
     setNewComment(val);

@@ -90,6 +90,48 @@ export function canSendDirectMessage(
   }
 }
 
+export function canCommentOnUser(
+  privacy: UserPrivacySettings,
+  ctx: ViewerProfileContext
+): boolean {
+  if (ctx.isOwnProfile) return true;
+  if (ctx.isBlocked) return false;
+  const rule = privacy.allowComments || 'tous';
+  switch (rule) {
+    case 'tous':
+      return true;
+    case 'followers':
+      return ctx.isFollower;
+    case 'cercles':
+      return ctx.sharesCircleOrGroup || ctx.isFollower;
+    case 'personne':
+      return false;
+    default:
+      return true;
+  }
+}
+
+export function canMentionUser(
+  privacy: UserPrivacySettings,
+  ctx: ViewerProfileContext
+): boolean {
+  if (ctx.isOwnProfile) return true;
+  if (ctx.isBlocked) return false;
+  const rule = privacy.allowMentions || 'tous';
+  switch (rule) {
+    case 'tous':
+      return true;
+    case 'followers':
+      return ctx.isFollower;
+    case 'cercles':
+      return ctx.sharesCircleOrGroup || ctx.isFollower;
+    case 'personne':
+      return false;
+    default:
+      return true;
+  }
+}
+
 export function getPrivacyBlockReason(
   audience: PrivacyAudience | undefined,
   privacy: UserPrivacySettings,
@@ -504,6 +546,190 @@ export const profileService = {
       };
     } catch {
       return { ...DEFAULT_PRIVACY_SETTINGS };
+    }
+  },
+
+  checkCommentPermission: async (
+    targetUserId: string,
+    viewerId: string,
+    blockedIds?: string[]
+  ): Promise<{ allowed: boolean; reason?: string }> => {
+    if (!targetUserId || !viewerId || targetUserId === viewerId) {
+      return { allowed: true };
+    }
+    const viewerBlocked = blockedIds || (await zaureService.getBlockedUserIds().catch(() => []));
+    if (viewerBlocked.includes(targetUserId)) {
+      return {
+        allowed: false,
+        reason: 'Vous avez bloqué cet utilisateur. Débloquez-le pour interagir avec ses publications.'
+      };
+    }
+    if (!dbFirestore) return { allowed: true };
+
+    try {
+      const targetSnap = await getDoc(doc(dbFirestore, 'public_profiles', targetUserId));
+      if (!targetSnap.exists()) return { allowed: true };
+      const targetData = targetSnap.data() as Partial<UserProfile>;
+      const privacy = normalizePrivacySettings(targetData.privacy_settings);
+      const rule = privacy.allowComments || 'tous';
+      if (rule === 'tous') return { allowed: true };
+      if (rule === 'personne') {
+        return {
+          allowed: false,
+          reason: `${targetData.nom || 'Cet auteur'} a désactivé les commentaires sur ses publications.`
+        };
+      }
+
+      const [followSnap, viewerCirclesSnap, targetCirclesSnap, viewerGroupsSnap, targetGroupsSnap] =
+        await Promise.all([
+          getDoc(doc(dbFirestore, 'user_follows', `${viewerId}_${targetUserId}`)).catch(() => null),
+          getDocs(query(collection(dbFirestore, 'circle_members'), where('user_id', '==', viewerId))).catch(
+            () => null
+          ),
+          getDocs(query(collection(dbFirestore, 'circle_members'), where('user_id', '==', targetUserId))).catch(
+            () => null
+          ),
+          getDocs(query(collection(dbFirestore, 'group_members'), where('userId', '==', viewerId))).catch(
+            () => null
+          ),
+          getDocs(query(collection(dbFirestore, 'group_members'), where('userId', '==', targetUserId))).catch(
+            () => null
+          )
+        ]);
+
+      const isFollower = Boolean(followSnap && followSnap.exists());
+      const viewerCircleSet = new Set<string>();
+      viewerCirclesSnap?.forEach((d) => {
+        const cid = (d.data() as any)?.circle_id;
+        if (cid) viewerCircleSet.add(cid);
+      });
+      let sharesCircleOrGroup = false;
+      targetCirclesSnap?.forEach((d) => {
+        const cid = (d.data() as any)?.circle_id;
+        if (cid && viewerCircleSet.has(cid)) sharesCircleOrGroup = true;
+      });
+      if (!sharesCircleOrGroup) {
+        const viewerGroupSet = new Set<string>();
+        viewerGroupsSnap?.forEach((d) => {
+          const gm = d.data() as CommunityMember;
+          if (gm.status === 'active') viewerGroupSet.add(gm.groupId);
+        });
+        targetGroupsSnap?.forEach((d) => {
+          const gm = d.data() as CommunityMember;
+          if (gm.status === 'active' && viewerGroupSet.has(gm.groupId)) sharesCircleOrGroup = true;
+        });
+      }
+
+      const allowed = canCommentOnUser(privacy, {
+        isOwnProfile: false,
+        isFollower,
+        sharesCircleOrGroup,
+        isMentorOrVerified: false,
+        isBlocked: false
+      });
+
+      if (!allowed) {
+        return {
+          allowed: false,
+          reason:
+            rule === 'followers'
+              ? `${targetData.nom || "L'auteur"} autorise uniquement ses abonnés à commenter.`
+              : `${targetData.nom || "L'auteur"} autorise uniquement les membres de ses cercles à commenter.`
+        };
+      }
+      return { allowed: true };
+    } catch {
+      return { allowed: true };
+    }
+  },
+
+  filterAllowedMentionIds: async (
+    candidateIds: string[],
+    viewerId: string,
+    blockedIds?: string[]
+  ): Promise<string[]> => {
+    const unique = Array.from(new Set(candidateIds.filter((id) => id && id !== viewerId)));
+    if (unique.length === 0 || !dbFirestore) return unique;
+
+    const viewerBlocked = new Set(blockedIds || (await zaureService.getBlockedUserIds().catch(() => [])));
+    const nonBlocked = unique.filter((id) => !viewerBlocked.has(id));
+    if (nonBlocked.length === 0) return [];
+
+    try {
+      const [viewerCirclesSnap, viewerGroupsSnap] = await Promise.all([
+        getDocs(query(collection(dbFirestore, 'circle_members'), where('user_id', '==', viewerId))).catch(
+          () => null
+        ),
+        getDocs(query(collection(dbFirestore, 'group_members'), where('userId', '==', viewerId))).catch(
+          () => null
+        )
+      ]);
+
+      const viewerCircleSet = new Set<string>();
+      viewerCirclesSnap?.forEach((d) => {
+        const cid = (d.data() as any)?.circle_id;
+        if (cid) viewerCircleSet.add(cid);
+      });
+      const viewerGroupSet = new Set<string>();
+      viewerGroupsSnap?.forEach((d) => {
+        const gm = d.data() as CommunityMember;
+        if (gm.status === 'active') viewerGroupSet.add(gm.groupId);
+      });
+
+      const results = await Promise.all(
+        nonBlocked.map(async (targetId) => {
+          try {
+            const targetSnap = await getDoc(doc(dbFirestore, 'public_profiles', targetId));
+            if (!targetSnap.exists()) return targetId;
+            const privacy = normalizePrivacySettings((targetSnap.data() as UserProfile).privacy_settings);
+            const rule = privacy.allowMentions || 'tous';
+            if (rule === 'tous') return targetId;
+            if (rule === 'personne') return null;
+
+            const followSnap = await getDoc(
+              doc(dbFirestore, 'user_follows', `${viewerId}_${targetId}`)
+            ).catch(() => null);
+            const isFollower = Boolean(followSnap && followSnap.exists());
+
+            let sharesCircleOrGroup = false;
+            if (rule === 'cercles' && !isFollower) {
+              const [tCircles, tGroups] = await Promise.all([
+                getDocs(query(collection(dbFirestore, 'circle_members'), where('user_id', '==', targetId))).catch(
+                  () => null
+                ),
+                getDocs(query(collection(dbFirestore, 'group_members'), where('userId', '==', targetId))).catch(
+                  () => null
+                )
+              ]);
+              tCircles?.forEach((d) => {
+                if (viewerCircleSet.has((d.data() as any)?.circle_id)) sharesCircleOrGroup = true;
+              });
+              if (!sharesCircleOrGroup) {
+                tGroups?.forEach((d) => {
+                  const gm = d.data() as CommunityMember;
+                  if (gm.status === 'active' && viewerGroupSet.has(gm.groupId)) sharesCircleOrGroup = true;
+                });
+              }
+            }
+
+            return canMentionUser(privacy, {
+              isOwnProfile: false,
+              isFollower,
+              sharesCircleOrGroup,
+              isMentorOrVerified: false,
+              isBlocked: false
+            })
+              ? targetId
+              : null;
+          } catch {
+            return targetId;
+          }
+        })
+      );
+
+      return results.filter((id): id is string => Boolean(id));
+    } catch {
+      return nonBlocked;
     }
   }
 };

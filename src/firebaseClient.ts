@@ -15,7 +15,9 @@ import {
   updateProfile,
   RecaptchaVerifier,
   signInWithPhoneNumber,
-  fetchSignInMethodsForEmail
+  fetchSignInMethodsForEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential
 } from 'firebase/auth';
 import { 
   initializeFirestore,
@@ -200,6 +202,7 @@ export function normalizePrivacySettings(raw: any): UserPrivacySettings {
   }
   const validAud = new Set(['public', 'followers', 'cercles', 'private']);
   const validMsg = new Set(['tous', 'followers', 'cercles', 'mentors', 'personne']);
+  const validInt = new Set(['tous', 'followers', 'cercles', 'personne']);
   return {
     profileMode: raw.profileMode === 'private' ? 'private' : 'public',
     infoVisibility: validAud.has(raw.infoVisibility) ? raw.infoVisibility : 'public',
@@ -207,7 +210,9 @@ export function normalizePrivacySettings(raw: any): UserPrivacySettings {
     followersVisibility: validAud.has(raw.followersVisibility) ? raw.followersVisibility : 'public',
     followingVisibility: validAud.has(raw.followingVisibility) ? raw.followingVisibility : 'public',
     communitiesVisibility: validAud.has(raw.communitiesVisibility) ? raw.communitiesVisibility : 'public',
-    allowMessages: validMsg.has(raw.allowMessages) ? raw.allowMessages : 'tous'
+    allowMessages: validMsg.has(raw.allowMessages) ? raw.allowMessages : 'tous',
+    allowComments: validInt.has(raw.allowComments) ? raw.allowComments : 'tous',
+    allowMentions: validInt.has(raw.allowMentions) ? raw.allowMentions : 'tous'
   };
 }
 
@@ -1163,6 +1168,23 @@ export const zaureService = {
     const safeContenu = (contenu || '').trim().slice(0, 2000);
     if (!safeContenu) throw new Error('Le commentaire ne peut pas être vide.');
 
+    let cap: Capsule | null = null;
+    try {
+      const capSnap = await getDoc(doc(dbFirestore, 'capsules', capsuleId));
+      cap = capSnap.exists() ? (capSnap.data() as Capsule) : null;
+      if (cap && cap.auteur_id && cap.auteur_id !== currentUser.id) {
+        const { profileService } = await import('./services/profileService');
+        const perm = await profileService.checkCommentPermission(cap.auteur_id, currentUser.id);
+        if (!perm.allowed) {
+          throw new Error(perm.reason || 'Commentaires restreints par cet utilisateur.');
+        }
+      }
+    } catch (permErr: any) {
+      if (permErr?.message && !permErr.message.includes('Firestore')) {
+        throw permErr;
+      }
+    }
+
     const newComment: Comment = {
       id: `comment-${Date.now()}`,
       capsule_id: capsuleId,
@@ -1183,9 +1205,7 @@ export const zaureService = {
       });
 
       try {
-        const capSnap = await getDoc(doc(dbFirestore, 'capsules', capsuleId));
         const { notificationService, buildDeterministicNotificationId, extractMentionedUserIds } = await import('./services/notificationService');
-        const cap = capSnap.exists() ? (capSnap.data() as Capsule) : null;
         if (cap && cap.auteur_id && cap.auteur_id !== currentUser.id) {
           await notificationService.createAppNotification({
             id: buildDeterministicNotificationId(['capcom', newComment.id, cap.auteur_id]),
@@ -1210,9 +1230,14 @@ export const zaureService = {
             const ud = u.data() as UserProfile;
             candidates.push({ id: ud.id, nom: ud.nom, username: ud.username });
           });
-          const mentionedIds = extractMentionedUserIds(safeContenu, candidates);
+          const rawMentionedIds = extractMentionedUserIds(safeContenu, candidates);
+          const { profileService } = await import('./services/profileService');
+          const allowedMentionIds = await profileService.filterAllowedMentionIds(
+            rawMentionedIds,
+            currentUser.id
+          );
           await Promise.all(
-            mentionedIds
+            allowedMentionIds
               .filter((uid) => uid !== currentUser?.id && uid !== cap?.auteur_id)
               .slice(0, 10)
               .map((uid) =>
@@ -2019,7 +2044,10 @@ export const zaureService = {
     const baseSettings: UserSettings = {
       ...DEFAULT_USER_SETTINGS,
       nom: currentUser?.nom || '',
+      username: currentUser?.username || '',
       email: currentUser?.email || '',
+      telephone: currentUser?.phone || '',
+      date_naissance: currentUser?.date_naissance || '',
       bio: currentUser?.bio || '',
       avatar_url: currentUser?.avatar_url || '',
       langue_preferee: currentUser?.langue_preferee || 'fr',
@@ -2031,7 +2059,11 @@ export const zaureService = {
     try {
       const settingsDoc = await getDoc(doc(dbFirestore, 'user_settings', userId));
       if (settingsDoc.exists()) {
-        return { ...baseSettings, ...settingsDoc.data() as UserSettings };
+        const merged = { ...baseSettings, ...(settingsDoc.data() as UserSettings) };
+        if (merged.privacy_settings) {
+          merged.privacy_settings = normalizePrivacySettings(merged.privacy_settings);
+        }
+        return merged;
       }
     } catch (error) {
       console.error('Erreur lors du chargement des préférences:', error);
@@ -2043,17 +2075,33 @@ export const zaureService = {
   saveUserSettings: async (userId: string, newSettings: Partial<UserSettings>): Promise<boolean> => {
     if (!dbFirestore) return false;
     try {
-      await setDoc(doc(dbFirestore, 'user_settings', userId), newSettings, { merge: true });
-      if (newSettings.privacy_settings && auth?.currentUser && auth.currentUser.uid === userId) {
-        const cleanPriv = normalizePrivacySettings(newSettings.privacy_settings);
-        await updateDoc(doc(dbFirestore, 'users', userId), { privacy_settings: cleanPriv }).catch(() => {});
-        if (currentUser && currentUser.id === userId) {
-          currentUser = { ...currentUser, privacy_settings: cleanPriv };
-          await syncPublicProfile(currentUser);
-          try {
-            localStorage.setItem('zaure_user_session_cache', JSON.stringify(currentUser));
-          } catch {
-            // ignore storage cache
+      const payload: Partial<UserSettings> = { ...newSettings };
+      if (payload.privacy_settings) {
+        payload.privacy_settings = normalizePrivacySettings(payload.privacy_settings);
+      }
+      await setDoc(doc(dbFirestore, 'user_settings', userId), payload, { merge: true });
+
+      if (auth?.currentUser && auth.currentUser.uid === userId) {
+        const userUpdates: Record<string, any> = {};
+        if (payload.privacy_settings) {
+          userUpdates.privacy_settings = payload.privacy_settings;
+        }
+        if (payload.langue_interface && !payload.langue_preferee) {
+          userUpdates.langue_preferee = payload.langue_interface;
+        } else if (payload.langue_preferee) {
+          userUpdates.langue_preferee = payload.langue_preferee;
+        }
+
+        if (Object.keys(userUpdates).length > 0) {
+          await updateDoc(doc(dbFirestore, 'users', userId), userUpdates).catch(() => {});
+          if (currentUser && currentUser.id === userId) {
+            currentUser = { ...currentUser, ...userUpdates };
+            await syncPublicProfile(currentUser);
+            try {
+              localStorage.setItem('zaure_user_session_cache', JSON.stringify(currentUser));
+            } catch {
+              // ignore storage cache
+            }
           }
         }
       }
@@ -2069,6 +2117,8 @@ export const zaureService = {
     updates: {
       nom?: string;
       username?: string;
+      phone?: string;
+      date_naissance?: string;
       bio?: string | null;
       avatar_url?: string | null;
       cover_url?: string | null;
@@ -2096,6 +2146,8 @@ export const zaureService = {
     if (updates.username !== undefined) {
       sanitized.username = sanitizeUsername(updates.username, updates.nom || currentUser?.nom).slice(0, 40);
     }
+    if (updates.phone !== undefined) sanitized.phone = updates.phone.trim().slice(0, 32);
+    if (updates.date_naissance !== undefined) sanitized.date_naissance = updates.date_naissance.trim().slice(0, 32);
     if (updates.bio !== undefined) sanitized.bio = updates.bio ? updates.bio.trim().slice(0, 1000) : null;
     if (updates.avatar_url !== undefined) {
       sanitized.avatar_url = updates.avatar_url ? updates.avatar_url.slice(0, 350000) : null;
@@ -2126,7 +2178,13 @@ export const zaureService = {
           // ignore storage cache
         }
       } else {
-        await setDoc(doc(dbFirestore, 'public_profiles', userId), sanitized, { merge: true });
+        const publicSanitized = { ...sanitized };
+        delete publicSanitized.phone;
+        delete publicSanitized.date_naissance;
+        delete publicSanitized.email;
+        if (Object.keys(publicSanitized).length > 0) {
+          await setDoc(doc(dbFirestore, 'public_profiles', userId), publicSanitized, { merge: true });
+        }
       }
       return { user: currentUser, error: null };
     } catch (error: any) {
@@ -2242,7 +2300,10 @@ export const zaureService = {
     }
   },
 
-  changeUserEmail: async (newEmail: string): Promise<{ success: boolean; error: string | null }> => {
+  changeUserEmail: async (
+    newEmail: string,
+    currentPassword?: string
+  ): Promise<{ success: boolean; error: string | null }> => {
     if (!currentUser) return { success: false, error: 'Utilisateur non connecté' };
     if (!auth || !auth.currentUser || !dbFirestore) {
       return { success: false, error: 'Firebase non disponible' };
@@ -2250,8 +2311,13 @@ export const zaureService = {
 
     const safeEmail = newEmail.trim().slice(0, 200);
     try {
+      if (currentPassword && auth.currentUser.email) {
+        const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, cred);
+      }
       await updateEmail(auth.currentUser, safeEmail);
       await updateDoc(doc(dbFirestore, 'users', currentUser.id), { email: safeEmail });
+      await setDoc(doc(dbFirestore, 'user_settings', currentUser.id), { email: safeEmail }, { merge: true }).catch(() => {});
       currentUser.email = safeEmail;
       try {
         const { notificationService } = await import('./services/notificationService');
@@ -2271,16 +2337,30 @@ export const zaureService = {
       }
       return { success: true, error: null };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Erreur lors de la mise à jour de l\'email' };
+      if (err?.code === 'auth/requires-recent-login') {
+        return {
+          success: false,
+          error:
+            'Par mesure de sécurité, saisissez votre mot de passe actuel ou reconnectez-vous avant de changer d’adresse e-mail.'
+        };
+      }
+      return { success: false, error: formatFirebaseAuthError(err) };
     }
   },
 
-  changeUserPassword: async (newPassword: string): Promise<{ success: boolean; error: string | null }> => {
+  changeUserPassword: async (
+    newPassword: string,
+    currentPassword?: string
+  ): Promise<{ success: boolean; error: string | null }> => {
     if (!auth || !auth.currentUser) {
       return { success: false, error: 'Utilisateur non connecté' };
     }
 
     try {
+      if (currentPassword && auth.currentUser.email) {
+        const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, cred);
+      }
       await updatePassword(auth.currentUser, newPassword);
       if (currentUser) {
         try {
@@ -2302,15 +2382,40 @@ export const zaureService = {
       }
       return { success: true, error: null };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Erreur lors du changement de mot de passe.' };
+      if (err?.code === 'auth/requires-recent-login') {
+        return {
+          success: false,
+          error:
+            'Par mesure de sécurité, veuillez saisir votre mot de passe actuel pour confirmer ce changement.'
+        };
+      }
+      return { success: false, error: formatFirebaseAuthError(err) };
     }
   },
 
-  deleteAccount: async (userId: string): Promise<{ success: boolean; error: string | null }> => {
+  deleteAccount: async (
+    userId: string,
+    currentPassword?: string
+  ): Promise<{ success: boolean; error: string | null }> => {
     if (!dbFirestore) return { success: false, error: 'Firestore non disponible' };
 
     try {
-      await deleteDoc(doc(dbFirestore, 'users', userId));
+      if (currentPassword && auth?.currentUser?.email) {
+        const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, cred);
+      }
+
+      // Clean up active session records for this user
+      try {
+        const sessSnap = await getDocs(
+          query(collection(dbFirestore, 'user_sessions'), where('userId', '==', userId))
+        );
+        await Promise.all(sessSnap.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+      } catch {
+        // Non-fatal
+      }
+
+      await deleteDoc(doc(dbFirestore, 'users', userId)).catch(() => {});
       await deleteDoc(doc(dbFirestore, 'public_profiles', userId)).catch(() => {});
       await deleteDoc(doc(dbFirestore, 'user_settings', userId)).catch(() => {});
       if (auth && auth.currentUser) {
@@ -2319,7 +2424,14 @@ export const zaureService = {
       currentUser = null;
       return { success: true, error: null };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Erreur lors de la suppression du compte' };
+      if (err?.code === 'auth/requires-recent-login') {
+        return {
+          success: false,
+          error:
+            'Par mesure de sécurité, saisissez votre mot de passe actuel ou reconnectez-vous avant de supprimer votre compte.'
+        };
+      }
+      return { success: false, error: formatFirebaseAuthError(err) };
     }
   },
 

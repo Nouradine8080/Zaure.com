@@ -9,7 +9,8 @@ import {
   MessageReplyInfo,
   UserProfile
 } from '../types';
-import { normalizePrivacySettings, zaureService } from '../firebaseClient';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { dbFirestore, normalizePrivacySettings, zaureService } from '../firebaseClient';
 import { canSendDirectMessage, profileService } from '../services/profileService';
 import { validateFileForChat } from '../utils/fileValidation';
 import { ChatFilterTab, ConversationSidebar } from './chat/ConversationSidebar';
@@ -167,6 +168,18 @@ export default function ChatView({
     zaureService.getBlockedUserIds().then(setBlockedUserIds);
     zaureService.getJoinedCircleIds(currentUser.id).then(setMyJoinedCircleIds);
 
+    const unsubSettings = dbFirestore
+      ? onSnapshot(
+          doc(dbFirestore, 'user_settings', currentUser.id),
+          (snap) => {
+            if (snap.exists()) {
+              setBlockedUserIds(snap.data()?.utilisateurs_bloques || []);
+            }
+          },
+          () => {}
+        )
+      : () => {};
+
     const unsubProfiles = zaureService.subscribePublicProfilesPresence((users) => {
       setAvailableUsers(users);
     });
@@ -178,6 +191,7 @@ export default function ChatView({
     });
 
     return () => {
+      unsubSettings();
       unsubProfiles();
       unsubFollowing();
       unsubConvs();

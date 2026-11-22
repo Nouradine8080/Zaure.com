@@ -16,6 +16,70 @@
     background-color: #f8fafc;
     color: #0f172a;
     overflow-x: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.dark,
+  html.dark body {
+    background-color: #020617;
+    color: #f1f5f9;
+  }
+
+  /* Accessibility: Text sizing */
+  html.text-scale-normal {
+    font-size: 16px;
+  }
+  html.text-scale-grand {
+    font-size: 17.5px;
+  }
+  html.text-scale-tres-grand {
+    font-size: 19px;
+  }
+
+  /* Accessibility: Enhanced readability */
+  html.enhanced-readability body {
+    line-height: 1.72;
+    letter-spacing: 0.014em;
+    word-spacing: 0.04em;
+  }
+
+  /* Accessibility: High contrast surface accents (preserves images/colors without invert hacks) */
+  html.high-contrast body {
+    color: #020617;
+  }
+  html.dark.high-contrast body {
+    color: #ffffff;
+  }
+  html.high-contrast input,
+  html.high-contrast textarea,
+  html.high-contrast select,
+  html.high-contrast article,
+  html.high-contrast section {
+    border-color: rgba(30, 41, 59, 0.45) !important;
+  }
+  html.dark.high-contrast input,
+  html.dark.high-contrast textarea,
+  html.dark.high-contrast select,
+  html.dark.high-contrast article,
+  html.dark.high-contrast section {
+    border-color: rgba(148, 163, 184, 0.55) !important;
+  }
+
+  /* Accessibility: Reduced motion */
+  html.reduced-motion *,
+  html.reduced-motion *::before,
+  html.reduced-motion *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Appearance: Compact display density */
+  html.density-compact main article,
+  html.density-compact main section {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
   }
 
   #root {
@@ -49,6 +113,12 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 @keyframes fadeIn {

@@ -10,6 +10,7 @@
         "username": { "type": "string", "maxLength": 40 },
         "email": { "type": "string", "maxLength": 200 },
         "phone": { "type": "string", "maxLength": 32 },
+        "date_naissance": { "type": "string", "maxLength": 32 },
         "bio": { "type": "string", "maxLength": 1000 },
         "avatar_url": { "type": "string", "maxLength": 350000 },
         "cover_url": { "type": "string", "maxLength": 350000 },
@@ -72,10 +73,13 @@
       "type": "object",
       "properties": {
         "nom": { "type": "string", "maxLength": 120 },
+        "username": { "type": "string", "maxLength": 40 },
         "bio": { "type": "string", "maxLength": 1000 },
         "avatar_url": { "type": "string", "maxLength": 350000 },
         "langue_preferee": { "type": "string", "enum": ["fr", "ha", "en"] },
         "email": { "type": "string", "maxLength": 200 },
+        "telephone": { "type": "string", "maxLength": 32 },
+        "date_naissance": { "type": "string", "maxLength": 32 },
         "profil_visibilite": { "type": "string", "enum": ["public", "cercles", "mentors"] },
         "capsules_visibilite": { "type": "string", "enum": ["public", "cercles", "mentors"] },
         "messages_autorises": { "type": "string", "enum": ["tous", "cercles", "mentors"] },
@@ -99,8 +103,13 @@
         "traduction_auto": { "type": "boolean" },
         "telechargement_hors_ligne": { "type": "boolean" },
         "masquer_suggestions": { "type": "boolean" },
+        "theme_mode": { "type": "string", "enum": ["light", "dark", "system"] },
+        "densite_affichage": { "type": "string", "enum": ["confort", "compact"] },
         "mode_faible_consommation": { "type": "boolean" },
-        "taille_texte": { "type": "string", "enum": ["normal", "grand", "tres_grand"] }
+        "taille_texte": { "type": "string", "enum": ["normal", "grand", "tres_grand"] },
+        "contraste_eleve": { "type": "boolean" },
+        "animations_reduites": { "type": "boolean" },
+        "lisibilite_amelioree": { "type": "boolean" }
       }
     },
     "Circle": {
@@ -581,6 +590,44 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "userId", "actorId", "actorName", "type", "category", "title", "message", "isRead", "createdAt"]
+    },
+    "UserSessionRecord": {
+      "title": "UserSessionRecord",
+      "description": "Authenticated browser/device session record enabling login history and cross-device revocation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "deviceType": { "type": "string", "enum": ["desktop", "mobile", "tablet"] },
+        "os": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "browser": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "lastActiveAt": { "type": "string", "maxLength": 64 },
+        "revoked": { "type": "boolean" },
+        "revokedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "deviceId", "deviceName", "deviceType", "os", "browser", "createdAt", "lastActiveAt", "revoked"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "User help, contact, or problem report ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "userEmail": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "enum": ["bug", "contact", "securite", "confidentialite", "autre"] },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 3000 },
+        "deviceInfo": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["open", "in_review", "resolved"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "userName", "category", "subject", "description", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -695,6 +742,14 @@
     "/notifications/{notifId}": {
       "schema": { "$ref": "#/entities/UserNotification" },
       "description": "Owner-scoped real-time user notifications across social interactions, follows, messaging, communities, and security alerts."
+    },
+    "/user_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/UserSessionRecord" },
+      "description": "Owner-scoped tracked login sessions and devices."
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "User-submitted support requests and bug reports readable by owner or staff."
     }
   }
 }

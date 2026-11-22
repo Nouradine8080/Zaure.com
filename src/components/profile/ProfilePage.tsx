@@ -493,7 +493,7 @@ export default function ProfilePage({
       {/* ==================================================================== */}
       {/* 1. EN-TÊTE DU PROFIL                                                 */}
       {/* ==================================================================== */}
-      <section className="bg-white border border-slate-200/85 rounded-3xl shadow-[0_2px_10px_-3px_rgba(15,23,42,0.06)] overflow-hidden">
+      <section className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-3xl shadow-[0_2px_10px_-3px_rgba(15,23,42,0.06)] overflow-hidden">
         {/* Large Cover Photo */}
         <div className="relative h-40 sm:h-56 md:h-64 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 overflow-hidden">
           {profile.cover_url ? (

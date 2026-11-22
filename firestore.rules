@@ -149,13 +149,18 @@ service cloud.firestore {
       return val is string && val in ['tous', 'followers', 'cercles', 'mentors', 'personne'];
     }
 
+    function isValidInteractionAudience(val) {
+      return val is string && val in ['tous', 'followers', 'cercles', 'personne'];
+    }
+
     function isValidPrivacySettings(data) {
       return !( 'privacy_settings' in data ) || (
         data.privacy_settings == null || (
           data.privacy_settings is map &&
           data.privacy_settings.keys().hasOnly([
             'profileMode', 'infoVisibility', 'postsVisibility',
-            'followersVisibility', 'followingVisibility', 'communitiesVisibility', 'allowMessages'
+            'followersVisibility', 'followingVisibility', 'communitiesVisibility',
+            'allowMessages', 'allowComments', 'allowMentions'
           ]) &&
           (!( 'profileMode' in data.privacy_settings ) || (data.privacy_settings.profileMode is string && data.privacy_settings.profileMode in ['public', 'private'])) &&
           (!( 'infoVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.infoVisibility)) &&
@@ -163,7 +168,9 @@ service cloud.firestore {
           (!( 'followersVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.followersVisibility)) &&
           (!( 'followingVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.followingVisibility)) &&
           (!( 'communitiesVisibility' in data.privacy_settings ) || isValidPrivacyAudience(data.privacy_settings.communitiesVisibility)) &&
-          (!( 'allowMessages' in data.privacy_settings ) || isValidMessageAudience(data.privacy_settings.allowMessages))
+          (!( 'allowMessages' in data.privacy_settings ) || isValidMessageAudience(data.privacy_settings.allowMessages)) &&
+          (!( 'allowComments' in data.privacy_settings ) || isValidInteractionAudience(data.privacy_settings.allowComments)) &&
+          (!( 'allowMentions' in data.privacy_settings ) || isValidInteractionAudience(data.privacy_settings.allowMentions))
         )
       );
     }
@@ -171,7 +178,7 @@ service cloud.firestore {
     function isValidUserPrivate(data, userId) {
       return data.keys().hasAll(['id', 'nom', 'role', 'langue_preferee']) &&
         data.keys().hasOnly([
-          'id', 'nom', 'username', 'email', 'phone', 'bio', 'avatar_url', 'cover_url',
+          'id', 'nom', 'username', 'email', 'phone', 'date_naissance', 'bio', 'avatar_url', 'cover_url',
           'profession', 'formation', 'localisation', 'site_web', 'infos_complementaires', 'privacy_settings',
           'role', 'langue_preferee', 'created_at', 'availability', 'status_message', 'last_active'
         ]) &&
@@ -183,6 +190,7 @@ service cloud.firestore {
         isOptionalString(data, 'username', 40) &&
         isOptionalString(data, 'email', 200) &&
         isOptionalString(data, 'phone', 32) &&
+        isOptionalString(data, 'date_naissance', 32) &&
         isOptionalString(data, 'bio', 1000) &&
         isOptionalString(data, 'avatar_url', 350000) &&
         isOptionalString(data, 'cover_url', 350000) &&
@@ -240,20 +248,24 @@ service cloud.firestore {
 
     function isValidUserSettings(data) {
       return data.keys().hasOnly([
-        'nom', 'bio', 'avatar_url', 'langue_preferee', 'email',
+        'nom', 'username', 'bio', 'avatar_url', 'langue_preferee', 'email', 'telephone', 'date_naissance',
         'profil_visibilite', 'capsules_visibilite', 'messages_autorises', 'mentorat_autorise',
         'utilisateurs_bloques', 'privacy_settings',
         'notif_capsule', 'notif_message', 'notif_mentorat', 'notif_reaction',
         'notif_comment', 'notif_follower', 'notif_community', 'notif_mention', 'notif_system', 'notif_push_enabled',
         'read_platform_notification_ids', 'dismissed_platform_notification_ids',
         'canal_notif', 'langue_interface', 'traduction_auto', 'telechargement_hors_ligne',
-        'masquer_suggestions', 'mode_faible_consommation', 'taille_texte'
+        'masquer_suggestions', 'theme_mode', 'densite_affichage', 'mode_faible_consommation',
+        'taille_texte', 'contraste_eleve', 'animations_reduites', 'lisibilite_amelioree'
       ]) &&
       isOptionalString(data, 'nom', 120) &&
+      isOptionalString(data, 'username', 40) &&
       isOptionalString(data, 'bio', 1000) &&
       isOptionalString(data, 'avatar_url', 350000) &&
       (!( 'langue_preferee' in data ) || isValidLang(data.langue_preferee)) &&
       isOptionalString(data, 'email', 200) &&
+      isOptionalString(data, 'telephone', 32) &&
+      isOptionalString(data, 'date_naissance', 32) &&
       (!( 'profil_visibilite' in data ) || (data.profil_visibilite is string && data.profil_visibilite in ['public', 'cercles', 'mentors'])) &&
       (!( 'capsules_visibilite' in data ) || (data.capsules_visibilite is string && data.capsules_visibilite in ['public', 'cercles', 'mentors'])) &&
       (!( 'messages_autorises' in data ) || (data.messages_autorises is string && data.messages_autorises in ['tous', 'cercles', 'mentors'])) &&
@@ -280,8 +292,47 @@ service cloud.firestore {
       (!( 'traduction_auto' in data ) || data.traduction_auto is bool) &&
       (!( 'telechargement_hors_ligne' in data ) || data.telechargement_hors_ligne is bool) &&
       (!( 'masquer_suggestions' in data ) || data.masquer_suggestions is bool) &&
+      (!( 'theme_mode' in data ) || (data.theme_mode is string && data.theme_mode in ['light', 'dark', 'system'])) &&
+      (!( 'densite_affichage' in data ) || (data.densite_affichage is string && data.densite_affichage in ['confort', 'compact'])) &&
       (!( 'mode_faible_consommation' in data ) || data.mode_faible_consommation is bool) &&
-      (!( 'taille_texte' in data ) || (data.taille_texte is string && data.taille_texte in ['normal', 'grand', 'tres_grand']));
+      (!( 'taille_texte' in data ) || (data.taille_texte is string && data.taille_texte in ['normal', 'grand', 'tres_grand'])) &&
+      (!( 'contraste_eleve' in data ) || data.contraste_eleve is bool) &&
+      (!( 'animations_reduites' in data ) || data.animations_reduites is bool) &&
+      (!( 'lisibilite_amelioree' in data ) || data.lisibilite_amelioree is bool);
+    }
+
+    function isValidUserSession(data, sessionId) {
+      return data.keys().hasAll(['id', 'userId', 'deviceId', 'deviceName', 'deviceType', 'os', 'browser', 'createdAt', 'lastActiveAt', 'revoked']) &&
+        data.keys().hasOnly(['id', 'userId', 'deviceId', 'deviceName', 'deviceType', 'os', 'browser', 'createdAt', 'lastActiveAt', 'revoked', 'revokedAt']) &&
+        data.id == sessionId &&
+        isValidId(data.id) &&
+        isValidId(data.userId) &&
+        data.deviceId is string && data.deviceId.size() >= 1 && data.deviceId.size() <= 64 &&
+        data.deviceName is string && data.deviceName.size() >= 1 && data.deviceName.size() <= 120 &&
+        data.deviceType is string && data.deviceType in ['desktop', 'mobile', 'tablet'] &&
+        data.os is string && data.os.size() >= 1 && data.os.size() <= 64 &&
+        data.browser is string && data.browser.size() >= 1 && data.browser.size() <= 64 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.lastActiveAt is string && data.lastActiveAt.size() <= 64 &&
+        data.revoked is bool &&
+        isOptionalString(data, 'revokedAt', 64);
+    }
+
+    function isValidSupportTicket(data, ticketId) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'category', 'subject', 'description', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'userId', 'userName', 'userEmail', 'category', 'subject', 'description', 'deviceInfo', 'status', 'createdAt', 'updatedAt']) &&
+        data.id == ticketId &&
+        isValidId(data.id) &&
+        isValidId(data.userId) &&
+        data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120 &&
+        isOptionalString(data, 'userEmail', 200) &&
+        data.category is string && data.category in ['bug', 'contact', 'securite', 'confidentialite', 'autre'] &&
+        data.subject is string && data.subject.size() >= 2 && data.subject.size() <= 160 &&
+        data.description is string && data.description.size() >= 5 && data.description.size() <= 3000 &&
+        isOptionalString(data, 'deviceInfo', 200) &&
+        data.status is string && data.status in ['open', 'in_review', 'resolved'] &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
     }
 
     function isValidCircle(data, circleId) {
@@ -1415,6 +1466,39 @@ service cloud.firestore {
         existing().userId == request.auth.uid &&
         incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
       allow delete: if isValidCompositeId(notifId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 24. User Sessions (Strictly Owner-Only Tracked Devices & Revocation)
+    match /user_sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(sessionId) && isSignedIn() && isValidUserSession(incoming(), sessionId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().revoked == false;
+      allow update: if isValidId(sessionId) && isSignedIn() && isValidUserSession(incoming(), sessionId) && (
+        isAdmin() || (
+          existing().userId == request.auth.uid &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().deviceId == existing().deviceId &&
+          incoming().createdAt == existing().createdAt
+        )
+      );
+      allow delete: if isValidId(sessionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 25. Support Tickets (Owner or Staff Readable, Authenticated Owner Create)
+    match /support_tickets/{ticketId} {
+      allow get: if isValidId(ticketId) && isSignedIn() && (existing().userId == request.auth.uid || isModerator());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isModerator());
+      allow create: if isValidId(ticketId) && isSignedIn() && isValidSupportTicket(incoming(), ticketId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'open';
+      allow update: if isValidId(ticketId) && isModerator() && isValidSupportTicket(incoming(), ticketId) &&
+        incoming().id == existing().id &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(ticketId) && isAdmin();
     }
   }
 }
