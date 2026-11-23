@@ -330,13 +330,13 @@ export default function CapsuleCard({
               </span>
               <span aria-hidden="true" className="text-slate-300">·</span>
               {capsule.circle_id === 'public' ? (
-                <span className="inline-flex items-center gap-1 font-medium text-blue-700">
-                  <Globe className="w-3 h-3" />
+                <span className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-400">
+                  <Globe className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
                   <span>Public</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 font-medium text-slate-600">
-                  <UsersRound className="w-3 h-3 text-slate-400" />
+                <span className="inline-flex items-center gap-1 font-medium text-slate-600 dark:text-slate-400">
+                  <UsersRound className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                   <span className="truncate max-w-[140px]">{capsule.circle_nom}</span>
                 </span>
               )}

@@ -111,6 +111,14 @@ import { AdminPortalRoot } from './admin/AdminPortalRoot';
 import MobileAndroidDrawer from './components/dashboard/MobileAndroidDrawer';
 import DashboardWelcomeAndShortcuts from './components/dashboard/DashboardWelcomeAndShortcuts';
 import {
+  SolidBellIcon,
+  SolidCirclesIcon,
+  SolidCommunitiesIcon,
+  SolidHomeIcon,
+  SolidMessagesIcon,
+  SolidProfileIcon
+} from './components/dashboard/ZaureNavIcons';
+import {
   buildProfilePath,
   parseZaureRoute,
   ProfileRouteTab,
@@ -1435,14 +1443,14 @@ export default function App() {
                 className={`relative min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition ${
                   activeTab === 'notifications'
                     ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
-                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
                 <motion.div
                   animate={notifBadgePulse ? { rotate: [0, -14, 14, -10, 10, 0] } : { rotate: 0 }}
                   transition={{ duration: 0.6 }}
                 >
-                  <Bell className={`w-5 h-5 ${activeTab === 'notifications' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                  <SolidBellIcon className="w-[22px] h-[22px]" />
                 </motion.div>
                 {unreadNotificationsCount > 0 && (
                   <motion.span
@@ -1631,10 +1639,10 @@ export default function App() {
               className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'all' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Newspaper className="w-4 h-4 shrink-0" />
+              <SolidHomeIcon className="w-[18px] h-[18px] shrink-0" />
               <span>Accueil</span>
             </button>
 
@@ -1644,11 +1652,11 @@ export default function App() {
               className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <span className="flex items-center gap-3">
-                <Compass className="w-4 h-4 shrink-0" />
+                <SolidCirclesIcon className="w-[18px] h-[18px] shrink-0" />
                 <span>Cercles</span>
               </span>
               {joinedCircleIds.length > 0 && (
@@ -1662,10 +1670,10 @@ export default function App() {
               className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'communities'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <UsersRound className="w-4 h-4 shrink-0" />
+              <SolidCommunitiesIcon className="w-[18px] h-[18px] shrink-0" />
               <span>Communautés</span>
             </button>
 
@@ -1679,11 +1687,11 @@ export default function App() {
               className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'chat'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <span className="flex items-center gap-3">
-                <MessageCircle className="w-4 h-4 shrink-0" />
+                <SolidMessagesIcon className="w-[18px] h-[18px] shrink-0" />
                 <span>Messages</span>
               </span>
               {unreadMessagesCount > 0 && (
@@ -1702,11 +1710,11 @@ export default function App() {
               className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'notifications'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <span className="flex items-center gap-3">
-                <Bell className="w-4 h-4 shrink-0" />
+                <SolidBellIcon className="w-[18px] h-[18px] shrink-0" />
                 <span>Notifications</span>
               </span>
               {unreadNotificationsCount > 0 && (
@@ -1723,10 +1731,10 @@ export default function App() {
                 className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                   activeTab === 'profile'
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
-                <CircleUserRound className="w-4 h-4 shrink-0" />
+                <SolidProfileIcon className="w-[18px] h-[18px] shrink-0" />
                 <span>Profil</span>
               </button>
             )}
@@ -1737,10 +1745,10 @@ export default function App() {
               className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'settings'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Settings className="w-4 h-4 shrink-0" />
+              <Settings className="w-[18px] h-[18px] shrink-0" />
               <span>{t('nav.settings')}</span>
             </button>
 
@@ -1755,7 +1763,7 @@ export default function App() {
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <Bookmark className="w-4 h-4 text-blue-600 shrink-0" />
+                  <Bookmark className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
                   <span>Enregistrés</span>
                 </span>
                 {bookmarkedIds.length > 0 && (
@@ -1773,7 +1781,7 @@ export default function App() {
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <Award className="w-4 h-4 text-amber-500 shrink-0" />
+                  <Award className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
                   <span>Mentors</span>
                 </span>
                 <span className="font-mono text-[10px] text-slate-500">{mentorsList.length}</span>
@@ -1783,7 +1791,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setShowCreateCircle(true)}
-                  className="w-full min-h-[38px] flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition"
+                  className="w-full min-h-[38px] flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/50 transition"
                 >
                   <Plus className="w-4 h-4 shrink-0" />
                   <span>Créer un Cercle</span>
@@ -3103,14 +3111,14 @@ export default function App() {
           className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
               ? 'text-blue-600 dark:text-blue-400 font-bold'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Accueil"
         >
-          <Newspaper className={`w-5 h-5 shrink-0 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <SolidHomeIcon className="w-[22px] h-[22px] shrink-0" />
           <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Accueil</span>
           {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' && (
-            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+            <span className="w-8 h-0.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
 
@@ -3121,14 +3129,14 @@ export default function App() {
           className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
               ? 'text-blue-600 dark:text-blue-400 font-bold'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Cercles"
         >
-          <Compass className={`w-5 h-5 shrink-0 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <SolidCirclesIcon className="w-[22px] h-[22px] shrink-0" />
           <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Cercles</span>
           {activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') && (
-            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+            <span className="w-8 h-0.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
 
@@ -3139,14 +3147,14 @@ export default function App() {
           className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'communities'
               ? 'text-blue-600 dark:text-blue-400 font-bold'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Communautés"
         >
-          <UsersRound className={`w-5 h-5 shrink-0 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-          <span className="text-[9px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Communautés</span>
+          <SolidCommunitiesIcon className="w-[22px] h-[22px] shrink-0" />
+          <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Communautés</span>
           {activeTab === 'communities' && (
-            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+            <span className="w-8 h-0.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
 
@@ -3161,12 +3169,12 @@ export default function App() {
           className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'chat'
               ? 'text-blue-600 dark:text-blue-400 font-bold'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Messages"
         >
           <div className="relative">
-            <MessageCircle className={`w-5 h-5 shrink-0 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+            <SolidMessagesIcon className="w-[22px] h-[22px] shrink-0" />
             {unreadMessagesCount > 0 && (
               <span className="absolute -top-1.5 -right-2 bg-red-600 text-white text-[9px] font-black min-w-[15px] h-3.5 px-1 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 tabular-nums">
                 {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
@@ -3175,7 +3183,7 @@ export default function App() {
           </div>
           <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Messages</span>
           {activeTab === 'chat' && (
-            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+            <span className="w-8 h-0.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
 
@@ -3193,12 +3201,12 @@ export default function App() {
           className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'notifications'
               ? 'text-blue-600 dark:text-blue-400 font-bold'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Notifications"
         >
           <div className="relative">
-            <Bell className={`w-5 h-5 shrink-0 ${activeTab === 'notifications' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+            <SolidBellIcon className="w-[22px] h-[22px] shrink-0" />
             {unreadNotificationsCount > 0 && (
               <span className="absolute -top-1.5 -right-2 bg-red-600 text-white text-[9px] font-black min-w-[15px] h-3.5 px-1 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 tabular-nums">
                 {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
@@ -3207,7 +3215,7 @@ export default function App() {
           </div>
           <span className="text-[9px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Notifications</span>
           {activeTab === 'notifications' && (
-            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+            <span className="w-8 h-0.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
 
@@ -3224,14 +3232,14 @@ export default function App() {
           className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'profile'
               ? 'text-blue-600 dark:text-blue-400 font-bold'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Profil"
         >
-          <CircleUserRound className={`w-5 h-5 shrink-0 ${activeTab === 'profile' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <SolidProfileIcon className="w-[22px] h-[22px] shrink-0" />
           <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Profil</span>
           {activeTab === 'profile' && (
-            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+            <span className="w-8 h-0.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
       </nav>

@@ -473,13 +473,13 @@ export default function CommunityPostCard({
               </span>
               <span aria-hidden="true" className="text-slate-300">·</span>
               {isPublicFeed ? (
-                <span className="inline-flex items-center gap-1 text-blue-700 font-medium">
-                  <Globe className="w-3 h-3" />
+                <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 font-medium">
+                  <Globe className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
                   <span>Public</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
-                  <UsersRound className="w-3 h-3 text-slate-400" />
+                <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 font-medium">
+                  <UsersRound className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                   <span className="truncate max-w-[160px]">{group.name}</span>
                 </span>
               )}
