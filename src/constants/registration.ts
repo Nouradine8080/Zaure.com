@@ -1,14 +1,12 @@
 export const REGISTRATION_ROUTES = {
   BASE: '/inscription',
   IDENTITE: '/inscription/identite',
-  VOCATION: '/inscription/vocation',
-  CERCLES_AVATAR: '/inscription/cercles-avatar',
 } as const;
 
-export type RegistrationRoute =
-  | typeof REGISTRATION_ROUTES.IDENTITE
-  | typeof REGISTRATION_ROUTES.VOCATION
-  | typeof REGISTRATION_ROUTES.CERCLES_AVATAR;
+export type RegistrationRoute = typeof REGISTRATION_ROUTES.IDENTITE;
+
+export const DEFAULT_AVATAR_URL =
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200';
 
 export type VocationSpecialty = 'medecine' | 'mentor' | 'etudiant' | 'chercheur';
 export type ProfileRole = 'utilisateur' | 'mentor' | 'verifie';

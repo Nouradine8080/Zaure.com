@@ -31,13 +31,8 @@ import {
   Eye,
   EyeOff,
   Mail,
-  ArrowRight,
-  Stethoscope,
-  GraduationCap,
-  Lightbulb,
-  Microscope,
+  Phone,
   UserCheck,
-  Camera,
   Image as ImageIcon,
   BarChart2,
   Globe,
@@ -50,7 +45,6 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence, MotionConfig } from 'motion/react';
-import { compressImageFile } from './utils/imageCompressor';
 import { isFirebaseAuthSettled, zaureService } from './firebaseClient';
 import { communityService, PUBLIC_FEED_GROUP } from './services/communityService';
 import { notificationService } from './services/notificationService';
@@ -80,12 +74,20 @@ import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
 import CircleGroupPage from './components/CircleGroupPage';
 import AuthPortal from './components/AuthPortal';
+import ZaureLandingPage from './components/ZaureLandingPage';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { RegistrationProvider } from './context/RegistrationContext';
+import {
+  RegistrationProvider,
+  buildInternationalPhone,
+  isValidEmailFormat
+} from './context/RegistrationContext';
 import { RegistrationIdentityPage } from './components/registration/RegistrationIdentityPage';
-import { RegistrationVocationPage } from './components/registration/RegistrationVocationPage';
-import { RegistrationCirclesAvatarPage } from './components/registration/RegistrationCirclesAvatarPage';
-import { REGISTRATION_ROUTES } from './constants/registration';
+import {
+  COUNTRY_DIAL_CODES,
+  DEFAULT_AVATAR_URL,
+  REGISTRATION_ROUTES
+} from './constants/registration';
+import LegalDocumentModal from './components/settings/LegalDocumentModal';
 import CommunitiesHub from './components/communities/CommunitiesHub';
 import CommunityPostComposer from './components/communities/CommunityPostComposer';
 import CommunityPostCard from './components/communities/CommunityPostCard';
@@ -101,39 +103,6 @@ import {
   ProfileRouteTab,
   SettingsRouteCategory
 } from './utils/zaureRoutes';
-
-const AVATAR_PRESETS = [
-  {
-    id: 'med-student-1',
-    label: 'Étudiant Santé',
-    url: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'med-student-2',
-    label: 'Étudiante Santé',
-    url: 'https://images.unsplash.com/photo-1594824813589-9800e84b2e15?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'scholar-1',
-    label: 'Apprenant Universitaire',
-    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'mentor-1',
-    label: 'Mentor & Enseignant',
-    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'practitioner-1',
-    label: 'Praticienne Spécialiste',
-    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200'
-  },
-  {
-    id: 'tech-1',
-    label: 'Innovateur Digital',
-    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200'
-  }
-];
 
 export default function App() {
   const { t, language, setLanguage } = useTranslation();
@@ -297,35 +266,16 @@ export default function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Multi-step Auth form states
+  // Single-step Auth form states
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
   const [authNom, setAuthNom] = useState('');
-  const [authBio, setAuthBio] = useState('');
-  const [authRole, setAuthRole] = useState<'utilisateur' | 'mentor' | 'verifie'>('utilisateur');
-  const [authSpecialty, setAuthSpecialty] = useState<'medecine' | 'mentor' | 'etudiant' | 'chercheur'>('medecine');
-  const [authLangue, setAuthLangue] = useState<'fr' | 'ha' | 'en'>('fr');
-  const [authAvatarUrl, setAuthAvatarUrl] = useState<string>(AVATAR_PRESETS[0].url);
-  const [authSelectedCircleIds, setAuthSelectedCircleIds] = useState<string[]>([]);
-  const [signupStep, setSignupStep] = useState<number>(1);
-  const [isCompressingAuthAvatar, setIsCompressingAuthAvatar] = useState(false);
-  const authAvatarFileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAuthAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      setIsCompressingAuthAvatar(true);
-      const dataUrl = await compressImageFile(file, 250, 250, 0.8);
-      setAuthAvatarUrl(dataUrl);
-    } catch (err: any) {
-      setAuthError(err.message || 'Erreur lors du traitement de la photo.');
-    } finally {
-      setIsCompressingAuthAvatar(false);
-      if (authAvatarFileInputRef.current) authAvatarFileInputRef.current.value = '';
-    }
-  };
+  const [authCountryCode, setAuthCountryCode] = useState('NE');
+  const [authDialCode, setAuthDialCode] = useState('+227');
+  const [authPhoneLocal, setAuthPhoneLocal] = useState('');
+  const [authAcceptedTerms, setAuthAcceptedTerms] = useState(false);
+  const [authLegalDoc, setAuthLegalDoc] = useState<'terms' | 'privacy' | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -614,96 +564,44 @@ export default function App() {
     setAuthPassword('');
     setAuthPasswordConfirm('');
     setAuthNom('');
-    setAuthBio('');
-    setAuthRole('utilisateur');
-    setAuthSpecialty('medecine');
-    setAuthLangue('fr');
-    setAuthAvatarUrl(AVATAR_PRESETS[0].url);
-    setAuthSelectedCircleIds([]);
-    setSignupStep(1);
+    setAuthCountryCode('NE');
+    setAuthDialCode('+227');
+    setAuthPhoneLocal('');
+    setAuthAcceptedTerms(false);
+    setAuthLegalDoc(null);
     setShowPassword(false);
     setAuthError(null);
   };
 
-  const handleSpecialtySelect = (spec: 'medecine' | 'mentor' | 'etudiant' | 'chercheur') => {
-    setAuthSpecialty(spec);
-    if (spec === 'medecine') {
-      setAuthRole('verifie');
-      if (!authBio || authBio.startsWith('Étudiant') || authBio.startsWith('Mentor') || authBio.startsWith('Chercheur') || authBio.startsWith('Membre') || authBio.startsWith('Apprenant')) {
-        setAuthBio('Étudiant en médecine passionné par la clinique, la pharmacologie et l\'entraide médicale.');
-      }
-    } else if (spec === 'mentor') {
-      setAuthRole('mentor');
-      if (!authBio || authBio.startsWith('Étudiant') || authBio.startsWith('Mentor') || authBio.startsWith('Chercheur') || authBio.startsWith('Membre') || authBio.startsWith('Apprenant')) {
-        setAuthBio('Enseignant & mentor guidant les apprenants dans l\'assimilation des concepts clés.');
-      }
-    } else if (spec === 'chercheur') {
-      setAuthRole('verifie');
-      if (!authBio || authBio.startsWith('Étudiant') || authBio.startsWith('Mentor') || authBio.startsWith('Chercheur') || authBio.startsWith('Membre') || authBio.startsWith('Apprenant')) {
-        setAuthBio('Chercheur et praticien partageant les avancées scientifiques et méthodologies.');
-      }
-    } else {
-      setAuthRole('utilisateur');
-      if (!authBio || authBio.startsWith('Étudiant') || authBio.startsWith('Mentor') || authBio.startsWith('Chercheur') || authBio.startsWith('Membre') || authBio.startsWith('Apprenant')) {
-        setAuthBio('Apprenant curieux explorant les savoirs et participant aux cercles thématiques.');
-      }
-    }
-  };
-
-  const toggleAuthCircleSelect = (circleId: string) => {
-    setAuthSelectedCircleIds(prev => 
-      prev.includes(circleId) ? prev.filter(id => id !== circleId) : [...prev, circleId]
-    );
-  };
-
-  const handleNextStep = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleAuthSelectCountry = (countryCode: string) => {
+    const match = COUNTRY_DIAL_CODES.find((c) => c.code === countryCode);
+    if (!match) return;
+    setAuthCountryCode(match.code);
+    setAuthDialCode(match.dial);
     setAuthError(null);
-
-    if (signupStep === 1) {
-      if (!authNom.trim()) {
-        setAuthError('Veuillez renseigner votre nom complet.');
-        return;
-      }
-      if (!authEmail.trim() || !authEmail.includes('@')) {
-        setAuthError('Veuillez saisir une adresse email valide.');
-        return;
-      }
-      if (!authPassword || authPassword.length < 6) {
-        setAuthError('Le mot de passe doit comporter au moins 6 caractères.');
-        return;
-      }
-      if (authPasswordConfirm && authPassword !== authPasswordConfirm) {
-        setAuthError('Les deux mots de passe ne correspondent pas.');
-        return;
-      }
-      setSignupStep(2);
-    } else if (signupStep === 2) {
-      if (!authBio.trim()) {
-        handleSpecialtySelect(authSpecialty);
-      }
-      // Auto select appropriate circles if empty
-      if (authSelectedCircleIds.length === 0 && circles.length > 0) {
-        const medCircles = circles.filter(c => 
-          c.categorie === 'Médecine' || 
-          c.nom.toLowerCase().includes('santé') || 
-          c.nom.toLowerCase().includes('méd')
-        );
-        if (medCircles.length > 0) {
-          setAuthSelectedCircleIds(medCircles.map(c => c.id));
-        } else {
-          setAuthSelectedCircleIds(circles.slice(0, 2).map(c => c.id));
-        }
-      }
-      setSignupStep(3);
-    }
   };
 
-  const handlePrevStep = () => {
+  const handleAuthPhoneLocalChange = (value: string) => {
     setAuthError(null);
-    if (signupStep > 1) {
-      setSignupStep(signupStep - 1);
+    const trimmed = value.trimStart();
+    if (trimmed.startsWith('+')) {
+      const sorted = [...COUNTRY_DIAL_CODES]
+        .filter((c) => c.dial !== '+')
+        .sort((a, b) => b.dial.length - a.dial.length);
+      const compact = '+' + trimmed.replace(/[^\d]/g, '');
+      const matched = sorted.find((c) => compact.startsWith(c.dial));
+      if (matched) {
+        setAuthCountryCode(matched.code);
+        setAuthDialCode(matched.dial);
+        setAuthPhoneLocal(compact.slice(matched.dial.length));
+        return;
+      }
+      setAuthCountryCode('OTHER');
+      setAuthDialCode('+');
+      setAuthPhoneLocal(compact.slice(1));
+      return;
     }
+    setAuthPhoneLocal(value.replace(/[^\d\s-]/g, ''));
   };
 
   // Auth Submit
@@ -712,47 +610,71 @@ export default function App() {
     setAuthError(null);
 
     if (isSignUp) {
-      if (signupStep < 3) {
-        handleNextStep();
+      if (!authNom.trim() || authNom.trim().length < 2) {
+        setAuthError('Veuillez renseigner votre nom et prénom (au moins 2 caractères).');
+        return;
+      }
+      if (!authEmail.trim() || !isValidEmailFormat(authEmail)) {
+        setAuthError('Veuillez saisir une adresse e-mail valide.');
+        return;
+      }
+      const fullPhone = buildInternationalPhone(authDialCode, authPhoneLocal);
+      const digitsCount = fullPhone.replace(/[^\d]/g, '').length;
+      if (!fullPhone.startsWith('+') || digitsCount < 8 || digitsCount > 15) {
+        setAuthError('Veuillez saisir un numéro de téléphone valide avec l’indicatif du pays.');
+        return;
+      }
+      if (!authPassword || authPassword.length < 6) {
+        setAuthError('Le mot de passe doit contenir au moins 6 caractères.');
+        return;
+      }
+      if (!authPasswordConfirm) {
+        setAuthError('Veuillez confirmer votre mot de passe.');
+        return;
+      }
+      if (authPassword !== authPasswordConfirm) {
+        setAuthError('Les deux mots de passe ne correspondent pas.');
+        return;
+      }
+      if (!authAcceptedTerms) {
+        setAuthError("Veuillez accepter les conditions d'utilisation et la politique de confidentialité.");
         return;
       }
 
       setAuthLoading(true);
       try {
-        const finalBio = authBio.trim() || (
-          authSpecialty === 'medecine' 
-            ? 'Étudiant en médecine passionné par la clinique et l\'entraide médicale.' 
-            : 'Membre actif sur Zaure.'
-        );
+        const normalizedEmail = authEmail.trim().toLowerCase();
+        const check = await zaureService.checkEmailAvailable(normalizedEmail);
+        if (!check.available) {
+          setAuthError(
+            check.error ||
+              'Cette adresse e-mail est déjà utilisée par un autre compte. Veuillez vous connecter.'
+          );
+          return;
+        }
 
         const { user, error } = await zaureService.signUp(
-          authNom.trim(), 
-          authEmail.trim(), 
-          finalBio, 
-          authRole, 
-          authLangue, 
+          authNom.trim(),
+          normalizedEmail,
+          '',
+          'utilisateur',
+          'fr',
           authPassword,
-          authAvatarUrl
+          DEFAULT_AVATAR_URL,
+          fullPhone
         );
 
         if (error) {
           setAuthError(error);
-          setAuthLoading(false);
           return;
         }
 
         if (user) {
           setCurrentUser(user);
-          // Join selected circles automatically
-          if (authSelectedCircleIds.length > 0) {
-            for (const cId of authSelectedCircleIds) {
-              await zaureService.joinCircle(cId, user.id);
-            }
-          }
-          const joined = await zaureService.getJoinedCircleIds(user.id);
-          setJoinedCircleIds(joined);
+          setJoinedCircleIds([]);
           setShowAuthModal(false);
           resetAuthForm();
+          navigate('/feed', { replace: true });
         }
       } catch (err: any) {
         setAuthError(err.message || 'Erreur lors de la création du compte.');
@@ -1204,7 +1126,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (currentUser && location.pathname.startsWith(REGISTRATION_ROUTES.BASE)) {
+    if (
+      currentUser &&
+      (location.pathname.startsWith(REGISTRATION_ROUTES.BASE) ||
+        location.pathname === '/connexion' ||
+        location.pathname === '/login')
+    ) {
       navigate('/feed', { replace: true });
     }
   }, [currentUser, location.pathname, navigate]);
@@ -1212,7 +1139,12 @@ export default function App() {
   const handleAuthSuccess = (user: UserProfile) => {
     setCurrentUser(user);
     zaureService.getJoinedCircleIds(user.id).then(setJoinedCircleIds).catch(() => {});
-    if (location.pathname.startsWith(REGISTRATION_ROUTES.BASE)) {
+    if (
+      location.pathname === '/' ||
+      location.pathname === '/connexion' ||
+      location.pathname === '/login' ||
+      location.pathname.startsWith(REGISTRATION_ROUTES.BASE)
+    ) {
       navigate('/feed', { replace: true });
     }
   };
@@ -1245,31 +1177,41 @@ export default function App() {
     );
   }
 
-  // 2. Page protection & Independent Multi-Page Registration Routes (preserves requested URL on reload/deep link)
+  // 2. Public Landing Page, Login Portal (/connexion) & Single-Step Registration
   if (!currentUser) {
     return (
       <RegistrationProvider>
         <Routes>
+          <Route path="/" element={<ZaureLandingPage />} />
+          <Route
+            path="/connexion"
+            element={
+              <AuthPortal
+                circles={circles}
+                onAuthSuccess={handleAuthSuccess}
+              />
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <AuthPortal
+                circles={circles}
+                onAuthSuccess={handleAuthSuccess}
+              />
+            }
+          />
           <Route
             path={REGISTRATION_ROUTES.BASE}
             element={<Navigate to={REGISTRATION_ROUTES.IDENTITE} replace />}
           />
           <Route
             path={REGISTRATION_ROUTES.IDENTITE}
-            element={<RegistrationIdentityPage />}
+            element={<RegistrationIdentityPage onRegistrationSuccess={handleAuthSuccess} />}
           />
           <Route
-            path={REGISTRATION_ROUTES.VOCATION}
-            element={<RegistrationVocationPage circles={circles} />}
-          />
-          <Route
-            path={REGISTRATION_ROUTES.CERCLES_AVATAR}
-            element={
-              <RegistrationCirclesAvatarPage
-                circles={circles}
-                onRegistrationSuccess={handleAuthSuccess}
-              />
-            }
+            path="/inscription/*"
+            element={<Navigate to={REGISTRATION_ROUTES.IDENTITE} replace />}
           />
           <Route
             path="*"
@@ -3466,14 +3408,14 @@ export default function App() {
       )}
 
       {/* ============================================================ */}
-      {/* 5. MODAL : AUTHENTIFICATION AVEC INSCRIPTION EN 3 ÉTAPES     */}
+      {/* 5. MODAL : AUTHENTIFICATION & INSCRIPTION RAPIDE (1 ÉTAPE)    */}
       {/* ============================================================ */}
       {showAuthModal && (
         <div 
           className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn overflow-y-auto" 
           id="auth-modal-screen"
         >
-          <div className={`bg-white rounded-3xl ${isSignUp ? 'max-w-xl' : 'max-w-md'} w-full p-5 sm:p-7 shadow-2xl border border-slate-100 my-auto transition-all`}>
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-7 shadow-2xl border border-slate-100 my-auto transition-all">
             {/* Modal Top Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
@@ -3487,7 +3429,7 @@ export default function App() {
                     <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md">Plateforme du Savoir</span>
                   </div>
                   <p className="text-[11px] text-slate-500 font-medium">
-                    {isSignUp ? "Création de compte guidée" : "Espace de connexion membre"}
+                    {isSignUp ? "Identité & Sécurité" : "Espace de connexion membre"}
                   </p>
                 </div>
               </div>
@@ -3534,97 +3476,9 @@ export default function App() {
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Créer un compte (3 étapes)</span>
+                <span>Créer un compte</span>
               </button>
             </div>
-
-            {/* Inscription Stepper Bar */}
-            {isSignUp && (
-              <div className="mb-4 pt-1">
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-2 px-1">
-                  <button
-                    type="button"
-                    onClick={() => setSignupStep(1)}
-                    className={`flex items-center gap-1.5 transition ${
-                      signupStep === 1 
-                        ? 'text-blue-700 font-extrabold' 
-                        : signupStep > 1 
-                          ? 'text-emerald-700' 
-                          : 'text-slate-400'
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                      signupStep === 1 
-                        ? 'bg-blue-600 text-white shadow-xs' 
-                        : signupStep > 1 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-slate-200 text-slate-600'
-                    }`}>
-                      {signupStep > 1 ? <Check className="w-3 h-3" /> : '1'}
-                    </span>
-                    <span>1. Identité</span>
-                  </button>
-
-                  <div className={`flex-1 h-0.5 mx-2 ${signupStep > 1 ? 'bg-blue-600' : 'bg-slate-200'} transition-colors`}></div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (authNom && authEmail && authPassword) setSignupStep(2);
-                    }}
-                    className={`flex items-center gap-1.5 transition ${
-                      signupStep === 2 
-                        ? 'text-blue-700 font-extrabold' 
-                        : signupStep > 2 
-                          ? 'text-emerald-700' 
-                          : 'text-slate-400'
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                      signupStep === 2 
-                        ? 'bg-blue-600 text-white shadow-xs' 
-                        : signupStep > 2 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-slate-200 text-slate-600'
-                    }`}>
-                      {signupStep > 2 ? <Check className="w-3 h-3" /> : '2'}
-                    </span>
-                    <span>2. Vocation</span>
-                  </button>
-
-                  <div className={`flex-1 h-0.5 mx-2 ${signupStep > 2 ? 'bg-blue-600' : 'bg-slate-200'} transition-colors`}></div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (authNom && authEmail && authPassword) setSignupStep(3);
-                    }}
-                    className={`flex items-center gap-1.5 transition ${
-                      signupStep === 3 
-                        ? 'text-blue-700 font-extrabold' 
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                      signupStep === 3 
-                        ? 'bg-blue-600 text-white shadow-xs' 
-                        : 'bg-slate-200 text-slate-600'
-                    }`}>
-                      3
-                    </span>
-                    <span>3. Cercles & Avatar</span>
-                  </button>
-                </div>
-
-                {/* Progress track */}
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-blue-600 via-blue-700 to-red-600 transition-all duration-300 rounded-full"
-                    style={{ width: signupStep === 1 ? '33.3%' : signupStep === 2 ? '66.6%' : '100%' }}
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Error Message */}
             {authError && (
@@ -3634,11 +3488,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ========================================= */}
-            {/* FORMULAIRE PRINCIPAL                      */}
-            {/* ========================================= */}
-            <form onSubmit={handleAuthSubmit} className="space-y-3.5">
-              
+            <form onSubmit={handleAuthSubmit} className="space-y-3.5" noValidate>
               {/* --- CAS 1 : CONNEXION DIRECTE --- */}
               {!isSignUp && (
                 <>
@@ -3726,34 +3576,15 @@ export default function App() {
                     </svg>
                     <span>Continuer avec Google</span>
                   </button>
-
-                  <div className="text-center pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSignUp(true);
-                        setSignupStep(1);
-                        setAuthError(null);
-                      }}
-                      className="text-xs text-blue-700 hover:text-blue-800 font-bold hover:underline"
-                    >
-                      Pas encore de compte ? S'inscrire en 3 étapes
-                    </button>
-                  </div>
                 </>
               )}
 
-              {/* --- CAS 2 : INSCRIPTION ÉTAPE 1 : IDENTIFIANTS --- */}
-              {isSignUp && signupStep === 1 && (
+              {/* --- CAS 2 : INSCRIPTION SIMPLE EN UNE ÉTAPE --- */}
+              {isSignUp && (
                 <div className="space-y-3 animate-fadeIn">
-                  <div className="bg-blue-50/60 border border-blue-100 p-3 rounded-2xl">
-                    <p className="text-xs font-bold text-blue-900">Étape 1 sur 3 : Identité & Sécurité</p>
-                    <p className="text-[11px] text-blue-700 mt-0.5">Renseignez votre nom et définissez vos identifiants d'accès.</p>
-                  </div>
-
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      Nom complet <span className="text-red-500">*</span>
+                      Nom et prénom <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -3772,7 +3603,7 @@ export default function App() {
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      Adresse email <span className="text-red-500">*</span>
+                      Adresse e-mail <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -3789,13 +3620,47 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                      Numéro de téléphone <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        aria-label="Pays et indicatif téléphonique"
+                        value={authCountryCode}
+                        onChange={(e) => handleAuthSelectCountry(e.target.value)}
+                        className="w-[140px] shrink-0 text-[11px] font-bold px-2.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-800 bg-[#F0F2F5] focus:bg-white transition"
+                      >
+                        {COUNTRY_DIAL_CODES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.flag} {c.name} ({c.dial})
+                          </option>
+                        ))}
+                      </select>
+                      <div className="relative flex-1 flex items-center border border-slate-200 rounded-xl bg-[#F0F2F5] focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-600 overflow-hidden">
+                        <span className="pl-2.5 pr-2 py-2.5 text-[11px] font-extrabold text-blue-700 bg-blue-50/70 border-r border-slate-200 flex items-center gap-1 shrink-0">
+                          <Phone className="w-3 h-3" />
+                          <span>{authDialCode}</span>
+                        </span>
+                        <input
+                          type="tel"
+                          placeholder="90 12 34 56"
+                          required
+                          value={authPhoneLocal}
+                          onChange={(e) => handleAuthPhoneLocalChange(e.target.value)}
+                          className="w-full text-xs px-2.5 py-2.5 bg-transparent focus:outline-none text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-600 mb-1">
                         Mot de passe <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                           <Lock className="w-4 h-4" />
                         </div>
                         <input
@@ -3804,7 +3669,7 @@ export default function App() {
                           required
                           value={authPassword}
                           onChange={(e) => setAuthPassword(e.target.value)}
-                          className="w-full text-xs pl-10 pr-10 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F0F2F5] focus:bg-white transition"
+                          className="w-full text-xs pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F0F2F5] focus:bg-white transition"
                         />
                         <button
                           type="button"
@@ -3818,408 +3683,78 @@ export default function App() {
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                        Confirmer mot de passe
+                        Confirmation du mot de passe <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                           <Lock className="w-4 h-4" />
                         </div>
                         <input
                           type={showPassword ? 'text' : 'password'}
                           placeholder="Répétez le mot de passe"
+                          required
                           value={authPasswordConfirm}
                           onChange={(e) => setAuthPasswordConfirm(e.target.value)}
-                          className="w-full text-xs pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F0F2F5] focus:bg-white transition"
+                          className="w-full text-xs pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F0F2F5] focus:bg-white transition"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleNextStep()}
-                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-2"
-                    >
-                      <span>Continuer vers l'Étape 2 (Profil & Rôle)</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="relative flex py-1 items-center">
-                    <div className="flex-grow border-t border-slate-200"></div>
-                    <span className="flex-shrink mx-3 text-[10px] text-slate-400 uppercase font-bold tracking-wider">OU</span>
-                    <div className="flex-grow border-t border-slate-200"></div>
-                  </div>
+                  <label className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50/70 text-[11px] text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={authAcceptedTerms}
+                      onChange={(e) => setAuthAcceptedTerms(e.target.checked)}
+                      required
+                      className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-600 shrink-0"
+                    />
+                    <span className="leading-snug">
+                      J'accepte les{' '}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAuthLegalDoc('terms');
+                        }}
+                        className="font-bold text-blue-700 underline"
+                      >
+                        conditions d'utilisation
+                      </button>{' '}
+                      et la{' '}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAuthLegalDoc('privacy');
+                        }}
+                        className="font-bold text-blue-700 underline"
+                      >
+                        politique de confidentialité
+                      </button>
+                      . <span className="text-red-500">*</span>
+                    </span>
+                  </label>
 
                   <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    className="w-full py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 rounded-xl transition shadow-xs flex items-center justify-center gap-2"
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <path fill="#EA4335" d="M12 5.04c1.5 0 2.85.51 3.9 1.5l2.9-2.9C17.05 1.9 14.7 1 12 1 7.35 1 3.4 3.65 1.5 7.5l3.5 2.7C5.85 6.95 8.7 5.04 12 5.04z" />
-                      <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.46-1.1 2.69-2.34 3.52l3.63 2.82c2.13-1.97 3.36-4.87 3.36-8.47z" />
-                      <path fill="#FBBC05" d="M5 14.8c-.25-.75-.39-1.55-.39-2.38s.14-1.63.39-2.38L1.5 7.34C.55 9.24 0 11.36 0 13.6s.55 4.36 1.5 6.26l3.5-2.06z" />
-                      <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.63-2.82c-1.01.68-2.3 1.09-3.9 1.09-3.3 0-6.15-1.91-7.15-4.78l-3.5 2.7C3.4 20.35 7.35 23 12 23z" />
-                    </svg>
-                    <span>Inscription rapide avec Google</span>
+                    {authLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        Création en cours...
+                      </span>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>Créer mon compte</span>
+                      </>
+                    )}
                   </button>
-                </div>
-              )}
-
-              {/* --- CAS 2 : INSCRIPTION ÉTAPE 2 : VOCATION & PROFIL --- */}
-              {isSignUp && signupStep === 2 && (
-                <div className="space-y-3.5 animate-fadeIn">
-                  <div className="bg-blue-50/60 border border-blue-100 p-3 rounded-2xl">
-                    <p className="text-xs font-bold text-blue-900">Étape 2 sur 3 : Vocation & Profil Académique</p>
-                    <p className="text-[11px] text-blue-700 mt-0.5">Choisissez votre statut sur la plateforme pour adapter vos cercles et vos échanges.</p>
-                  </div>
-
-                  {/* Specialty Selection Cards */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                      Quel est votre profil principal ?
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {/* Option 1: Étudiant Médecine / Santé */}
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('medecine')}
-                        className={`p-3 rounded-2xl border text-left transition flex items-start gap-2.5 ${
-                          authSpecialty === 'medecine'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/30'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`p-2 rounded-xl ${authSpecialty === 'medecine' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          <Stethoscope className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-slate-900">Étudiant Santé</span>
-                            <span className="text-[9px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">Praticien</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                            Médecine, pharmacie, biologie clinique & fiches d'étude.
-                          </p>
-                        </div>
-                      </button>
-
-                      {/* Option 2: Enseignant / Mentor */}
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('mentor')}
-                        className={`p-3 rounded-2xl border text-left transition flex items-start gap-2.5 ${
-                          authSpecialty === 'mentor'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/30'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`p-2 rounded-xl ${authSpecialty === 'mentor' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          <GraduationCap className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-slate-900">Enseignant / Mentor</span>
-                            <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">Mentor</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                            Transmission pédagogique, cours magistraux & méthodes.
-                          </p>
-                        </div>
-                      </button>
-
-                      {/* Option 3: Curieux & Apprenant */}
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('etudiant')}
-                        className={`p-3 rounded-2xl border text-left transition flex items-start gap-2.5 ${
-                          authSpecialty === 'etudiant'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/30'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`p-2 rounded-xl ${authSpecialty === 'etudiant' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          <Lightbulb className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-slate-900">Curieux & Apprenant</span>
-                            <span className="text-[9px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full">Membre</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                            Apprentissage général, questions & entraide partagée.
-                          </p>
-                        </div>
-                      </button>
-
-                      {/* Option 4: Chercheur / Praticien */}
-                      <button
-                        type="button"
-                        onClick={() => handleSpecialtySelect('chercheur')}
-                        className={`p-3 rounded-2xl border text-left transition flex items-start gap-2.5 ${
-                          authSpecialty === 'chercheur'
-                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/30'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`p-2 rounded-xl ${authSpecialty === 'chercheur' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          <Microscope className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-slate-900">Chercheur / Spécialiste</span>
-                            <span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full">Expert</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-                            Veille scientifique, revues cliniques et protocoles.
-                          </p>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Bio Field with preset suggestions */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Votre biographie ou domaine d'étude
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthBio("Étudiant en médecine passionné par la clinique, la cardiologie et l'accès universel au savoir.");
-                        }}
-                        className="text-[10px] font-bold text-blue-700 hover:underline"
-                      >
-                        + Exemple médical
-                      </button>
-                    </div>
-                    <textarea
-                      rows={2}
-                      placeholder="Ex: Étudiant en médecine, passionné par la sémiologie et les cas pratiques..."
-                      value={authBio}
-                      onChange={(e) => setAuthBio(e.target.value)}
-                      className="w-full text-xs px-3.5 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F0F2F5] focus:bg-white transition"
-                    />
-                  </div>
-
-                  {/* Language selection */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Langue préférée pour les savoirs
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setAuthLangue('fr')}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                          authLangue === 'fr'
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                            : 'bg-[#F0F2F5] text-slate-700 border-slate-200 hover:bg-slate-200/70'
-                        }`}
-                      >
-                        <span>🇫🇷 Français</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAuthLangue('ha')}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                          authLangue === 'ha'
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                            : 'bg-[#F0F2F5] text-slate-700 border-slate-200 hover:bg-slate-200/70'
-                        }`}
-                      >
-                        <span>🌍 Hausa</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAuthLangue('en')}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                          authLangue === 'en'
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                            : 'bg-[#F0F2F5] text-slate-700 border-slate-200 hover:bg-slate-200/70'
-                        }`}
-                      >
-                        <span>🇬🇧 English</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Navigation Buttons */}
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={handlePrevStep}
-                      className="px-4 py-2.5 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-bold transition"
-                    >
-                      ← Précédent
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNextStep()}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-2"
-                    >
-                      <span>Continuer vers l'Étape 3 (Cercles)</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* --- CAS 2 : INSCRIPTION ÉTAPE 3 : CERCLES & AVATAR --- */}
-              {isSignUp && signupStep === 3 && (
-                <div className="space-y-3.5 animate-fadeIn">
-                  <div className="bg-blue-50/60 border border-blue-100 p-3 rounded-2xl">
-                    <p className="text-xs font-bold text-blue-900">Étape 3 sur 3 : Avatar & Vos Premiers Cercles</p>
-                    <p className="text-[11px] text-blue-700 mt-0.5">Personnalisez votre photo de profil et rejoignez les communautés qui vous intéressent.</p>
-                  </div>
-
-                  {/* Avatar Picker */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                      Photo de profil / Avatar
-                    </label>
-                    <input
-                      ref={authAvatarFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAuthAvatarFileChange}
-                      className="hidden"
-                    />
-                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 mb-2 flex items-center gap-3">
-                      <img
-                        src={authAvatarUrl}
-                        alt="Aperçu avatar"
-                        className="w-11 h-11 rounded-full object-cover ring-2 ring-blue-600 shrink-0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => authAvatarFileInputRef.current?.click()}
-                        disabled={isCompressingAuthAvatar}
-                        className="flex-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-                      >
-                        <Camera className="w-3.5 h-3.5 text-blue-600" />
-                        <span>
-                          {isCompressingAuthAvatar ? 'Traitement photo...' : '📸 Importer ma propre photo (Galerie)'}
-                        </span>
-                      </button>
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Ou choisir un modèle :</p>
-                    <div className="grid grid-cols-6 gap-2">
-                      {AVATAR_PRESETS.map((preset) => (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => setAuthAvatarUrl(preset.url)}
-                          className={`relative rounded-2xl overflow-hidden aspect-square border-2 transition-all group ${
-                            authAvatarUrl === preset.url
-                              ? 'border-blue-600 ring-2 ring-blue-500/40 scale-105 shadow-sm'
-                              : 'border-transparent opacity-70 hover:opacity-100 hover:border-slate-300'
-                          }`}
-                        >
-                          <img
-                            src={preset.url}
-                            alt={preset.label}
-                            className="w-full h-full object-cover"
-                          />
-                          {authAvatarUrl === preset.url && (
-                            <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                              <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                                <Check className="w-2.5 h-2.5" />
-                              </div>
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Recommended Circles */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                      Rejoindre automatiquement des cercles clés :
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
-                      {circles.map((c) => {
-                        const isSelected = authSelectedCircleIds.includes(c.id);
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => toggleAuthCircleSelect(c.id)}
-                            className={`p-2 rounded-xl border text-left transition flex items-center gap-2.5 ${
-                              isSelected
-                                ? 'border-blue-600 bg-blue-50 text-blue-950 font-bold shadow-xs'
-                                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                            }`}
-                          >
-                            <img
-                              src={c.image}
-                              alt={c.nom}
-                              className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold truncate">{c.nom}</p>
-                              <span className="text-[10px] text-slate-500 truncate block">{c.categorie}</span>
-                            </div>
-                            <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 text-xs transition ${
-                              isSelected 
-                                ? 'bg-blue-600 text-white' 
-                                : 'border border-slate-300 text-transparent'
-                            }`}>
-                              ✓
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Summary Box */}
-                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-3">
-                    <img
-                      src={authAvatarUrl}
-                      alt="Avatar"
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-xs flex-shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-extrabold text-slate-900 truncate">{authNom || 'Nouvel Utilisateur'}</p>
-                      <p className="text-[11px] text-slate-500 truncate">{authEmail} • {authLangue.toUpperCase()}</p>
-                      <p className="text-[10px] font-bold text-blue-700 mt-0.5">
-                        {authSelectedCircleIds.length} cercle(s) sélectionné(s)
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Final Navigation Buttons */}
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={handlePrevStep}
-                      className="px-4 py-2.5 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-bold transition"
-                    >
-                      ← Précédent
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={authLoading}
-                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {authLoading ? (
-                        <span className="flex items-center gap-2">
-                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                          Création en cours...
-                        </span>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 text-amber-300" />
-                          <span>Finaliser et créer mon compte</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -4229,18 +3764,18 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setIsSignUp(!isSignUp);
-                    setSignupStep(1);
                     setAuthError(null);
                   }}
                   className="text-xs text-blue-700 hover:text-blue-800 font-bold hover:underline"
                 >
                   {isSignUp 
-                    ? "Vous avez déjà un compte ? Se connecter directement" 
-                    : "Pas encore membre ? Rejoindre Zaure en 3 étapes"}
+                    ? "Vous avez déjà un compte ? Se connecter" 
+                    : "Pas encore membre ? Créer un compte"}
                 </button>
               </div>
-
             </form>
+
+            <LegalDocumentModal docType={authLegalDoc} onClose={() => setAuthLegalDoc(null)} />
           </div>
         </div>
       )}

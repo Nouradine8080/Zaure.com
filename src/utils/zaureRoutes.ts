@@ -51,6 +51,7 @@ const VALID_PROFILE_TABS = new Set<ProfileRouteTab>([
 export interface ParsedZaureRoute {
   kind:
     | 'admin'
+    | 'auth'
     | 'registration'
     | 'feed'
     | 'circles'
@@ -123,6 +124,10 @@ export function parseZaureRoute(pathname: string, search = ''): ParsedZaureRoute
 
   if (rawPath === '/inscription' || rawPath.startsWith('/inscription/')) {
     return { ...base, kind: 'registration' };
+  }
+
+  if (rawPath === '/connexion' || rawPath === '/login') {
+    return { ...base, kind: 'auth' };
   }
 
   // Backward-compatible query-string deep links on root `/`

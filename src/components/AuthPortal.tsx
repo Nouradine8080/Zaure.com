@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   KeyRound,
+  ArrowLeft,
 } from 'lucide-react';
 import { zaureService } from '../firebaseClient';
 import { Circle, UserProfile } from '../types';
@@ -206,6 +207,16 @@ export default function AuthPortal({
   return (
     <div className="min-h-screen bg-[#F0F2F5] flex flex-col items-center justify-center px-4 py-6 text-slate-800 font-sans selection:bg-blue-100">
       <div className="w-full max-w-[430px] mx-auto">
+        <div className="mb-4 flex items-center justify-between">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-blue-700 bg-white/80 hover:bg-white border border-slate-200/80 px-3 py-2 rounded-full transition"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Retour à l'accueil</span>
+          </Link>
+        </div>
+
         {/* Centered Zaure Logo */}
         <div className="relative flex items-center justify-center mb-6 px-1">
           <div className="flex items-center gap-2.5">

@@ -8,14 +8,22 @@ import {
   Lock,
   Mail,
   Phone,
-  ShieldCheck,
   User,
+  UserPlus,
 } from 'lucide-react';
-import { COUNTRY_DIAL_CODES, REGISTRATION_ROUTES } from '../../constants/registration';
+import { COUNTRY_DIAL_CODES } from '../../constants/registration';
 import { useRegistration } from '../../context/RegistrationContext';
+import { UserProfile } from '../../types';
+import LegalDocumentModal from '../settings/LegalDocumentModal';
 import { RegistrationLayout } from './RegistrationLayout';
 
-export const RegistrationIdentityPage: React.FC = () => {
+interface RegistrationIdentityPageProps {
+  onRegistrationSuccess?: (user: UserProfile) => void;
+}
+
+export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> = ({
+  onRegistrationSuccess,
+}) => {
   const navigate = useNavigate();
   const {
     draft,
@@ -24,20 +32,30 @@ export const RegistrationIdentityPage: React.FC = () => {
     updateFields,
     selectCountry,
     handlePhoneLocalChange,
-    validateAndCompleteStep1,
+    submitRegistration,
+    signInWithGoogle,
   } = useRegistration();
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<'terms' | 'privacy' | null>(null);
 
   const selectedCountry =
     COUNTRY_DIAL_CODES.find((c) => c.code === draft.countryCode) || COUNTRY_DIAL_CODES[0];
 
-  const handleContinue = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await validateAndCompleteStep1();
-    if (ok) {
-      navigate(REGISTRATION_ROUTES.VOCATION);
-    }
+    await submitRegistration((user) => {
+      onRegistrationSuccess?.(user);
+      navigate('/feed', { replace: true });
+    });
+  };
+
+  const handleGoogleContinue = async () => {
+    await signInWithGoogle((user) => {
+      onRegistrationSuccess?.(user);
+      navigate('/feed', { replace: true });
+    });
   };
 
   const passwordsMatch =
@@ -47,186 +65,271 @@ export const RegistrationIdentityPage: React.FC = () => {
 
   return (
     <RegistrationLayout
-      currentStep={1}
-      pageTitle="1. Identité — Inscription Zaure"
-      title="Identité & Sécurité"
-      subtitle="Renseignez vos informations personnelles pour créer votre compte Zaure."
-      icon={<ShieldCheck className="w-5 h-5" />}
+      pageTitle="Inscription | ZAURE"
+      title="Inscription"
+      subtitle="Créez votre compte en quelques secondes"
+      icon={<UserPlus className="w-5 h-5" />}
     >
-      <form onSubmit={handleContinue} className="space-y-4" noValidate>
+      <form onSubmit={handleSubmit} className="space-y-3.5" noValidate>
         {/* Nom et prénom */}
         <div>
-          <label htmlFor="reg-nom" className="block text-xs font-bold text-slate-700 mb-1.5">
-            Nom et prénom <span className="text-red-500">*</span>
+          <label htmlFor="reg-nom" className="sr-only">
+            Nom et prénom
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
               <User className="w-4 h-4" />
             </div>
             <input
               id="reg-nom"
               type="text"
               autoComplete="name"
-              placeholder="Ex: Mahamadou Garba"
+              placeholder="Nom et prénom *"
               required
               value={draft.nom}
               onChange={(e) => updateFields({ nom: e.target.value })}
-              className="w-full text-sm pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
+              className="w-full min-h-[46px] text-sm pl-11 pr-4 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
             />
           </div>
         </div>
 
         {/* Adresse e-mail */}
         <div>
-          <label htmlFor="reg-email" className="block text-xs font-bold text-slate-700 mb-1.5">
-            Adresse e-mail <span className="text-red-500">*</span>
+          <label htmlFor="reg-email" className="sr-only">
+            Adresse e-mail
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
               <Mail className="w-4 h-4" />
             </div>
             <input
               id="reg-email"
               type="email"
               autoComplete="email"
-              placeholder="Ex: mahamadou@zaure.org"
+              placeholder="Adresse e-mail *"
               required
               value={draft.email}
               onChange={(e) => updateFields({ email: e.target.value })}
-              className="w-full text-sm pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
+              className="w-full min-h-[46px] text-sm pl-11 pr-4 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
             />
           </div>
         </div>
 
-        {/* Numéro de téléphone avec sélection du pays et indicatif */}
+        {/* Numéro de téléphone avec indicatif pays intégré */}
         <div>
-          <label htmlFor="reg-phone" className="block text-xs font-bold text-slate-700 mb-1.5">
-            Numéro de téléphone <span className="text-red-500">*</span>
+          <label htmlFor="reg-phone" className="sr-only">
+            Numéro de téléphone
           </label>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <select
-              aria-label="Pays et indicatif téléphonique"
-              value={draft.countryCode}
-              onChange={(e) => selectCountry(e.target.value)}
-              className="sm:w-[195px] shrink-0 text-xs font-bold px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-800 bg-slate-50 focus:bg-white transition cursor-pointer"
-            >
-              {COUNTRY_DIAL_CODES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.flag} {c.name} ({c.dial})
-                </option>
-              ))}
-            </select>
-
-            <div className="relative flex-1 flex items-center border border-slate-200 rounded-xl bg-slate-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-600 transition overflow-hidden">
-              <span className="pl-3 pr-2.5 py-2.5 text-xs font-extrabold text-blue-700 bg-blue-50/70 border-r border-slate-200 flex items-center gap-1 shrink-0 select-none">
-                <Phone className="w-3.5 h-3.5" />
-                <span>{selectedCountry.dial}</span>
-              </span>
-              <input
-                id="reg-phone"
-                type="tel"
-                autoComplete="tel-national"
-                placeholder={selectedCountry.placeholder}
-                required
-                value={draft.phoneLocal}
-                onChange={(e) => handlePhoneLocalChange(e.target.value)}
-                className="w-full text-sm px-3 py-2.5 bg-transparent focus:outline-none text-slate-900"
-              />
+          <div className="flex items-center min-h-[46px] border border-slate-200 rounded-full bg-white focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600 transition overflow-hidden">
+            <div className="pl-4 pr-2 flex items-center gap-1.5 border-r border-slate-200 shrink-0 bg-slate-50/70 self-stretch">
+              <Phone className="w-4 h-4 text-blue-600/80 shrink-0" />
+              <select
+                aria-label="Pays et indicatif téléphonique"
+                value={draft.countryCode}
+                onChange={(e) => selectCountry(e.target.value)}
+                className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer py-2 pr-1"
+              >
+                {COUNTRY_DIAL_CODES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.dial} ({c.name})
+                  </option>
+                ))}
+              </select>
             </div>
+            <input
+              id="reg-phone"
+              type="tel"
+              autoComplete="tel-national"
+              placeholder={`Numéro de téléphone * (${selectedCountry.placeholder})`}
+              required
+              value={draft.phoneLocal}
+              onChange={(e) => handlePhoneLocalChange(e.target.value)}
+              className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+            />
           </div>
           {fullPhoneNumber && (
-            <p className="text-[11px] text-slate-500 mt-1 px-0.5">
-              Format enregistré : <span className="font-bold text-slate-700">{fullPhoneNumber}</span>
+            <p className="text-[11px] text-slate-500 mt-1 px-4">
+              Numéro complet : <span className="font-bold text-slate-700">{fullPhoneNumber}</span>
             </p>
           )}
         </div>
 
-        {/* Mot de passe et Confirmation */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label
-              htmlFor="reg-password"
-              className="block text-xs font-bold text-slate-700 mb-1.5"
+        {/* Mot de passe */}
+        <div>
+          <label htmlFor="reg-password" className="sr-only">
+            Mot de passe
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
+              <Lock className="w-4 h-4" />
+            </div>
+            <input
+              id="reg-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Mot de passe * (min. 6 caractères)"
+              required
+              value={draft.password}
+              onChange={(e) => updateFields({ password: e.target.value })}
+              className="w-full min-h-[46px] text-sm pl-11 pr-11 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600"
+              tabIndex={-1}
             >
-              Mot de passe <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Lock className="w-4 h-4" />
-              </div>
-              <input
-                id="reg-password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="Min. 6 caractères"
-                required
-                value={draft.password}
-                onChange={(e) => updateFields({ password: e.target.value })}
-                className="w-full text-sm pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-              />
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Confirmer le mot de passe */}
+        <div>
+          <label htmlFor="reg-password-confirm" className="sr-only">
+            Confirmer le mot de passe
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
+              <Lock className="w-4 h-4" />
+            </div>
+            <input
+              id="reg-password-confirm"
+              type={showConfirmPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Confirmer le mot de passe *"
+              required
+              value={draft.passwordConfirm}
+              onChange={(e) => updateFields({ passwordConfirm: e.target.value })}
+              className="w-full min-h-[46px] text-sm pl-11 pr-16 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+            />
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center gap-2">
+              {passwordsMatch && (
+                <CheckCircle2
+                  aria-label="Mots de passe identiques"
+                  className="w-4 h-4 text-emerald-600 shrink-0"
+                />
+              )}
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={
+                  showConfirmPassword
+                    ? 'Masquer la confirmation du mot de passe'
+                    : 'Afficher la confirmation du mot de passe'
+                }
+                className="text-slate-400 hover:text-slate-600"
                 tabIndex={-1}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="reg-password-confirm"
-              className="block text-xs font-bold text-slate-700 mb-1.5"
-            >
-              Confirmation du mot de passe <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Lock className="w-4 h-4" />
-              </div>
-              <input
-                id="reg-password-confirm"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="Répétez le mot de passe"
-                required
-                value={draft.passwordConfirm}
-                onChange={(e) => updateFields({ passwordConfirm: e.target.value })}
-                className="w-full text-sm pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-              />
-              {passwordsMatch && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-emerald-600 pointer-events-none">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Bouton Continuer */}
-        <div className="pt-2">
+        {/* Acceptation des conditions d'utilisation et de la politique de confidentialité */}
+        <div className="pt-1">
+          <label
+            htmlFor="reg-terms"
+            className="flex items-start gap-2.5 px-1.5 py-1 cursor-pointer select-none"
+          >
+            <input
+              id="reg-terms"
+              type="checkbox"
+              checked={draft.acceptedTerms}
+              onChange={(e) => updateFields({ acceptedTerms: e.target.checked })}
+              required
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600 shrink-0 cursor-pointer"
+            />
+            <span className="text-xs text-slate-600 leading-relaxed">
+              J'accepte les{' '}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setLegalDoc('terms');
+                }}
+                className="font-bold text-blue-700 hover:text-blue-800 hover:underline"
+              >
+                Conditions d'utilisation
+              </button>{' '}
+              et la{' '}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setLegalDoc('privacy');
+                }}
+                className="font-bold text-blue-700 hover:text-blue-800 hover:underline"
+              >
+                Politique de confidentialité
+              </button>
+            </span>
+          </label>
+        </div>
+
+        {/* Primary Submit CTA */}
+        <div className="pt-1.5">
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full min-h-[48px] py-3 px-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-sm sm:text-base transition shadow-md shadow-blue-600/20 flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Vérification...</span>
+                <span>Création du compte...</span>
               </>
             ) : (
               <>
-                <span>Continuer</span>
+                <UserPlus className="w-4 h-4" />
+                <span>Créer mon compte</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </div>
+
+        {/* Divider */}
+        <div className="relative flex py-1.5 items-center">
+          <div className="flex-grow border-t border-slate-200" />
+          <span className="shrink mx-3 text-xs font-semibold text-slate-400">Ou</span>
+          <div className="flex-grow border-t border-slate-200" />
+        </div>
+
+        {/* Continuer avec Google */}
+        <button
+          type="button"
+          onClick={handleGoogleContinue}
+          disabled={isSubmitting}
+          className="w-full min-h-[46px] py-2.5 px-5 rounded-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm border border-slate-200 transition shadow-2xs flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
+        >
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="#EA4335"
+              d="M12 5.04c1.5 0 2.85.51 3.9 1.5l2.9-2.9C17.05 1.9 14.7 1 12 1 7.35 1 3.4 3.65 1.5 7.5l3.5 2.7C5.85 6.95 8.7 5.04 12 5.04z"
+            />
+            <path
+              fill="#4285F4"
+              d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.46-1.1 2.69-2.34 3.52l3.63 2.82c2.13-1.97 3.36-4.87 3.36-8.47z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5 14.8c-.25-.75-.39-1.55-.39-2.38s.14-1.63.39-2.38L1.5 7.34C.55 9.24 0 11.36 0 13.6s.55 4.36 1.5 6.26l3.5-2.06z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.63-2.82c-1.01.68-2.3 1.09-3.9 1.09-3.3 0-6.15-1.91-7.15-4.78l-3.5 2.7C3.4 20.35 7.35 23 12 23z"
+            />
+          </svg>
+          <span>Continuer avec Google</span>
+        </button>
       </form>
+
+      <LegalDocumentModal docType={legalDoc} onClose={() => setLegalDoc(null)} />
     </RegistrationLayout>
   );
 };

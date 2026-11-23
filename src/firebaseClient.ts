@@ -516,9 +516,10 @@ export const zaureService = {
         const profile: UserProfile = {
           id: firebaseUser.uid,
           nom: nom.trim().slice(0, 120),
+          username: sanitizeUsername(undefined, nom).slice(0, 40),
           email: email.trim().slice(0, 200),
           ...(phone?.trim() ? { phone: phone.trim().slice(0, 32) } : {}),
-          bio: bio ? bio.trim().slice(0, 1000) : null,
+          bio: bio && bio.trim() ? bio.trim().slice(0, 1000) : null,
           avatar_url: finalAvatar,
           role,
           langue_preferee: langue,
@@ -528,6 +529,11 @@ export const zaureService = {
         await setDoc(doc(dbFirestore, 'users', firebaseUser.uid), profile);
         await syncPublicProfile(profile);
         currentUser = profile;
+        try {
+          localStorage.setItem('zaure_user_session_cache', JSON.stringify(profile));
+        } catch {
+          // ignore storage errors
+        }
         return { user: profile, error: null };
       }
       return { user: null, error: 'L\'inscription a échoué.' };
