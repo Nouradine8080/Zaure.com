@@ -42,7 +42,17 @@ import {
   CircleUserRound,
   MessageCircle,
   ArrowUp,
-  ChevronDown
+  ChevronDown,
+  Menu,
+  Sun,
+  Moon,
+  Flame,
+  Lightbulb,
+  Video,
+  FileText,
+  Calendar,
+  Send,
+  MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { isFirebaseAuthSettled, zaureService } from './firebaseClient';
@@ -52,7 +62,8 @@ import { settingsService } from './services/settingsService';
 import {
   applyAndPersistAppearancePreferences,
   extractAppearancePreferences,
-  loadStoredAppearancePreferences
+  loadStoredAppearancePreferences,
+  resolveEffectiveTheme
 } from './utils/appearancePreferences';
 import {
   Circle,
@@ -97,6 +108,8 @@ import { PWAInstallButton } from './components/PWAInstallButton';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useTranslation } from './context/LanguageContext';
 import { AdminPortalRoot } from './admin/AdminPortalRoot';
+import MobileAndroidDrawer from './components/dashboard/MobileAndroidDrawer';
+import DashboardWelcomeAndShortcuts from './components/dashboard/DashboardWelcomeAndShortcuts';
 import {
   buildProfilePath,
   parseZaureRoute,
@@ -216,9 +229,15 @@ export default function App() {
   
   // Real-time Notifications & Settings sync state
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [notificationSettings, setNotificationSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [notifBadgePulse, setNotifBadgePulse] = useState(false);
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() =>
+    resolveEffectiveTheme(loadStoredAppearancePreferences().theme_mode)
+  );
   const [reducedMotionPref, setReducedMotionPref] = useState<boolean>(() =>
     Boolean(loadStoredAppearancePreferences().animations_reduites)
   );
@@ -244,6 +263,7 @@ export default function App() {
   const [publicPostReactions, setPublicPostReactions] = useState<PostReaction[]>([]);
   const [composerMode, setComposerMode] = useState<'none' | 'post' | 'capsule'>('none');
   const [composerPostInitialType, setComposerPostInitialType] = useState<GroupPostType>('text');
+  const [showComposerMore, setShowComposerMore] = useState(false);
   
   // Bookmarks (saved locally for quick access)
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
@@ -460,7 +480,8 @@ export default function App() {
         setNotificationSettings(nextSettings);
 
         const prefs = extractAppearancePreferences(nextSettings);
-        applyAndPersistAppearancePreferences(prefs, activeUser.id, () => {
+        applyAndPersistAppearancePreferences(prefs, activeUser.id, (effectiveTheme) => {
+          setThemeMode(effectiveTheme);
           setReducedMotionPref(Boolean(prefs.animations_reduites));
         });
 
@@ -481,12 +502,38 @@ export default function App() {
       }
     );
 
+    const unsubUnreadMessages = zaureService.subscribeUserConversations(
+      activeUser.id,
+      (convs) => {
+        let total = 0;
+        for (const c of convs) {
+          if ((c.deleted_by || []).includes(activeUser.id)) continue;
+          const count = c.unread_counts?.[activeUser.id] || 0;
+          if (count > 0) total += count;
+        }
+        setUnreadMessagesCount(total);
+      }
+    );
+
     return () => {
       unsub();
+      unsubUnreadMessages();
       unsubSessionRevoke();
       if (pulseTimer) clearTimeout(pulseTimer);
     };
   }, [isAuthResolving, currentUserId]);
+
+  const handleToggleTheme = () => {
+    const nextMode: 'light' | 'dark' = themeMode === 'dark' ? 'light' : 'dark';
+    const currentPrefs = loadStoredAppearancePreferences(currentUser?.id);
+    const updatedPrefs = { ...currentPrefs, theme_mode: nextMode };
+    applyAndPersistAppearancePreferences(updatedPrefs, currentUser?.id, (effective) => {
+      setThemeMode(effective);
+    });
+    if (currentUser?.id) {
+      zaureService.saveUserSettings(currentUser.id, { theme_mode: nextMode }).catch(() => {});
+    }
+  };
 
   // Reset progressive feed pagination on filter/search changes & track scroll for Back-to-Top
   useEffect(() => {
@@ -1265,173 +1312,132 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion={reducedMotionPref ? 'always' : 'user'}>
-      <div className="min-h-screen bg-[#F0F2F5] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900" id="main-app-container">
+      <div className="min-h-screen bg-[#F3F6FB] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden" id="main-app-container">
       
       {/* ============================================================ */}
-      {/* 1. TOP NAVBAR (FIXED, FACEBOOK-STYLE ERGONOMIC APP BAR) */}
+      {/* 1. TOP NAVBAR (ANDROID MOBILE FIRST + DESKTOP APP BAR) */}
       {/* ============================================================ */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200/90 dark:border-slate-800 sticky top-0 z-40 shadow-xs h-14 sm:h-16 w-full" id="header-navbar">
-        <div className="max-w-[1520px] w-full mx-auto px-3 sm:px-4 lg:px-6 h-full flex items-center justify-between gap-2 sm:gap-4">
+      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 shadow-2xs w-full pt-[env(safe-area-inset-top,0px)]" id="header-navbar">
+        <div className="max-w-[1520px] w-full mx-auto px-2.5 sm:px-4 lg:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
           
-          {/* ZONE GAUCHE : Logo & Search Bar */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-xs md:max-w-sm">
+          {/* ZONE GAUCHE : Hamburger (Mobile/Tablet) + Logo ZAURE */}
+          <div className="flex items-center gap-1.5 sm:gap-3 lg:w-60 shrink-0">
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(true)}
+                aria-label="Ouvrir le menu"
+                className="lg:hidden min-h-[44px] min-w-[44px] rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
+
             <button 
               type="button"
               onClick={() => {
                 setFeedFilter('all');
                 navigate('/feed');
               }}
-              className="flex items-center gap-2 group shrink-0"
+              className="flex items-center gap-2 group shrink-0 min-h-[44px]"
               title="Accueil Zaure"
             >
-              <div className="bg-blue-600 text-white font-black text-lg tracking-wider rounded-xl w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+              <div className="bg-blue-600 text-white font-black text-base sm:text-lg tracking-wider rounded-xl w-9 h-9 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
                 Z
               </div>
-              <div className="hidden sm:block text-left leading-none">
-                <span className="text-lg font-black tracking-tight text-slate-950 dark:text-white group-hover:text-blue-600 transition-colors">
-                  Zaure
-                </span>
-                <p className="text-[10px] text-red-600 dark:text-red-400 font-semibold uppercase tracking-wider mt-0.5">
-                  Savoirs du Sahel
-                </p>
-              </div>
+              <span className="text-lg sm:text-xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
+                ZAURE
+              </span>
             </button>
+          </div>
 
-            {/* Global Search Bar (Facebook style input with instant filter) */}
-            <div className="relative flex-1 hidden md:block">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          {/* ZONE CENTRALE : Barre de recherche (Desktop/Tablet) */}
+          <div className="hidden md:flex items-center flex-1 max-w-xl">
+            <div className="relative w-full">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                 <Search className="w-4 h-4" />
               </div>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('common.search_placeholder')}
-                className="w-full bg-[#F0F2F5] dark:bg-slate-800 hover:bg-slate-200/70 dark:hover:bg-slate-700 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs pl-9 pr-8 py-2 rounded-full border border-transparent focus:border-blue-500 focus:outline-none transition"
+                placeholder="Rechercher sur ZAURE..."
+                className="w-full min-h-[40px] bg-[#F3F6FB] dark:bg-slate-800 hover:bg-slate-200/70 dark:hover:bg-slate-700 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs sm:text-sm pl-10 pr-8 py-2 rounded-full border border-slate-200/70 dark:border-slate-700 focus:border-blue-500 focus:outline-none transition"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
                   title="Effacer la recherche"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
+          </div>
 
+          {/* ZONE DROITE : Recherche (Mobile) + Thème + Langue + Notifications + Avatar */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Mobile Search Toggle */}
             <button
               type="button"
-              onClick={() => setShowMobileSearch(!showMobileSearch)}
-              className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-full transition"
-              title="Rechercher"
+              onClick={() => setShowMobileSearch((prev) => !prev)}
+              aria-label="Rechercher"
+              className="md:hidden min-h-[44px] min-w-[44px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full flex items-center justify-center transition"
             >
               <Search className="w-5 h-5" />
             </button>
-          </div>
 
-          {/* ZONE CENTRALE : Onglets de Navigation Principaux (Desktop & Tablette) */}
-          <nav className="hidden md:flex items-center justify-center gap-1 sm:gap-2 flex-1 max-w-lg h-full">
-            {/* 1. Actualité */}
+            {/* Desktop/Tablet Compact PWA Install */}
+            <div className="hidden lg:flex">
+              <PWAInstallButton compact />
+            </div>
+
+            {/* Desktop Light/Dark Theme Switcher */}
             <button
               type="button"
-              onClick={() => {
-                setFeedFilter('all');
-                navigate('/feed');
-              }}
-              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
-              }`}
-              title={t('nav.feed')}
+              onClick={handleToggleTheme}
+              aria-label={themeMode === 'dark' ? 'Passer en thème clair' : 'Passer en thème sombre'}
+              title={themeMode === 'dark' ? 'Mode clair' : 'Mode sombre'}
+              className="hidden lg:inline-flex items-center gap-1.5 min-h-[38px] px-2.5 py-1.5 rounded-full bg-[#F3F6FB] dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700 transition"
             >
-              <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.feed')}</span>
-              {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
+              <Sun className={`w-3.5 h-3.5 ${themeMode === 'light' ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span className="w-px h-3 bg-slate-300 dark:bg-slate-600" />
+              <Moon className={`w-3.5 h-3.5 ${themeMode === 'dark' ? 'text-blue-400' : 'text-slate-400'}`} />
             </button>
 
-            {/* 2. Découverte (Cercles) */}
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/circles');
-              }}
-              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
-              }`}
-              title="Découvrir les Cercles"
-            >
-              <Compass className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">Découverte</span>
-              {activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
-            </button>
+            {/* Language Switcher (Desktop/Tablet) */}
+            <div className="hidden lg:flex items-center gap-1 bg-[#F3F6FB] dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 px-2.5 py-1.5 rounded-full text-xs text-slate-700 dark:text-slate-200 transition border border-slate-200/70 dark:border-slate-700">
+              <Languages className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'fr' | 'ha' | 'en')}
+                className="bg-transparent font-bold text-xs focus:outline-none cursor-pointer pr-1 text-slate-800 dark:text-slate-100"
+                aria-label="Sélectionner la langue"
+              >
+                <option value="fr" className="dark:bg-slate-900">FR</option>
+                <option value="ha" className="dark:bg-slate-900">HA</option>
+                <option value="en" className="dark:bg-slate-900">EN</option>
+              </select>
+            </div>
 
-            {/* 3. Communautés */}
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/communities');
-              }}
-              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'communities'
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
-              }`}
-              title={t('nav.circles')}
-            >
-              <UsersRound className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.circles')}</span>
-              {activeTab === 'communities' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
-            </button>
-
-            {/* 4. Messagerie */}
-            <button
-              type="button"
-              onClick={() => {
-                setDirectChatUser(null);
-                setChatMobileView('list');
-                navigate('/messages');
-              }}
-              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'chat'
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
-              }`}
-              title={t('nav.chat')}
-            >
-              <MessageCircle className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.chat')}</span>
-              {activeTab === 'chat' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
-            </button>
-
-            {/* 5. Notifications */}
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/notifications');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group rounded-xl ${
-                activeTab === 'notifications'
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70'
-              }`}
-              title={t('nav.notifications')}
-            >
-              <div className="relative">
+            {/* Notifications Bell (Always visible in Header on Android + Desktop) */}
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/notifications');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                aria-label={t('nav.notifications')}
+                title={t('nav.notifications')}
+                className={`relative min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center transition ${
+                  activeTab === 'notifications'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
                 <motion.div
                   animate={notifBadgePulse ? { rotate: [0, -14, 14, -10, 10, 0] } : { rotate: 0 }}
                   transition={{ duration: 0.6 }}
@@ -1444,106 +1450,25 @@ export default function App() {
                     initial={{ scale: 0.65, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: 'spring', stiffness: 450, damping: 22 }}
-                    className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center shadow-xs tabular-nums"
+                    className="absolute top-1.5 right-1.5 bg-red-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 tabular-nums"
                   >
                     {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
                   </motion.span>
                 )}
-              </div>
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.notifications')}</span>
-              {activeTab === 'notifications' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
-            </button>
-
-            {/* 6. Profil Utilisateur */}
-            <button
-              type="button"
-              onClick={() => {
-                if (currentUser) {
-                  openUserProfile(currentUser);
-                } else {
-                  setShowAuthModal(true);
-                }
-              }}
-              className={`h-full px-3 lg:px-4 flex flex-col items-center justify-center relative transition group ${
-                activeTab === 'profile'
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/70 rounded-xl'
-              }`}
-              title={t('nav.profile')}
-            >
-              <CircleUserRound className={`w-5 h-5 ${activeTab === 'profile' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-              <span className="text-[10px] tracking-tight mt-0.5 hidden xl:inline">{t('nav.profile')}</span>
-              {activeTab === 'profile' && (
-                <span className="absolute bottom-0 inset-x-2 h-1 bg-blue-600 rounded-t-full" />
-              )}
-            </button>
-          </nav>
-
-          {/* ZONE DROITE : Installer PWA + Langue + Paramètres + Bouton Créer + Profil Utilisateur */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            
-            {/* In-App PWA Install Button */}
-            <PWAInstallButton compact />
-
-            {/* Language Switcher */}
-            <div className="flex items-center gap-1 bg-[#F0F2F5] dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 px-2 py-1.5 rounded-full text-xs text-slate-700 dark:text-slate-200 transition">
-              <Languages className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as 'fr' | 'ha' | 'en')}
-                className="bg-transparent font-bold text-xs focus:outline-none cursor-pointer pr-1 text-slate-800 dark:text-slate-100"
-                aria-label="Sélectionner la langue"
-              >
-                <option value="fr" className="dark:bg-slate-900">FR</option>
-                <option value="ha" className="dark:bg-slate-900">HA (Hausa)</option>
-                <option value="en" className="dark:bg-slate-900">EN</option>
-              </select>
-            </div>
-
-            {currentUser && (
-              <button
-                type="button"
-                onClick={() => {
-                  navigate('/settings');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className={`p-2 rounded-full transition ${
-                  activeTab === 'settings'
-                    ? 'bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-                title={t('nav.settings')}
-                aria-label={t('nav.settings')}
-              >
-                <Settings className="w-4 h-4" />
               </button>
             )}
 
-            {/* Quick Action: New Circle (Desktop shortcut) */}
-            {currentUser && (
-              <button
-                type="button"
-                onClick={() => setShowCreateCircle(true)}
-                className="hidden xl:flex items-center gap-1.5 min-h-[38px] px-3 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-bold text-xs rounded-full transition"
-                title="Créer un nouveau cercle de savoir"
-              >
-                <Plus className="w-3.5 h-3.5 text-red-500 stroke-[2.5]" />
-                <span>Nouveau Cercle</span>
-              </button>
-            )}
-
-            {/* User Profile Pill or Login Button */}
+            {/* User Avatar + Quick Menu */}
             {currentUser ? (
-              <div className="flex items-center gap-1 sm:gap-2">
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={() => openUserProfile(currentUser)}
-                  className="flex items-center gap-2 p-1 hover:bg-[#F0F2F5] dark:hover:bg-slate-800 rounded-full transition pr-2"
-                  title={t('nav.profile')}
+                  onClick={() => setShowAvatarMenu((prev) => !prev)}
+                  className="min-h-[44px] flex items-center gap-1.5 pl-1 pr-1.5 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition"
+                  aria-label="Menu du compte"
+                  aria-expanded={showAvatarMenu}
                 >
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     {currentUser.avatar_url ? (
                       <img 
                         src={currentUser.avatar_url} 
@@ -1556,27 +1481,65 @@ export default function App() {
                         {currentUser.nom.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    {currentUser.role === 'verifie' && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-600 border-2 border-white dark:border-slate-900 rounded-full" title="Professionnel vérifié" />
-                    )}
-                    {currentUser.role === 'mentor' && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-amber-500 border-2 border-white dark:border-slate-900 rounded-full" title="Mentor" />
-                    )}
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"
+                      title="Actif"
+                    />
                   </div>
-                  
-                  <span className="hidden sm:inline font-bold text-xs text-slate-800 dark:text-slate-100 max-w-[100px] truncate">
-                    {currentUser.nom.split(' ')[0]}
-                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={requestSignOut}
-                  title="Déconnexion"
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+                {showAvatarMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowAvatarMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl py-1.5 z-50 animate-fadeIn">
+                      <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-800">
+                        <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                          {currentUser.nom}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {currentUser.email}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAvatarMenu(false);
+                          openUserProfile(currentUser);
+                        }}
+                        className="w-full min-h-[40px] px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5"
+                      >
+                        <CircleUserRound className="w-4 h-4 text-blue-600" />
+                        <span>Mon profil</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAvatarMenu(false);
+                          navigate('/settings');
+                        }}
+                        className="w-full min-h-[40px] px-3.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5"
+                      >
+                        <Settings className="w-4 h-4 text-slate-500" />
+                        <span>Paramètres</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAvatarMenu(false);
+                          requestSignOut();
+                        }}
+                        className="w-full min-h-[40px] px-3.5 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2.5 border-t border-slate-100 dark:border-slate-800 mt-1"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Déconnexion</span>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <button
@@ -1593,23 +1556,24 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile Search Overlay Bar when toggled */}
+        {/* Mobile Search Expandable Bar */}
         {showMobileSearch && (
-          <div className="md:hidden bg-white border-t border-slate-200 px-3 py-2 flex items-center gap-2 animate-fadeIn">
-            <Search className="w-4 h-4 text-slate-400" />
+          <div className="md:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center gap-2 animate-fadeIn">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher des savoirs, cercles, auteurs..."
-              className="flex-1 bg-[#F0F2F5] text-xs px-3 py-1.5 rounded-full outline-none"
+              placeholder="Rechercher sur ZAURE..."
+              className="flex-1 min-h-[38px] bg-[#F3F6FB] dark:bg-slate-800 text-xs px-3.5 py-1.5 rounded-full outline-none text-slate-900 dark:text-slate-100"
               autoFocus
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                className="p-1.5 text-slate-400 hover:text-slate-600"
+                aria-label="Effacer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1617,7 +1581,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setShowMobileSearch(false)}
-              className="text-xs font-bold text-blue-700 px-2"
+              className="min-h-[36px] text-xs font-bold text-blue-700 dark:text-blue-400 px-2"
             >
               Fermer
             </button>
@@ -1625,186 +1589,84 @@ export default function App() {
         )}
       </header>
 
+      {/* Mobile Android Bottom Sheet (Utility & Settings Only - No Vertical Nav Sidebar) */}
+      {currentUser && (
+        <MobileAndroidDrawer
+          open={mobileDrawerOpen}
+          onClose={() => setMobileDrawerOpen(false)}
+          currentUser={currentUser}
+          joinedCirclesCount={joinedCircleIds.length}
+          bookmarkedCount={bookmarkedIds.length}
+          themeMode={themeMode}
+          language={language}
+          onToggleTheme={handleToggleTheme}
+          onChangeLanguage={setLanguage}
+          onNavigatePath={(path) => {
+            navigate(path);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onOpenProfile={() => openUserProfile(currentUser)}
+          onOpenCreateCircle={() => setShowCreateCircle(true)}
+          onRequestSignOut={requestSignOut}
+        />
+      )}
+
       <div 
-        className="flex-1 w-full mx-auto px-1.5 sm:px-4 lg:px-6 py-2.5 sm:py-4 pb-20 md:pb-6 flex gap-4 lg:gap-6 justify-center max-w-[1520px]" 
+        className="flex-1 w-full mx-auto px-2.5 sm:px-4 lg:px-6 py-3 sm:py-5 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] lg:pb-8 flex gap-4 lg:gap-6 justify-center max-w-[1520px]" 
         id="main-layout-container"
       >
         
         {/* ======================================================== */}
-        {/* COLONNE GAUCHE (NAVIGATION LATÉRALE & RACCOURCIS) */}
+        {/* COLONNE GAUCHE DESKTOP (NAVIGATION PRINCIPALE IMAGE 2) */}
         {/* ======================================================== */}
-        <aside className="hidden lg:block w-64 xl:w-72 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
+        <aside className="hidden lg:block w-60 xl:w-64 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-none">
           
-          {/* Quick User Identity card */}
-          {currentUser ? (
-            <button
-              type="button"
-              onClick={() => openUserProfile(currentUser)}
-              className="w-full bg-white hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-3 transition shadow-xs text-left group"
-            >
-              <div className="relative shrink-0">
-                {currentUser.avatar_url ? (
-                  <img src={currentUser.avatar_url} alt={currentUser.nom} className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                    {currentUser.nom.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                {currentUser.role === 'verifie' && (
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full" />
-                )}
-                {currentUser.role === 'mentor' && (
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-500 border-2 border-white rounded-full" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-900 truncate group-hover:text-blue-700 transition-colors">
-                  {currentUser.nom}
-                </p>
-                <p className="text-[11px] text-slate-500 truncate capitalize">
-                  {currentUser.role === 'verifie' ? 'Professionnel de santé' : currentUser.role === 'mentor' ? 'Mentor éducatif' : 'Membre apprenant'}
-                </p>
-                <p className="text-[10px] text-blue-700 font-medium mt-0.5">
-                  {joinedCircleIds.length} cercle(s) rejoint(s)
-                </p>
-              </div>
-            </button>
-          ) : (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
-              <p className="text-xs font-bold text-slate-900">Bienvenue sur Zaure</p>
-              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                Le réseau communautaire d'apprentissage et de savoirs partagés au Sahel.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignUp(true);
-                  setShowAuthModal(true);
-                }}
-                className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition"
-              >
-                Rejoindre la communauté
-              </button>
-            </div>
-          )}
-
-          {/* Navigation Links Menu (Facebook style menu) */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-2 shadow-xs space-y-0.5">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-2.5 shadow-2xs space-y-1">
             <button
               type="button"
               onClick={() => {
                 setFeedFilter('all');
                 navigate('/feed');
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+              className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'all' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <BookOpen className="w-4 h-4 text-blue-600" />
-              <span>Fil d'actualité</span>
+              <Newspaper className="w-4 h-4 shrink-0" />
+              <span>Accueil</span>
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                navigate('/communities');
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'communities'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
+              onClick={() => navigate('/circles')}
+              className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
+                activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Compass className="w-4 h-4 text-blue-600" />
-                <span>Communautés</span>
-              </div>
-              <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                Cercles
+              <span className="flex items-center gap-3">
+                <Compass className="w-4 h-4 shrink-0" />
+                <span>Cercles</span>
               </span>
-            </button>
-
-            {currentUser && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFeedFilter('joined');
-                  navigate('/feed');
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'joined'
-                    ? 'bg-blue-50 text-blue-900 font-bold'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                  <span>Mes Cercles</span>
-                </div>
-                <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
-                  {joinedCircleIds.length}
-                </span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setFeedFilter('audio');
-                navigate('/feed');
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'feed' && feedSection === 'feed' && feedFilter === 'audio'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Volume2 className="w-4 h-4 text-blue-600" />
-              <span>Notes Vocales & Audios</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                navigate('/bookmarks');
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'feed' && feedSection === 'bookmarks'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Bookmark className="w-4 h-4 text-blue-600" />
-                <span>Savoirs Enregistrés</span>
-              </div>
-              {bookmarkedIds.length > 0 && (
-                <span className="font-mono text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                  {bookmarkedIds.length}
-                </span>
+              {joinedCircleIds.length > 0 && (
+                <span className="text-[10px] font-mono opacity-80">{joinedCircleIds.length}</span>
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                navigate('/mentors');
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'feed' && feedSection === 'mentors'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
+              onClick={() => navigate('/communities')}
+              className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
+                activeTab === 'communities'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Award className="w-4 h-4 text-amber-500" />
-                <span>Mentors du Sahel</span>
-              </div>
-              <span className="font-mono text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-bold">
-                {mentorsList.length}
-              </span>
+              <UsersRound className="w-4 h-4 shrink-0" />
+              <span>Communautés</span>
             </button>
 
             <button
@@ -1814,10 +1676,21 @@ export default function App() {
                 setChatMobileView('list');
                 navigate('/messages');
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition text-slate-700 hover:bg-slate-50"
+              className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
+                activeTab === 'chat'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
             >
-              <MessageSquare className="w-4 h-4 text-blue-600" />
-              <span>Messagerie directe</span>
+              <span className="flex items-center gap-3">
+                <MessageCircle className="w-4 h-4 shrink-0" />
+                <span>Messages</span>
+              </span>
+              {unreadMessagesCount > 0 && (
+                <span className="bg-red-600 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1.5 rounded-full flex items-center justify-center tabular-nums">
+                  {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                </span>
+              )}
             </button>
 
             <button
@@ -1826,107 +1699,105 @@ export default function App() {
                 navigate('/notifications');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+              className={`w-full min-h-[42px] flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'notifications'
-                  ? 'bg-blue-50 text-blue-900 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Bell className="w-4 h-4 text-blue-600" />
+              <span className="flex items-center gap-3">
+                <Bell className="w-4 h-4 shrink-0" />
                 <span>Notifications</span>
-              </div>
+              </span>
               {unreadNotificationsCount > 0 && (
-                <span className="font-mono text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-bold tabular-nums">
+                <span className="bg-red-600 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1.5 rounded-full flex items-center justify-center tabular-nums">
                   {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
                 </span>
               )}
             </button>
 
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => openUserProfile(currentUser)}
+                className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
+                  activeTab === 'profile'
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <CircleUserRound className="w-4 h-4 shrink-0" />
+                <span>Profil</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => {
-                navigate('/settings');
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+              onClick={() => navigate('/settings')}
+              className={`w-full min-h-[42px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                 activeTab === 'settings'
-                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 font-bold'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Settings className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <Settings className="w-4 h-4 shrink-0" />
               <span>{t('nav.settings')}</span>
             </button>
-          </div>
 
-          {/* Raccourcis vers vos Cercles (Facebook-style Shortcuts) */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 shadow-xs">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                Vos Cercles de Savoir
-              </h3>
+            <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-1">
+              <button
+                type="button"
+                onClick={() => navigate('/bookmarks')}
+                className={`w-full min-h-[38px] flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'feed' && feedSection === 'bookmarks'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Bookmark className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Enregistrés</span>
+                </span>
+                {bookmarkedIds.length > 0 && (
+                  <span className="font-mono text-[10px] text-slate-500">{bookmarkedIds.length}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/mentors')}
+                className={`w-full min-h-[38px] flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'feed' && feedSection === 'mentors'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Award className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>Mentors</span>
+                </span>
+                <span className="font-mono text-[10px] text-slate-500">{mentorsList.length}</span>
+              </button>
+
               {currentUser && (
                 <button
                   type="button"
                   onClick={() => setShowCreateCircle(true)}
-                  className="text-blue-700 hover:text-blue-900 p-0.5"
-                  title="Créer un nouveau cercle"
+                  className="w-full min-h-[38px] flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>Créer un Cercle</span>
                 </button>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              {userJoinedCircles.length === 0 ? (
-                <div className="p-3 text-center">
-                  <p className="text-[11px] text-slate-400">Vous n'avez pas encore rejoint de cercle.</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/circles')}
-                    className="mt-2 text-xs font-bold text-blue-700 hover:underline"
-                  >
-                    Explorer les cercles →
-                  </button>
-                </div>
-              ) : (
-                userJoinedCircles.map((circle) => (
-                  <button
-                    key={circle.id}
-                    type="button"
-                    onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
-                    className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition group ${
-                      selectedCircleId === circle.id
-                        ? 'bg-blue-50 text-blue-900 font-bold'
-                        : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <img
-                      src={circle.image}
-                      alt={circle.nom}
-                      className="w-7 h-7 rounded-lg object-cover ring-1 ring-slate-200 shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold truncate group-hover:text-blue-700">
-                        {circle.nom}
-                      </p>
-                      <p className="text-[10px] text-slate-400 truncate">
-                        {circle.categorie}
-                      </p>
-                    </div>
-                  </button>
-                ))
               )}
             </div>
           </div>
 
           {/* Micro Footer links */}
           <div className="px-3 text-[11px] text-slate-400 leading-relaxed">
-            <p>© 2026 Zaure · Partage du Savoir en Afrique de l'Ouest</p>
-            <p className="mt-1">Français · Hausa · English</p>
+            <p>© 2026 ZAURE · Plateforme du Savoir</p>
+            <p className="mt-0.5">Français · Hausa · English</p>
           </div>
-          </aside>
+        </aside>
 
         {/* ======================================================== */}
         {/* COLONNE CENTRALE : FIL D'ACTUALITÉ / FEED PRINCIPAL */}
@@ -2394,87 +2265,42 @@ export default function App() {
 
           {/* 6. VUE PRINCIPALE : FIL D'ACTUALITÉ DU SAVOIR (FEED CENTRAL) */}
           {parsedRoute.kind !== 'not_found' && activeTab === 'feed' && selectedCircleId === 'all' && (feedSection === 'feed' || feedSection === 'bookmarks') && (
-            <div className="space-y-4 animate-fadeIn">
+            <div className="space-y-3.5 sm:space-y-4 animate-fadeIn">
               
-              {/* A. STORIES / REELS DES CERCLES (Horizontal Carousel style Facebook) */}
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-3 sm:p-4 shadow-xs">
-                <div className="flex items-center justify-between mb-2.5 px-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Cercles de Savoir du Sahel</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/circles')}
-                    className="text-xs font-bold text-blue-700 hover:text-blue-800 transition flex items-center gap-0.5"
-                  >
-                    <span>Voir tout</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+              {/* A. BANNIÈRE DE BIENVENUE + RACCOURCIS HORIZONTAUX */}
+              {feedSection === 'feed' && (
+                <DashboardWelcomeAndShortcuts
+                  currentUser={currentUser}
+                  circles={circles}
+                  joinedCircleIds={joinedCircleIds}
+                  activeFeedFilter={feedFilter}
+                  activeSearchQuery={searchQuery}
+                  onOpenProfile={() => {
+                    if (currentUser) openUserProfile(currentUser);
+                  }}
+                  onCompleteProfile={() => navigate('/settings/compte')}
+                  onOpenQuickPost={() => {
+                    setShowCreateCapsule(false);
+                    setComposerPostInitialType('text');
+                    setComposerMode('post');
+                  }}
+                  onOpenCircle={(circleId) => navigate(`/circles/${encodeURIComponent(circleId)}`)}
+                  onOpenAllCircles={() => navigate('/circles')}
+                  onOpenCommunities={() => navigate('/communities')}
+                  onSelectCategoryShortcut={(q) => {
+                    setFeedFilter('all');
+                    setSearchQuery(q);
+                    if (feedSection !== 'feed') navigate('/feed');
+                  }}
+                  onResetFeedAll={() => {
+                    setFeedFilter('all');
+                    setSearchQuery('');
+                    navigate('/feed');
+                  }}
+                />
+              )}
 
-                <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                  
-                  {/* Create Circle Card (Story style) */}
-                  {currentUser && (
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateCircle(true)}
-                      className="min-h-[140px] w-28 sm:w-32 shrink-0 bg-gradient-to-b from-blue-50 via-indigo-50 to-red-50/60 border border-blue-200/80 rounded-2xl p-2.5 flex flex-col items-center justify-between text-center hover:shadow-xs transition active:scale-95 group"
-                    >
-                      <div className="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center shadow-xs mt-2 group-hover:scale-110 transition-transform">
-                        <Plus className="w-5 h-5 stroke-[2.5]" />
-                      </div>
-                      <div className="mb-1">
-                        <p className="text-[11px] font-bold text-slate-950 leading-tight">Créer un Cercle</p>
-                        <p className="text-[9px] text-blue-700 mt-0.5">Nouveau savoir</p>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Circle Cards Carousel */}
-                  {circles.map((circle) => {
-                    const isJoined = joinedCircleIds.includes(circle.id);
-                    return (
-                      <div
-                        key={circle.id}
-                        onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
-                        className="relative min-h-[140px] w-28 sm:w-32 shrink-0 rounded-2xl overflow-hidden cursor-pointer group shadow-xs border border-slate-200/60 active:scale-95 transition-all"
-                      >
-                        <img
-                          src={circle.image}
-                          alt={circle.nom}
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
-                        
-                        {/* Top tag */}
-                        <div className="absolute top-2 left-2 right-2 flex justify-between items-center">
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-900/80 text-white backdrop-blur-xs truncate max-w-[70px]">
-                            {circle.categorie}
-                          </span>
-                          {isJoined && (
-                            <span className="w-2 h-2 rounded-full bg-red-500 ring-2 ring-slate-900" title="Rejoint" />
-                          )}
-                        </div>
-
-                        {/* Bottom Info */}
-                        <div className="absolute bottom-2 left-2 right-2">
-                          <p className="text-xs font-bold text-white leading-tight line-clamp-2 drop-shadow-xs">
-                            {circle.nom}
-                          </p>
-                          <p className="text-[9px] text-blue-300 font-semibold mt-0.5">
-                            {isJoined ? '✓ Membre' : 'Voir le cercle'}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* B. BOÎTE DE CRÉATION DE PUBLICATION COMPACTE & ÉLÉGANTE */}
+              {/* B. COMPOSITEUR DE PUBLICATION (MOBILE ANDROID & DESKTOP) */}
               {currentUser ? (
                 composerMode === 'post' ? (
                   <CommunityPostComposer
@@ -2485,20 +2311,21 @@ export default function App() {
                     onCancel={() => setComposerMode('none')}
                   />
                 ) : (
-                  <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
                     {/* Top trigger row */}
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center shrink-0 ring-1 ring-slate-200/80 overflow-hidden">
+                    <div className="flex items-center gap-2.5 sm:gap-3">
+                      <div className="relative w-10 h-10 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center shrink-0 ring-1 ring-slate-200/80 dark:ring-slate-700">
                         {currentUser.avatar_url ? (
                           <img
                             src={currentUser.avatar_url}
                             alt={currentUser.nom}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full rounded-full object-cover"
                             referrerPolicy="no-referrer"
                           />
                         ) : (
                           currentUser.nom.charAt(0).toUpperCase()
                         )}
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
                       </div>
 
                       <motion.button
@@ -2509,68 +2336,122 @@ export default function App() {
                           setComposerPostInitialType('text');
                           setComposerMode('post');
                         }}
-                        className="flex-1 text-left px-4 py-2.5 bg-slate-100/90 hover:bg-slate-200/60 border border-slate-200/60 rounded-full text-xs sm:text-sm text-slate-500 font-medium transition truncate"
+                        className="flex-1 min-h-[42px] text-left px-4 py-2 bg-[#F3F6FB] dark:bg-slate-800 hover:bg-slate-200/70 dark:hover:bg-slate-700 border border-slate-200/70 dark:border-slate-700 rounded-full text-xs sm:text-sm text-slate-500 dark:text-slate-300 font-medium transition truncate"
                       >
-                        Quoi de neuf, {currentUser.nom.split(' ')[0]} ? Partagez une réflexion...
+                        Quoi de neuf aujourd’hui ?
                       </motion.button>
                     </div>
 
-                    {/* Organized 4 Quick-Action Triggers */}
+                    {/* Android-friendly action bar matching reference: Photo, Vidéo, Article, Événement, Plus + Publier */}
                     {composerMode === 'none' && !showCreateCapsule && (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-3 mt-3 border-t border-slate-100">
-                        <motion.button
-                          type="button"
-                          whileTap={{ scale: 0.96 }}
-                          onClick={() => {
-                            setComposerPostInitialType('image');
-                            setComposerMode('post');
-                          }}
-                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-emerald-50/70 text-slate-700 hover:text-emerald-800 font-semibold text-xs transition"
-                        >
-                          <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span className="truncate">Photo / Vidéo</span>
-                        </motion.button>
+                      <div className="pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 min-w-0 py-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setComposerPostInitialType('image');
+                                setComposerMode('post');
+                              }}
+                              className="min-h-[36px] px-2.5 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-700 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1.5 shrink-0 border border-slate-200/70 dark:border-slate-700 transition"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <span>Photo</span>
+                            </button>
 
-                        <motion.button
-                          type="button"
-                          whileTap={{ scale: 0.96 }}
-                          onClick={() => {
-                            setComposerPostInitialType('text');
-                            setComposerMode('post');
-                          }}
-                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-blue-50/70 text-slate-700 hover:text-blue-800 font-semibold text-xs transition"
-                        >
-                          <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
-                          <span className="truncate">Texte / Lien / Doc</span>
-                        </motion.button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setComposerPostInitialType('video');
+                                setComposerMode('post');
+                              }}
+                              className="min-h-[36px] px-2.5 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1.5 shrink-0 border border-slate-200/70 dark:border-slate-700 transition"
+                            >
+                              <Video className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                              <span>Vidéo</span>
+                            </button>
 
-                        <motion.button
-                          type="button"
-                          whileTap={{ scale: 0.96 }}
-                          onClick={() => {
-                            setComposerPostInitialType('poll');
-                            setComposerMode('post');
-                          }}
-                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-amber-50/70 text-slate-700 hover:text-amber-800 font-semibold text-xs transition"
-                        >
-                          <BarChart2 className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span className="truncate">Sondage</span>
-                        </motion.button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setComposerPostInitialType('document');
+                                setComposerMode('post');
+                              }}
+                              className="min-h-[36px] px-2.5 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1.5 shrink-0 border border-slate-200/70 dark:border-slate-700 transition"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Article</span>
+                            </button>
 
-                        <motion.button
-                          type="button"
-                          whileTap={{ scale: 0.96 }}
-                          onClick={() => {
-                            setNewCapsuleCircleId('public');
-                            setNewCapsuleType('audio');
-                            setShowCreateCapsule(true);
-                            setComposerMode('capsule');
-                          }}
-                          className="min-h-[42px] flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl hover:bg-red-50/70 text-slate-700 hover:text-red-800 font-semibold text-xs transition"
-                        >
-                          <Volume2 className="w-4 h-4 text-red-600 shrink-0" />
-                          <span className="truncate">Note Vocale</span>
-                        </motion.button>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/communities')}
+                              className="min-h-[36px] px-2.5 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 font-semibold text-[11px] flex items-center gap-1.5 shrink-0 border border-slate-200/70 dark:border-slate-700 transition"
+                            >
+                              <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Événement</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowComposerMore((prev) => !prev)}
+                              aria-expanded={showComposerMore}
+                              className={`min-h-[36px] px-2.5 py-1.5 rounded-full font-semibold text-[11px] flex items-center gap-1 shrink-0 border transition ${
+                                showComposerMore
+                                  ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                                  : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200/70 dark:border-slate-700'
+                              }`}
+                            >
+                              <MoreHorizontal className="w-3.5 h-3.5 shrink-0" />
+                              <span>Plus</span>
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowCreateCapsule(false);
+                              setComposerPostInitialType('text');
+                              setComposerMode('post');
+                            }}
+                            className="min-h-[36px] px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-xs transition"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Publier</span>
+                          </button>
+                        </div>
+
+                        {showComposerMore && (
+                          <div className="flex items-center gap-2 pt-1 animate-fadeIn">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowComposerMore(false);
+                                setComposerPostInitialType('poll');
+                                setComposerMode('post');
+                              }}
+                              className="min-h-[36px] px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold text-[11px] flex items-center gap-1.5 border border-blue-200/70 dark:border-blue-800 transition"
+                            >
+                              <BarChart2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Sondage</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowComposerMore(false);
+                                setNewCapsuleCircleId('public');
+                                setNewCapsuleType('audio');
+                                setShowCreateCapsule(true);
+                                setComposerMode('capsule');
+                              }}
+                              className="min-h-[36px] px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold text-[11px] flex items-center gap-1.5 border border-indigo-200/70 dark:border-indigo-800 transition"
+                            >
+                              <Volume2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Note vocale</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -2734,101 +2615,91 @@ export default function App() {
                 </div>
               )}
 
-              {/* C. BARRE DE FILTRES DU FLUX (FACEBOOK-STYLE SEGMENTED TABS) */}
-              <div className="bg-white border border-slate-200/80 p-2 sm:p-3 rounded-2xl shadow-xs flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none">
-                  
-                  {/* Tab : Tous les savoirs */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFeedFilter('all');
-                      if (feedSection !== 'feed') navigate('/feed');
-                    }}
-                    className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                      feedFilter === 'all' && feedSection === 'feed'
-                        ? 'bg-slate-950 text-white shadow-xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>Tout le fil</span>
-                  </button>
-
-                  {/* Tab : Fil public (Hors cercle) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFeedFilter('public');
-                      if (feedSection !== 'feed') navigate('/feed');
-                    }}
-                    className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                      feedFilter === 'public' && feedSection === 'feed'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>Hors cercle</span>
-                  </button>
-
-                  {/* Tab : Mes Cercles */}
-                  {currentUser && (
+              {/* C. À LA UNE & FILTRES DISCRETS DU FLUX */}
+              <div className="flex flex-col gap-2 px-0.5 pt-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-xs sm:text-sm font-extrabold text-slate-950 dark:text-white flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-blue-600" />
+                    <span>{feedSection === 'bookmarks' ? 'Savoirs enregistrés' : 'À la une'}</span>
+                  </h2>
+                  <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
                     <button
                       type="button"
                       onClick={() => {
-                        setFeedFilter('joined');
+                        setFeedFilter('all');
                         if (feedSection !== 'feed') navigate('/feed');
                       }}
-                      className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                        feedFilter === 'joined' && feedSection === 'feed'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-600 hover:bg-slate-100'
+                      className={`min-h-[30px] px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
+                        feedFilter === 'all' && feedSection === 'feed'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white/80 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 hover:bg-white'
                       }`}
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Mes Cercles</span>
-                      <span className="font-mono text-[10px] opacity-80">({joinedCircleIds.length})</span>
+                      Tout
                     </button>
-                  )}
 
-                  {/* Tab : Audios uniquement */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFeedFilter('audio');
-                      if (feedSection !== 'feed') navigate('/feed');
-                    }}
-                    className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                      feedFilter === 'audio' && feedSection === 'feed'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>Audios</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFeedFilter('public');
+                        if (feedSection !== 'feed') navigate('/feed');
+                      }}
+                      className={`min-h-[30px] px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
+                        feedFilter === 'public' && feedSection === 'feed'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white/80 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 hover:bg-white'
+                      }`}
+                    >
+                      Public
+                    </button>
 
-                  {/* Tab : Questions & Sondages */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFeedFilter('questions');
-                      if (feedSection !== 'feed') navigate('/feed');
-                    }}
-                    className={`min-h-[34px] px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                      feedFilter === 'questions' && feedSection === 'feed'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    <span>Questions</span>
-                  </button>
-                </div>
+                    {currentUser && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFeedFilter('joined');
+                          if (feedSection !== 'feed') navigate('/feed');
+                        }}
+                        className={`min-h-[30px] px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
+                          feedFilter === 'joined' && feedSection === 'feed'
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-white/80 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 hover:bg-white'
+                        }`}
+                      >
+                        Mes Cercles ({joinedCircleIds.length})
+                      </button>
+                    )}
 
-                {/* Total count badge */}
-                <div className="text-[11px] font-medium text-slate-400 px-2 shrink-0">
-                  <span className="font-bold text-slate-700">{displayedFeedItems.length}</span> publications
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFeedFilter('audio');
+                        if (feedSection !== 'feed') navigate('/feed');
+                      }}
+                      className={`min-h-[30px] px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
+                        feedFilter === 'audio' && feedSection === 'feed'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white/80 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 hover:bg-white'
+                      }`}
+                    >
+                      Audios
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFeedFilter('questions');
+                        if (feedSection !== 'feed') navigate('/feed');
+                      }}
+                      className={`min-h-[30px] px-2.5 py-1 rounded-full text-[11px] font-bold transition shrink-0 ${
+                        feedFilter === 'questions' && feedSection === 'feed'
+                          ? 'bg-amber-600 text-white shadow-2xs'
+                          : 'bg-white/80 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 hover:bg-white'
+                      }`}
+                    >
+                      Questions
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -3009,219 +2880,277 @@ export default function App() {
         </main>
 
         {/* ======================================================== */}
-        {/* COLONNE DROITE CONTEXTUELLE (DESKTOP XL >= 1280px) */}
+        {/* COLONNE DROITE CONTEXTUELLE (DESKTOP XL >= 1280px IMAGE 2) */}
         {/* ======================================================== */}
-        <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-thin">
+        <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-none">
           
-          {/* 1. Cercles recommandés (Suggested Circles) */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xs">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
-                <span>Cercles Recommandés</span>
+          {/* 1. Mes cercles (Image 2 circular shortcut grid using REAL Firestore circles) */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-4 shadow-2xs">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                Mes cercles
               </h3>
               <button
                 type="button"
                 onClick={() => navigate('/circles')}
-                className="text-xs font-bold text-blue-700 hover:underline"
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Voir tout →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {circles.slice(0, 3).map((circle) => (
+                <button
+                  key={circle.id}
+                  type="button"
+                  onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
+                  className="flex flex-col items-center text-center group"
+                  title={circle.nom}
+                >
+                  <span className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-blue-600/20 group-hover:ring-blue-600 transition bg-blue-50">
+                    <img
+                      src={circle.image}
+                      alt={circle.nom}
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </span>
+                  <span className="mt-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 truncate w-full">
+                    {circle.categorie || circle.nom}
+                  </span>
+                </button>
+              ))}
+
+              {currentUser && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateCircle(true)}
+                  className="flex flex-col items-center text-center group"
+                >
+                  <span className="w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+                    <Plus className="w-4 h-4" />
+                  </span>
+                  <span className="mt-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+                    Créer
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 2. Activités récentes (Powered by LIVE Firestore notifications) */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-4 shadow-2xs">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                Activités récentes
+              </h3>
+              <button
+                type="button"
+                onClick={() => navigate('/notifications')}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
               >
                 Tout voir
               </button>
             </div>
 
-            <div className="space-y-3">
-              {suggestedCircles.length === 0 ? (
-                <p className="text-xs text-slate-400 p-2 text-center">Tous les cercles rejoints !</p>
-              ) : (
-                suggestedCircles.map((circle) => (
-                  <div key={circle.id} className="flex items-start gap-2.5 p-1">
-                    <img
-                      src={circle.image}
-                      alt={circle.nom}
-                      className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200 shrink-0 cursor-pointer"
-                      onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
-                      referrerPolicy="no-referrer"
-                    />
+            {notifications.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Aucune activité récente pour le moment. Vos interactions et messages apparaîtront ici.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {notifications.slice(0, 4).map((notif) => (
+                  <button
+                    key={notif.id}
+                    type="button"
+                    onClick={() => {
+                      if (notif.targetType === 'conversation' && notif.targetId) {
+                        navigate(`/messages/${encodeURIComponent(notif.targetId)}`);
+                      } else if (notif.groupId && notif.groupId !== 'public') {
+                        navigate(`/communities/${encodeURIComponent(notif.groupId)}`);
+                      } else {
+                        navigate('/notifications');
+                      }
+                    }}
+                    className="w-full flex items-start gap-2.5 p-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/70 text-left transition group"
+                  >
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${notif.isRead ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' : 'bg-blue-50 dark:bg-blue-950 text-blue-600'}`}>
+                      <Bell className="w-3.5 h-3.5" />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p 
-                        className="text-xs font-bold text-slate-900 truncate hover:text-blue-700 cursor-pointer"
-                        onClick={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
-                      >
-                        {circle.nom}
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 line-clamp-2 group-hover:text-blue-700 leading-snug">
+                        {notif.message || notif.title}
                       </p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {circle.categorie}
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {new Date(notif.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleJoinCircle(circle.id)}
-                        className="mt-1.5 min-h-[28px] px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3 text-blue-700" />
-                        <span>Rejoindre</span>
-                      </button>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-1" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 2. Mentors en ligne & contacts disponibles */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xs">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-amber-500" />
-                <span>Mentors & Experts</span>
-              </h3>
+          {/* 3. Conseil & Partage du jour (Opens Real Post Composer) */}
+          {currentUser && (
+            <div className="bg-gradient-to-br from-amber-50 via-white to-blue-50/70 dark:from-slate-900 dark:to-slate-900 border border-amber-200/70 dark:border-slate-800 rounded-3xl p-4 shadow-2xs">
+              <div className="flex items-start gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center shrink-0">
+                  <Lightbulb className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                    Conseil du jour
+                  </h3>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                    Partagez vos connaissances ou posez une question pour aider la communauté ZAURE.
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => navigate('/mentors')}
-                className="text-xs font-bold text-amber-700 hover:underline"
+                onClick={() => {
+                  setComposerPostInitialType('text');
+                  setComposerMode('post');
+                  navigate('/feed');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="mt-3 w-full min-h-[38px] px-4 py-2 rounded-full bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-bold text-blue-700 dark:text-blue-400 transition"
               >
-                Annuaire
+                Publier une idée →
               </button>
             </div>
+          )}
 
-            <div className="space-y-2.5">
-              {mentorsList.slice(0, 4).map((mentor) => (
-                <div key={mentor.id} className="flex items-center justify-between gap-2 p-1 group">
-                  <button
-                    type="button"
-                    onClick={() => openUserProfile(mentor)}
-                    className="flex items-center gap-2.5 min-w-0 text-left flex-1"
-                    title={`Voir le profil de ${mentor.nom}`}
-                  >
-                    <div className="relative shrink-0">
+          {/* 4. Mentors & Experts en ligne */}
+          {mentorsList.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-4 shadow-2xs">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Award className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Mentors & Experts</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => navigate('/mentors')}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Annuaire
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {mentorsList.slice(0, 3).map((mentor) => (
+                  <div key={mentor.id} className="flex items-center justify-between gap-2 p-1 group">
+                    <button
+                      type="button"
+                      onClick={() => openUserProfile(mentor)}
+                      className="flex items-center gap-2.5 min-w-0 text-left flex-1"
+                    >
                       {mentor.avatar_url ? (
-                        <img src={mentor.avatar_url} alt={mentor.nom} className="w-8 h-8 rounded-full object-cover ring-1 ring-amber-400" referrerPolicy="no-referrer" />
+                        <img src={mentor.avatar_url} alt={mentor.nom} loading="lazy" className="w-8 h-8 rounded-full object-cover ring-1 ring-amber-400 shrink-0" referrerPolicy="no-referrer" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center shrink-0">
                           {mentor.nom.charAt(0)}
                         </div>
                       )}
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-600 border-2 border-white rounded-full" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 group-hover:text-blue-700 truncate flex items-center gap-1 transition-colors">
-                        <span>{mentor.nom}</span>
-                      </p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {mentor.role === 'verifie' ? 'Santé' : 'Mentor'} · {mentor.langue_preferee.toUpperCase()}
-                      </p>
-                    </div>
-                  </button>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-700 truncate">
+                          {mentor.nom}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate">
+                          {mentor.role === 'verifie' ? 'Santé' : 'Mentor'} · {mentor.langue_preferee.toUpperCase()}
+                        </p>
+                      </div>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleOpenChatWithUser(mentor)}
-                    className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition shrink-0"
-                    title={`Discuter avec ${mentor.nom}`}
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 3. Charte d'engagement & Règles d'or de la communauté */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xs">
-            <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-2 px-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>Charte du Savoir</span>
-            </h3>
-
-            <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
-              <div className="flex items-start gap-2">
-                <span className="font-bold text-blue-600 shrink-0">1.</span>
-                <p>Savoirs vérifiés et basés sur des pratiques réelles.</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="font-bold text-blue-600 shrink-0">2.</span>
-                <p>Respect mutuel et bienveillance inter-communautaire.</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="font-bold text-blue-600 shrink-0">3.</span>
-                <p>Priorité à l'audio pour une accessibilité maximale.</p>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenChatWithUser(mentor)}
+                      className="p-2 text-blue-700 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-xl transition shrink-0"
+                      title={`Discuter avec ${mentor.nom}`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* 4. Statistiques de la plateforme */}
-          <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl p-4 shadow-xs">
-            <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Impact Communautaire</p>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div>
-                <p className="font-mono text-xl font-black text-white">{capsules.length}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Savoirs partagés</p>
-              </div>
-              <div>
-                <p className="font-mono text-xl font-black text-white">{circles.length}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Cercles actifs</p>
-              </div>
-            </div>
-          </div>
-
-          </aside>
+        </aside>
 
       </div>
 
       {/* ============================================================ */}
-      {/* 3. FIXED MOBILE BOTTOM NAVIGATION BAR (< 768px) */}
+      {/* 3. BARRE HORIZONTALE ANDROID (< 1024px) UNIQUEMENT (6 ACCÈS) */}
       {/* ============================================================ */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 shadow-lg z-50 px-1 py-1 flex justify-around items-center pb-safe" id="mobile-bottom-navigation">
-        
-        {/* Actualité */}
+      <nav
+        aria-label="Navigation Android principale"
+        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] z-50 px-0.5 pt-1 pb-safe-nav grid grid-cols-6 items-center"
+        id="mobile-bottom-navigation"
+      >
+        {/* 1. Accueil */}
         <button
           type="button"
           onClick={() => {
+            setFeedFilter('all');
             navigate('/feed');
           }}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+          className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found'
-              ? 'text-blue-700 font-bold'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
-          title="Actualité"
+          title="Accueil"
         >
-          <Newspaper className={`w-5 h-5 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Fil</span>
+          <Newspaper className={`w-5 h-5 shrink-0 ${activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Accueil</span>
+          {activeTab === 'feed' && feedSection === 'feed' && selectedCircleId === 'all' && parsedRoute.kind !== 'not_found' && (
+            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+          )}
         </button>
 
-        {/* Découverte */}
+        {/* 2. Cercles */}
         <button
           type="button"
-          onClick={() => {
-            navigate('/circles');
-          }}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+          onClick={() => navigate('/circles')}
+          className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all')
-              ? 'text-blue-700 font-bold'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
-          title="Découverte"
+          title="Cercles"
         >
-          <Compass className={`w-5 h-5 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Explorer</span>
+          <Compass className={`w-5 h-5 shrink-0 ${activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Cercles</span>
+          {activeTab === 'feed' && (feedSection === 'circles' || selectedCircleId !== 'all') && (
+            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+          )}
         </button>
 
-        {/* Communautés */}
+        {/* 3. Communautés */}
         <button
           type="button"
           onClick={() => navigate('/communities')}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+          className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'communities'
-              ? 'text-blue-700 font-bold'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Communautés"
         >
-          <UsersRound className={`w-5 h-5 ${activeTab === 'communities' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Groupes</span>
+          <UsersRound className={`w-5 h-5 shrink-0 ${activeTab === 'communities' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[9px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Communautés</span>
+          {activeTab === 'communities' && (
+            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+          )}
         </button>
 
-        {/* Messages */}
+        {/* 4. Messages (avec badge dynamique) */}
         <button
           type="button"
           onClick={() => {
@@ -3229,50 +3158,60 @@ export default function App() {
             setChatMobileView('list');
             navigate('/messages');
           }}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
-            activeTab === 'chat' ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+          className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
+            activeTab === 'chat'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Messages"
         >
-          <MessageCircle className={`w-5 h-5 ${activeTab === 'chat' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Messages</span>
+          <div className="relative">
+            <MessageCircle className={`w-5 h-5 shrink-0 ${activeTab === 'chat' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+            {unreadMessagesCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 bg-red-600 text-white text-[9px] font-black min-w-[15px] h-3.5 px-1 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 tabular-nums">
+                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Messages</span>
+          {activeTab === 'chat' && (
+            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+          )}
         </button>
 
-        {/* Notifications */}
+        {/* 5. Notifications (avec badge dynamique) */}
         <button
           type="button"
           onClick={() => {
-            navigate('/notifications');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (currentUser) {
+              navigate('/notifications');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+              setShowAuthModal(true);
+            }
           }}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 relative ${
-            activeTab === 'notifications' ? 'text-blue-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+          className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
+            activeTab === 'notifications'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
           title="Notifications"
         >
           <div className="relative">
-            <motion.div
-              animate={notifBadgePulse ? { rotate: [0, -14, 14, -10, 10, 0] } : { rotate: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <Bell className={`w-5 h-5 ${activeTab === 'notifications' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-            </motion.div>
+            <Bell className={`w-5 h-5 shrink-0 ${activeTab === 'notifications' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
             {unreadNotificationsCount > 0 && (
-              <motion.span
-                key={unreadNotificationsCount}
-                initial={{ scale: 0.65, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 450, damping: 22 }}
-                className="absolute -top-1 -right-1.5 bg-red-600 text-white text-[9px] font-black min-w-[14px] h-3.5 px-1 rounded-full flex items-center justify-center tabular-nums"
-              >
+              <span className="absolute -top-1.5 -right-2 bg-red-600 text-white text-[9px] font-black min-w-[15px] h-3.5 px-1 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 tabular-nums">
                 {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
-              </motion.span>
+              </span>
             )}
           </div>
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Alertes</span>
+          <span className="text-[9px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Notifications</span>
+          {activeTab === 'notifications' && (
+            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+          )}
         </button>
 
-        {/* Profil */}
+        {/* 6. Profil */}
         <button
           type="button"
           onClick={() => {
@@ -3282,15 +3221,18 @@ export default function App() {
               setShowAuthModal(true);
             }
           }}
-          className={`min-h-[48px] flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition active:scale-95 ${
+          className={`min-h-[48px] min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl relative transition active:scale-95 ${
             activeTab === 'profile'
-              ? 'text-blue-700 font-bold'
-              : 'text-slate-500 hover:text-slate-800'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
-          title="Mon profil"
+          title="Profil"
         >
-          <CircleUserRound className={`w-5 h-5 ${activeTab === 'profile' ? 'stroke-[2.5px] text-blue-600' : 'stroke-2'}`} />
-          <span className="text-[10px] font-semibold tracking-tight mt-0.5">Profil</span>
+          <CircleUserRound className={`w-5 h-5 shrink-0 ${activeTab === 'profile' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[9.5px] min-[400px]:text-[10px] font-semibold tracking-tight mt-0.5 truncate max-w-full">Profil</span>
+          {activeTab === 'profile' && (
+            <span className="w-7 h-0.5 bg-blue-600 rounded-full mt-0.5" />
+          )}
         </button>
       </nav>
 
@@ -3868,7 +3810,7 @@ export default function App() {
 
       {/* Remote Session Revoked Notice */}
       {sessionRevokedNotice && (
-        <div className="fixed bottom-20 md:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-slate-900 text-white border border-slate-700 rounded-2xl p-4 shadow-2xl flex items-start gap-3">
+        <div className="fixed bottom-20 lg:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-slate-900 text-white border border-slate-700 rounded-2xl p-4 shadow-2xl flex items-start gap-3">
           <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-xs leading-relaxed flex-1">
             {sessionRevokedNotice}
@@ -3894,7 +3836,7 @@ export default function App() {
             exit={{ opacity: 0, scale: 0.85, y: 12 }}
             whileTap={{ scale: 0.92 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 w-11 h-11 rounded-full bg-slate-950 hover:bg-blue-600 text-white shadow-lg flex items-center justify-center transition-colors"
+            className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-40 w-11 h-11 rounded-full bg-slate-950 hover:bg-blue-600 text-white shadow-lg flex items-center justify-center transition-colors"
             title="Revenir en haut du fil"
             aria-label="Revenir en haut du fil"
           >

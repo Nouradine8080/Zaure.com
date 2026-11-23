@@ -120,7 +120,7 @@ function extractDomain(url: string): string {
 }
 
 function renderFormattedContent(text: string): React.ReactNode {
-  const tokens = text.split(/(https?:\/\/[^\s]+|@[a-zA-Z0-9À-ÿ_]+(?:\s[a-zA-Z0-9À-ÿ_]+)?)/g);
+  const tokens = text.split(/(https?:\/\/[^\s]+|#[a-zA-Z0-9À-ÿ_]+|@[a-zA-Z0-9À-ÿ_]+(?:\s[a-zA-Z0-9À-ÿ_]+)?)/g);
   return tokens.map((token, idx) => {
     if (token.startsWith('http://') || token.startsWith('https://')) {
       return (
@@ -135,9 +135,16 @@ function renderFormattedContent(text: string): React.ReactNode {
         </a>
       );
     }
+    if (token.startsWith('#') && token.length > 1) {
+      return (
+        <span key={idx} className="font-semibold text-blue-600 dark:text-blue-400">
+          {token}
+        </span>
+      );
+    }
     if (token.startsWith('@') && token.length > 1) {
       return (
-        <span key={idx} className="font-semibold text-blue-700">
+        <span key={idx} className="font-semibold text-blue-700 dark:text-blue-400">
           {token}
         </span>
       );
@@ -334,7 +341,7 @@ export default function CommunityPostCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5"
+      className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5 min-w-0 overflow-x-clip"
     >
       {/* Status Banner (Pinned / Pending / Scheduled) */}
       {(post.isPinned || post.status !== 'published') && (
@@ -392,6 +399,8 @@ export default function CommunityPostCard({
                   <img
                     src={post.authorAvatar}
                     alt={post.authorName}
+                    loading="lazy"
+                    decoding="async"
                     className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover bg-slate-100 ring-1 ring-slate-200/80 hover:opacity-90 transition-opacity"
                     referrerPolicy="no-referrer"
                   />
@@ -405,6 +414,8 @@ export default function CommunityPostCard({
               <img
                 src={post.authorAvatar}
                 alt={post.authorName}
+                loading="lazy"
+                decoding="async"
                 className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover bg-slate-100 ring-1 ring-slate-200/80"
                 referrerPolicy="no-referrer"
               />
@@ -421,12 +432,12 @@ export default function CommunityPostCard({
                 <button
                   type="button"
                   onClick={() => onAuthorClick(post.authorId)}
-                  className="text-[13.5px] sm:text-[15px] font-bold text-slate-950 hover:text-blue-700 truncate text-left transition-colors"
+                  className="text-[13.5px] sm:text-[15px] font-bold text-slate-950 dark:text-white hover:text-blue-700 truncate text-left transition-colors"
                 >
                   {post.authorName}
                 </button>
               ) : (
-                <span className="text-[13.5px] sm:text-[15px] font-bold text-slate-950 truncate">
+                <span className="text-[13.5px] sm:text-[15px] font-bold text-slate-950 dark:text-white truncate">
                   {post.isAnonymous ? 'Membre anonyme' : post.authorName}
                 </span>
               )}
@@ -612,7 +623,7 @@ export default function CommunityPostCard({
         </div>
       ) : (
         post.content && (
-          <div className="text-[14px] sm:text-[15px] text-slate-800 leading-[1.6] whitespace-pre-wrap break-words">
+          <div className="text-[14px] sm:text-[15px] text-slate-800 dark:text-slate-200 leading-[1.6] whitespace-pre-wrap break-words">
             {renderFormattedContent(displayedText)}
             {isLongText && (
               <button
@@ -664,6 +675,8 @@ export default function CommunityPostCard({
               <img
                 src={images[0].url}
                 alt={images[0].name}
+                loading="lazy"
+                decoding="async"
                 className="w-full max-h-[480px] object-cover group-hover/img:scale-[1.01] transition-transform duration-300"
                 referrerPolicy="no-referrer"
               />
@@ -685,6 +698,8 @@ export default function CommunityPostCard({
                   <img
                     src={img.url}
                     alt={img.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover/img:scale-[1.02] transition-transform duration-300"
                     referrerPolicy="no-referrer"
                   />
@@ -703,6 +718,8 @@ export default function CommunityPostCard({
                 <img
                   src={images[0].url}
                   alt={images[0].name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover group-hover/img:scale-[1.02] transition-transform duration-300"
                   referrerPolicy="no-referrer"
                 />
@@ -717,6 +734,8 @@ export default function CommunityPostCard({
                   <img
                     src={img.url}
                     alt={img.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover/img:scale-[1.02] transition-transform duration-300"
                     referrerPolicy="no-referrer"
                   />
@@ -739,6 +758,8 @@ export default function CommunityPostCard({
                     <img
                       src={img.url}
                       alt={img.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover/img:scale-[1.02] transition-transform duration-300"
                       referrerPolicy="no-referrer"
                     />

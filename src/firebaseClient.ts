@@ -19,7 +19,8 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { 
   initializeFirestore,
@@ -96,7 +97,17 @@ if (isFirebaseConfigured) {
   try {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
-    setPersistence(auth, browserLocalPersistence).catch(() => {});
+    const shouldPersistLocally = (() => {
+      try {
+        return localStorage.getItem('zaure_remember_me') !== 'false';
+      } catch {
+        return true;
+      }
+    })();
+    setPersistence(
+      auth,
+      shouldPersistLocally ? browserLocalPersistence : browserSessionPersistence
+    ).catch(() => {});
     try {
       dbFirestore = initializeFirestore(app, {
         localCache: persistentLocalCache({
@@ -413,7 +424,11 @@ export const zaureService = {
 
           currentUser = freshUser;
           try {
-            localStorage.setItem('zaure_user_session_cache', JSON.stringify(freshUser));
+            if (localStorage.getItem('zaure_remember_me') !== 'false') {
+              localStorage.setItem('zaure_user_session_cache', JSON.stringify(freshUser));
+            } else {
+              localStorage.removeItem('zaure_user_session_cache');
+            }
           } catch {
             // ignore storage errors
           }
@@ -563,6 +578,26 @@ export const zaureService = {
       // If email enumeration protection or network check doesn't reveal methods, allow step progression;
       // Firebase createUserWithEmailAndPassword enforces uniqueness cleanly on finalization.
       return { available: true, error: null };
+    }
+  },
+
+  setAuthPersistence: async (rememberMe: boolean): Promise<void> => {
+    try {
+      localStorage.setItem('zaure_remember_me', rememberMe ? 'true' : 'false');
+      if (!rememberMe) {
+        localStorage.removeItem('zaure_user_session_cache');
+      }
+    } catch {
+      // ignore storage errors
+    }
+    if (!auth) return;
+    try {
+      await setPersistence(
+        auth,
+        rememberMe ? browserLocalPersistence : browserSessionPersistence
+      );
+    } catch {
+      // ignore persistence fallback in restricted contexts
     }
   },
 

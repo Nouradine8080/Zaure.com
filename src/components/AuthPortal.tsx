@@ -1,24 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Mail,
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
   Eye,
   EyeOff,
-  Sparkles,
-  CheckCircle2,
-  AlertCircle,
   KeyRound,
-  ArrowLeft,
+  Lock,
+  LogIn,
+  Mail,
+  Smartphone,
+  User,
 } from 'lucide-react';
 import { zaureService } from '../firebaseClient';
 import { Circle, UserProfile } from '../types';
-import { REGISTRATION_ROUTES } from '../constants/registration';
+import { DEFAULT_AVATAR_URL, REGISTRATION_ROUTES } from '../constants/registration';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface AuthPortalProps {
   onAuthSuccess: (user: UserProfile) => void;
   circles?: Circle[];
   initialEmail?: string;
+}
+
+const REMEMBER_ME_KEY = 'zaure_remember_me';
+const REMEMBERED_EMAIL_KEY = 'zaure_remembered_email';
+
+function loadInitialRememberMe(): boolean {
+  try {
+    return localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function loadRememberedEmail(): string {
+  try {
+    if (localStorage.getItem(REMEMBER_ME_KEY) === 'false') return '';
+    return localStorage.getItem(REMEMBERED_EMAIL_KEY) || '';
+  } catch {
+    return '';
+  }
 }
 
 export default function AuthPortal({
@@ -29,11 +52,13 @@ export default function AuthPortal({
   const routePrefilledEmail =
     (location.state as { prefilledEmail?: string } | null)?.prefilledEmail || initialEmail;
 
-  // Mode: 'login' | 'forgot_password'
   const [authMode, setAuthMode] = useState<'login' | 'forgot_password'>('login');
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
 
-  // Form fields
-  const [email, setEmail] = useState(routePrefilledEmail);
+  const [rememberMe, setRememberMe] = useState<boolean>(() => loadInitialRememberMe());
+  const [email, setEmail] = useState<string>(
+    () => routePrefilledEmail || loadRememberedEmail()
+  );
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -44,30 +69,52 @@ export default function AuthPortal({
     }
   }, [routePrefilledEmail]);
 
-  // UI states
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Phone Auth States
-  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [smsCode, setSmsCode] = useState('');
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
   const [recaptchaVerifierInstance, setRecaptchaVerifierInstance] = useState<any>(null);
+
+  const resetFormState = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setShowPassword(false);
+    setConfirmationResult(null);
+    setSmsCode('');
+  };
+
+  const syncRememberPreference = async (targetEmail?: string) => {
+    await zaureService.setAuthPersistence(rememberMe);
+    try {
+      if (rememberMe && targetEmail?.trim()) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, targetEmail.trim());
+      } else if (!rememberMe) {
+        localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   const handleSendSmsCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
     if (!phoneNumber.trim() || !phoneNumber.startsWith('+')) {
-      setErrorMessage('Veuillez entrer un numéro de téléphone valide au format international (ex: +22790123456).');
+      setErrorMessage(
+        'Veuillez entrer un numéro de téléphone valide au format international (ex : +22790123456).'
+      );
       return;
     }
 
     setIsLoading(true);
     try {
+      await syncRememberPreference();
       if (recaptchaVerifierInstance) {
         try {
           recaptchaVerifierInstance.clear();
@@ -78,15 +125,18 @@ export default function AuthPortal({
       const verifier = zaureService.createRecaptchaVerifier('recaptcha-container');
       setRecaptchaVerifierInstance(verifier);
 
-      const { confirmationResult: res, error } = await zaureService.signInWithPhone(phoneNumber.trim(), verifier);
+      const { confirmationResult: res, error } = await zaureService.signInWithPhone(
+        phoneNumber.trim(),
+        verifier
+      );
       if (error) {
         setErrorMessage(error);
       } else if (res) {
         setConfirmationResult(res);
-        setSuccessMessage('Code SMS envoyé avec succès !');
+        setSuccessMessage('Code SMS envoyé avec succès.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de l’envoi du SMS.');
+      setErrorMessage(err?.message || 'Erreur lors de l’envoi du SMS.');
     } finally {
       setIsLoading(false);
     }
@@ -103,41 +153,43 @@ export default function AuthPortal({
 
     setIsLoading(true);
     try {
-      const { user, error } = await zaureService.confirmPhoneCode(confirmationResult, smsCode.trim(), {
-        nom: 'Membre Zaure',
-        role: 'utilisateur',
-        bio: 'Inscrit par téléphone sur Zaure',
-        langue: 'fr',
-        avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=200'
-      });
+      const { user, error } = await zaureService.confirmPhoneCode(
+        confirmationResult,
+        smsCode.trim(),
+        {
+          nom: 'Membre Zaure',
+          role: 'utilisateur',
+          bio: 'Inscrit par téléphone sur Zaure',
+          langue: 'fr',
+          avatarUrl: DEFAULT_AVATAR_URL,
+        }
+      );
       if (error) {
         setErrorMessage(error);
       } else if (user) {
         onAuthSuccess(user);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Code SMS incorrect.');
+      setErrorMessage(err?.message || 'Code SMS incorrect.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const resetFormState = () => {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setShowPassword(false);
-    setConfirmationResult(null);
-    setSmsCode('');
-  };
-
-  // Login Submit
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!email.trim()) {
-      setErrorMessage('Veuillez saisir votre adresse email.');
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErrorMessage('Veuillez saisir votre adresse e-mail.');
+      return;
+    }
+    if (!trimmedEmail.includes('@')) {
+      setErrorMessage(
+        'Veuillez saisir l’adresse e-mail complète associée à votre compte Zaure.'
+      );
       return;
     }
     if (!password) {
@@ -147,24 +199,26 @@ export default function AuthPortal({
 
     setIsLoading(true);
     try {
-      const { user, error } = await zaureService.signIn(email.trim(), password);
+      await syncRememberPreference(trimmedEmail);
+      const { user, error } = await zaureService.signIn(trimmedEmail, password);
       if (error) {
         setErrorMessage(error);
       } else if (user) {
         onAuthSuccess(user);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de la connexion.');
+      setErrorMessage(err?.message || 'Erreur lors de la connexion.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Google Sign-In
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
+    setSuccessMessage(null);
     setIsLoading(true);
     try {
+      await syncRememberPreference();
       const { user, error } = await zaureService.signInWithGoogle();
       if (error) {
         setErrorMessage(error);
@@ -172,346 +226,475 @@ export default function AuthPortal({
         onAuthSuccess(user);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Échec de la connexion avec Google.');
+      setErrorMessage(err?.message || 'Échec de la connexion avec Google.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Password Reset Submit
   const handlePasswordResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMessage('Veuillez renseigner une adresse email valide.');
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      setErrorMessage('Veuillez renseigner une adresse e-mail valide.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const { success, error } = await zaureService.sendPasswordReset(email);
+      const { success, error } = await zaureService.sendPasswordReset(trimmedEmail);
       if (error) {
         setErrorMessage(error);
       } else if (success) {
-        setSuccessMessage(`Un lien de réinitialisation sécurisé a été envoyé à ${email}. Vérifiez votre boîte de réception.`);
+        setSuccessMessage(
+          `Un lien de réinitialisation sécurisé a été envoyé à ${trimmedEmail}. Vérifiez votre boîte de réception.`
+        );
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de l\'envoi du lien de réinitialisation.');
+      setErrorMessage(
+        err?.message || "Erreur lors de l'envoi du lien de réinitialisation."
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] flex flex-col items-center justify-center px-4 py-6 text-slate-800 font-sans selection:bg-blue-100">
-      <div className="w-full max-w-[430px] mx-auto">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#EAF2FF] via-[#F4F8FF] to-[#DFECFF] flex flex-col items-center justify-center px-4 py-8 text-slate-900 font-sans selection:bg-blue-100">
+      {/* Subtle Decorative Blue Geometric Background Waves matching mockup */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full bg-gradient-to-br from-blue-600/20 to-sky-400/15 blur-2xl" />
+        <div className="absolute top-1/4 -left-32 w-[360px] h-[360px] rounded-full bg-blue-500/12 blur-2xl" />
+        <div className="absolute -bottom-28 -right-16 w-[400px] h-[400px] rounded-full bg-gradient-to-tl from-blue-600/22 to-sky-400/10 blur-xl" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-[440px] mx-auto">
+        {/* Top Back to Landing & PWA Install */}
+        <div className="mb-4 flex items-center justify-between gap-2">
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-blue-700 bg-white/80 hover:bg-white border border-slate-200/80 px-3 py-2 rounded-full transition"
+            className="min-h-[40px] inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white/85 hover:bg-white border border-blue-100 px-3.5 py-2 rounded-full shadow-2xs transition"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Retour à l'accueil</span>
           </Link>
+          <PWAInstallButton compact />
         </div>
 
-        {/* Centered Zaure Logo */}
-        <div className="relative flex items-center justify-center mb-6 px-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-2xl shadow-sm">
-              Z
-            </div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">
-                Zaure
-              </h1>
-              <span className="w-2 h-2 rounded-full bg-red-600"></span>
-            </div>
-          </div>
-          <div className="absolute right-0">
-            <PWAInstallButton compact />
-          </div>
-        </div>
+        {/* Centered Crisp White Login Card */}
+        <section className="w-full bg-white rounded-[28px] p-7 sm:p-9 shadow-[0_24px_60px_-18px_rgba(29,78,216,0.2)] border border-blue-100/90">
+          {/* Top Brand Lockup matching Mockup */}
+          <div className="flex flex-col items-center text-center">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 rounded-xl"
+            >
+              <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white font-black text-2xl shadow-md shadow-blue-600/25">
+                Z
+              </span>
+              <span className="flex flex-col items-start">
+                <span className="text-3xl font-extrabold tracking-tight text-blue-600 leading-none">
+                  ZAURE
+                </span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 110 10"
+                  className="w-24 h-2.5 mt-1 text-blue-600"
+                  fill="none"
+                >
+                  <path
+                    d="M3 7.5C32 2 76 1.5 107 4.5"
+                    stroke="currentColor"
+                    strokeWidth="2.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+            </Link>
 
-        {/* Authentication Card */}
-        <section className="w-full">
-          
-          {/* Main Card */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-xl border border-slate-200/90 relative">
-            
-            {/* Notifications / Errors */}
-            {errorMessage && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-xs text-red-700 rounded-xl flex items-start gap-2.5 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                <span className="font-medium flex-1">{errorMessage}</span>
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 rounded-xl flex items-start gap-2.5 animate-fadeIn">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span className="font-medium flex-1">{successMessage}</span>
-              </div>
-            )}
-
-            {/* ======================================================== */}
-            {/* VUE 1 : CONNEXION DIRECTE                                */}
-            {/* ======================================================== */}
-            {authMode === 'login' && (
+            {authMode === 'login' ? (
               <>
-                <div className="flex p-1 bg-slate-100 rounded-xl mb-4 text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMethod('email'); resetFormState(); }}
-                    className={`flex-1 py-2 rounded-lg transition ${authMethod === 'email' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600'}`}
-                  >
-                    Par Email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMethod('phone'); resetFormState(); }}
-                    className={`flex-1 py-2 rounded-lg transition ${authMethod === 'phone' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600'}`}
-                  >
-                    Par Téléphone (SMS)
-                  </button>
-                </div>
+                <h1 className="mt-5 text-2xl sm:text-[28px] font-extrabold text-slate-950 tracking-tight">
+                  Connexion
+                </h1>
+                <p className="mt-1.5 text-sm text-slate-600 font-medium">
+                  Accédez à votre compte en toute sécurité
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="mt-5 text-2xl font-extrabold text-slate-950 tracking-tight">
+                  Mot de passe oublié
+                </h1>
+                <p className="mt-1.5 text-sm text-slate-600 font-medium">
+                  Recevez un lien sécurisé par e-mail
+                </p>
+              </>
+            )}
+          </div>
 
-                {authMethod === 'email' ? (
-                  <form onSubmit={handleLoginSubmit} className="space-y-3.5">
-                    <div>
-                      <div className="relative">
-                        <input
-                          type="email"
-                          placeholder="Adresse e-mail universitaire ou personnelle"
-                          required
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 placeholder:text-slate-400 bg-slate-50 focus:bg-white transition"
-                        />
-                      </div>
-                    </div>
+          {/* Notifications / Errors */}
+          {errorMessage && (
+            <div
+              role="alert"
+              className="mt-5 p-3.5 bg-red-50 border border-red-200 text-xs text-red-700 rounded-2xl flex items-start gap-2.5 animate-fadeIn"
+            >
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <span className="font-semibold flex-1 leading-snug">{errorMessage}</span>
+            </div>
+          )}
 
-                    <div>
-                      <div className="relative">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Mot de passe"
-                          required
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full text-sm pl-4 pr-11 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 placeholder:text-slate-400 bg-slate-50 focus:bg-white transition"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
+          {successMessage && (
+            <div
+              role="status"
+              className="mt-5 p-3.5 bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 rounded-2xl flex items-start gap-2.5 animate-fadeIn"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="font-semibold flex-1 leading-snug">{successMessage}</span>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VUE 1 : CONNEXION                                        */}
+          {/* ======================================================== */}
+          {authMode === 'login' && (
+            <div className="mt-6">
+              {authMethod === 'email' ? (
+                <form onSubmit={handleLoginSubmit} className="space-y-4" noValidate>
+                  {/* Email Input Pill with vertical hairline divider */}
+                  <div>
+                    <label htmlFor="login-email" className="sr-only">
+                      Adresse e-mail
+                    </label>
+                    <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                      <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4" />
+                      </span>
+                      <input
+                        id="login-email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="Adresse e-mail"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                      />
                     </div>
+                  </div>
+
+                  {/* Password Input Pill with vertical hairline divider + eye toggle */}
+                  <div>
+                    <label htmlFor="login-password" className="sr-only">
+                      Mot de passe
+                    </label>
+                    <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                      <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                        <Lock className="w-4 h-4" />
+                      </span>
+                      <input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        placeholder="Mot de passe"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={
+                          showPassword
+                            ? 'Masquer le mot de passe'
+                            : 'Afficher le mot de passe'
+                        }
+                        className="pr-4 pl-2 min-h-[44px] flex items-center text-slate-500 hover:text-slate-800 cursor-pointer"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Remember me & Forgot Password Row */}
+                  <div className="flex items-center justify-between gap-2 pt-0.5 px-1">
+                    <label
+                      htmlFor="login-remember"
+                      className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 cursor-pointer select-none min-h-[36px]"
+                    >
+                      <input
+                        id="login-remember"
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
+                      />
+                      <span>Se souvenir de moi</span>
+                    </label>
 
                     <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                      type="button"
+                      onClick={() => {
+                        resetFormState();
+                        setAuthMode('forgot_password');
+                      }}
+                      className="text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-4 cursor-pointer min-h-[36px]"
                     >
-                      {isLoading ? (
-                        <span className="flex items-center gap-2">
-                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                          Connexion en cours...
-                        </span>
-                      ) : (
-                        <span>Se connecter</span>
-                      )}
+                      Mot de passe oublié ?
                     </button>
-                  </form>
-                ) : (
-                  <div className="space-y-3.5">
-                    {!confirmationResult ? (
-                      <form onSubmit={handleSendSmsCode} className="space-y-3.5">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Numéro de téléphone (Format international ex: +227...)
-                          </label>
+                  </div>
+
+                  {/* Primary Submit CTA */}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full min-h-[52px] py-3 px-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-base transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Connexion en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="w-4 h-4" />
+                        <span>Se connecter</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-4 animate-fadeIn">
+                  {!confirmationResult ? (
+                    <form onSubmit={handleSendSmsCode} className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor="login-phone"
+                          className="block text-xs font-bold text-slate-700 mb-1.5 px-2"
+                        >
+                          Numéro de téléphone (format international)
+                        </label>
+                        <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                          <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                            <Smartphone className="w-4 h-4" />
+                          </span>
                           <input
+                            id="login-phone"
                             type="tel"
                             placeholder="+227 90 12 34 56"
                             required
                             value={phoneNumber}
                             onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="w-full text-sm px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
+                            className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
                           />
                         </div>
+                      </div>
 
-                        <div id="recaptcha-container" className="my-2 flex justify-center"></div>
+                      <div id="recaptcha-container" className="my-2 flex justify-center" />
 
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full min-h-[50px] py-3 px-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-sm transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                      >
+                        {isLoading ? 'Envoi du SMS...' : 'Envoyer le code SMS'}
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleVerifySmsCode} className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor="login-sms-code"
+                          className="block text-xs font-bold text-slate-700 mb-1.5 px-2"
                         >
-                          {isLoading ? 'Envoi du SMS...' : 'Envoyer le code SMS'}
-                        </button>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleVerifySmsCode} className="space-y-3.5">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Code de vérification SMS (6 chiffres)
-                          </label>
-                          <input
-                            type="text"
-                            maxLength={6}
-                            placeholder="123456"
-                            required
-                            value={smsCode}
-                            onChange={(e) => setSmsCode(e.target.value)}
-                            className="w-full text-center tracking-widest text-lg font-mono px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                          />
-                        </div>
+                          Code de vérification SMS (6 chiffres)
+                        </label>
+                        <input
+                          id="login-sms-code"
+                          type="text"
+                          maxLength={6}
+                          placeholder="123456"
+                          required
+                          value={smsCode}
+                          onChange={(e) => setSmsCode(e.target.value)}
+                          className="w-full min-h-[50px] text-center tracking-widest text-lg font-mono px-4 py-2.5 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F8FAFC] focus:bg-white transition"
+                        />
+                      </div>
 
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-base rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          {isLoading ? 'Vérification...' : 'Valider le code & Se connecter'}
-                        </button>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full min-h-[50px] py-3 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                      >
+                        {isLoading ? 'Vérification...' : 'Valider le code & Se connecter'}
+                      </button>
 
-                        <button
-                          type="button"
-                          onClick={() => { setConfirmationResult(null); setSmsCode(''); }}
-                          className="w-full text-center text-xs text-blue-600 hover:underline pt-2 font-semibold"
-                        >
-                          ← Utiliser un autre numéro ou méthode
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmationResult(null);
+                          setSmsCode('');
+                        }}
+                        className="w-full text-center text-xs text-blue-600 hover:underline pt-1 font-semibold cursor-pointer"
+                      >
+                        Utiliser un autre numéro
+                      </button>
+                    </form>
+                  )}
 
-                <div className="text-center pt-1">
                   <button
                     type="button"
                     onClick={() => {
                       resetFormState();
-                      setAuthMode('forgot_password');
+                      setAuthMethod('email');
                     }}
-                    className="text-xs text-blue-700 hover:text-blue-800 font-semibold hover:underline"
+                    className="w-full text-center text-xs font-bold text-slate-600 hover:text-blue-700 py-1.5 cursor-pointer"
                   >
-                    Mot de passe oublié ?
+                    ← Revenir à la connexion par e-mail
                   </button>
                 </div>
+              )}
 
-                {/* Divider Line */}
-                <div className="relative flex py-2 items-center">
-                  <div className="flex-grow border-t border-slate-200"></div>
-                  <span className="flex-shrink mx-3 text-[11px] text-slate-400 uppercase font-bold tracking-wider">OU</span>
-                  <div className="flex-grow border-t border-slate-200"></div>
-                </div>
+              {/* Divider "Ou" */}
+              <div className="relative flex py-4 items-center">
+                <div className="flex-grow border-t border-slate-200" />
+                <span className="shrink mx-3 text-xs font-semibold text-slate-400">Ou</span>
+                <div className="flex-grow border-t border-slate-200" />
+              </div>
 
-                {/* Google Sign In */}
+              {/* Google Sign-In Only (Facebook & Apple deliberately excluded) */}
+              <div className="space-y-2.5">
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 rounded-xl transition shadow-2xs flex items-center justify-center gap-2.5"
+                  className="w-full min-h-[48px] py-2.5 px-5 rounded-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm border border-slate-200 transition shadow-2xs flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#EA4335" d="M12 5.04c1.5 0 2.85.51 3.9 1.5l2.9-2.9C17.05 1.9 14.7 1 12 1 7.35 1 3.4 3.65 1.5 7.5l3.5 2.7C5.85 6.95 8.7 5.04 12 5.04z" />
-                    <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.46-1.1 2.69-2.34 3.52l3.63 2.82c2.13-1.97 3.36-4.87 3.36-8.47z" />
-                    <path fill="#FBBC05" d="M5 14.8c-.25-.75-.39-1.55-.39-2.38s.14-1.63.39-2.38L1.5 7.34C.55 9.24 0 11.36 0 13.6s.55 4.36 1.5 6.26l3.5-2.06z" />
-                    <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.63-2.82c-1.01.68-2.3 1.09-3.9 1.09-3.3 0-6.15-1.91-7.15-4.78l-3.5 2.7C3.4 20.35 7.35 23 12 23z" />
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.04c1.5 0 2.85.51 3.9 1.5l2.9-2.9C17.05 1.9 14.7 1 12 1 7.35 1 3.4 3.65 1.5 7.5l3.5 2.7C5.85 6.95 8.7 5.04 12 5.04z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M23.49 12.27c0-.82-.07-1.61-.21-2.38H12v4.51h6.44c-.28 1.46-1.1 2.69-2.34 3.52l3.63 2.82c2.13-1.97 3.36-4.87 3.36-8.47z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5 14.8c-.25-.75-.39-1.55-.39-2.38s.14-1.63.39-2.38L1.5 7.34C.55 9.24 0 11.36 0 13.6s.55 4.36 1.5 6.26l3.5-2.06z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.63-2.82c-1.01.68-2.3 1.09-3.9 1.09-3.3 0-6.15-1.91-7.15-4.78l-3.5 2.7C3.4 20.35 7.35 23 12 23z"
+                    />
                   </svg>
                   <span>Continuer avec Google</span>
                 </button>
 
-                {/* Create Account High-Impact Link to Page 1 (/inscription/identite) */}
-                <div className="pt-2 text-center">
-                  <Link
-                    to={REGISTRATION_ROUTES.IDENTITE}
-                    onClick={() => resetFormState()}
-                    className="w-full sm:w-auto px-6 py-3 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-extrabold text-sm rounded-xl transition shadow-sm inline-flex items-center justify-center gap-2"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-200" />
-                    <span>Créer un nouveau compte</span>
-                  </Link>
-                </div>
-              </>
-            )}
-
-            {/* ======================================================== */}
-            {/* VUE 2 : MOT DE PASSE OUBLIÉ                             */}
-            {/* ======================================================== */}
-            {authMode === 'forgot_password' && (
-              <form onSubmit={handlePasswordResetSubmit} className="space-y-4 animate-fadeIn">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <div className="p-2 rounded-xl bg-blue-50 text-blue-700">
-                    <KeyRound className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm">Retrouvez votre compte</h3>
-                    <p className="text-[11px] text-slate-500">Réinitialisation sécurisée par e-mail.</p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Saisissez l'adresse e-mail associée à votre compte Zaure. Nous vous enverrons un lien officiel Firebase pour réinitialiser votre mot de passe.
-                </p>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Adresse e-mail du compte
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Mail className="w-4 h-4" />
-                    </div>
-                    <input
-                      type="email"
-                      placeholder="Ex: mahamadou@zaure.org"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full text-xs pl-10 pr-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-slate-50 focus:bg-white transition"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
+                {authMethod === 'email' && (
                   <button
                     type="button"
                     onClick={() => {
                       resetFormState();
-                      setAuthMode('login');
+                      setAuthMethod('phone');
                     }}
-                    className="px-4 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-bold transition"
+                    className="w-full min-h-[40px] py-2 px-4 rounded-full text-xs font-semibold text-slate-600 hover:text-blue-700 hover:bg-blue-50/60 transition flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    Annuler
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>Se connecter par téléphone (SMS)</span>
                   </button>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center gap-2">
-                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                        Envoi...
-                      </span>
-                    ) : (
-                      <span>Envoyer le lien</span>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
+                )}
+              </div>
 
-          </div>
+              {/* Bottom Create Account Link matching Mockup */}
+              <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+                <p className="text-xs sm:text-sm text-slate-600">
+                  Vous n’avez pas de compte ?{' '}
+                  <Link
+                    to={REGISTRATION_ROUTES.IDENTITE}
+                    onClick={() => resetFormState()}
+                    className="font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    Créer un compte
+                  </Link>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VUE 2 : MOT DE PASSE OUBLIÉ                             */}
+          {/* ======================================================== */}
+          {authMode === 'forgot_password' && (
+            <form onSubmit={handlePasswordResetSubmit} className="mt-6 space-y-4 animate-fadeIn">
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Saisissez l'adresse e-mail associée à votre compte Zaure pour recevoir un lien
+                  officiel de réinitialisation.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="reset-email" className="sr-only">
+                  Adresse e-mail du compte
+                </label>
+                <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                  <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4" />
+                  </span>
+                  <input
+                    id="reset-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="Adresse e-mail du compte"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetFormState();
+                    setAuthMode('login');
+                  }}
+                  className="min-h-[46px] px-5 py-2.5 border border-slate-200 text-slate-700 text-xs font-bold rounded-full hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 min-h-[46px] px-6 py-2.5 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs sm:text-sm transition shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  {isLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Envoi...</span>
+                    </>
+                  ) : (
+                    <span>Envoyer le lien</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </section>
       </div>
     </div>

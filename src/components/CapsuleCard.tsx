@@ -68,6 +68,33 @@ function formatRelativeDate(isoString: string): string {
   }
 }
 
+function renderCapsuleContent(text: string): React.ReactNode {
+  const tokens = text.split(/(https?:\/\/[^\s]+|#[a-zA-Z0-9À-ÿ_]+)/g);
+  return tokens.map((token, idx) => {
+    if (token.startsWith('http://') || token.startsWith('https://')) {
+      return (
+        <a
+          key={idx}
+          href={token}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-700 underline decoration-blue-300 underline-offset-2 break-all"
+        >
+          {token}
+        </a>
+      );
+    }
+    if (token.startsWith('#') && token.length > 1) {
+      return (
+        <span key={idx} className="font-semibold text-blue-600 dark:text-blue-400">
+          {token}
+        </span>
+      );
+    }
+    return <React.Fragment key={idx}>{token}</React.Fragment>;
+  });
+}
+
 export default function CapsuleCard({
   capsule,
   currentUser,
@@ -214,7 +241,7 @@ export default function CapsuleCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5"
+      className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5 min-w-0 overflow-x-clip"
       id={`capsule-card-${capsule.id}`}
     >
       {/* Author Header */}
@@ -231,6 +258,8 @@ export default function CapsuleCard({
                 <img
                   src={capsule.auteur_avatar}
                   alt={capsule.auteur_nom}
+                  loading="lazy"
+                  decoding="async"
                   className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover ring-1 ring-slate-200/80 bg-slate-100 hover:opacity-90 transition-opacity"
                   referrerPolicy="no-referrer"
                 />
@@ -244,6 +273,8 @@ export default function CapsuleCard({
             <img
               src={capsule.auteur_avatar}
               alt={capsule.auteur_nom}
+              loading="lazy"
+              decoding="async"
               className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover ring-1 ring-slate-200/80 shrink-0 bg-slate-100"
               referrerPolicy="no-referrer"
             />
@@ -259,12 +290,12 @@ export default function CapsuleCard({
                 <button
                   type="button"
                   onClick={() => onAuthorClick(capsule.auteur_id)}
-                  className="font-bold text-slate-950 hover:text-blue-700 text-[13.5px] sm:text-[15px] truncate text-left transition-colors"
+                  className="font-bold text-slate-950 dark:text-white hover:text-blue-700 text-[13.5px] sm:text-[15px] truncate text-left transition-colors"
                 >
                   {capsule.auteur_nom}
                 </button>
               ) : (
-                <span className="font-bold text-slate-950 text-[13.5px] sm:text-[15px] truncate">
+                <span className="font-bold text-slate-950 dark:text-white text-[13.5px] sm:text-[15px] truncate">
                   {capsule.auteur_nom}
                 </span>
               )}
@@ -398,10 +429,12 @@ export default function CapsuleCard({
             <VoiceNotePlayer url={audioSrc} />
           </div>
         ) : (
-          <div className="text-[14px] sm:text-[15px] leading-[1.6] text-slate-800 whitespace-pre-line break-words">
-            {capsule.contenu.length > 280 && !isExpanded
-              ? `${capsule.contenu.slice(0, 280).trim()}...`
-              : capsule.contenu}
+          <div className="text-[14px] sm:text-[15px] leading-[1.6] text-slate-800 dark:text-slate-200 whitespace-pre-line break-words">
+            {renderCapsuleContent(
+              capsule.contenu.length > 280 && !isExpanded
+                ? `${capsule.contenu.slice(0, 280).trim()}...`
+                : capsule.contenu
+            )}
 
             {capsule.contenu.length > 280 && (
               <button
