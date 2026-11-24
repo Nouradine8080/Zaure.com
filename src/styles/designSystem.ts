@@ -64,6 +64,22 @@ export const ZAURE_SHADOWS = {
   nav: 'zaure-shadow-nav',
 } as const;
 
+export const ZAURE_GLOWS = {
+  blue: 'zaure-glow-blue',
+  soft: 'zaure-glow-soft',
+  sky: 'zaure-glow-sky',
+} as const;
+
+export const ZAURE_ICON_CHIPS = {
+  blue: 'zaure-icon-chip-blue',
+  sky: 'zaure-icon-chip-sky',
+  indigo: 'zaure-icon-chip-indigo',
+  emerald: 'zaure-icon-chip-emerald',
+  rose: 'zaure-icon-chip-rose',
+  amber: 'zaure-icon-chip-amber',
+  violet: 'zaure-icon-chip-violet',
+} as const;
+
 export const ZAURE_ANIMATIONS = {
   fadeIn: 'zaure-animate-fade-in',
   slideUp: 'zaure-animate-slide-up',
@@ -78,17 +94,25 @@ export const ZAURE_ANIMATIONS = {
  * Classes composées réutilisables pour unifier les cartes, bannières, modales et boutons.
  */
 export const ZAURE_SURFACES = {
-  canvas: 'zaure-bg-canvas',
+  canvas: 'zaure-canvas-ambient',
+  glassHeader: 'zaure-glass-header',
   card: 'zaure-card rounded-2xl sm:rounded-3xl',
   cardInteractive: 'zaure-card-interactive rounded-2xl sm:rounded-3xl',
   heroBanner:
     'relative overflow-hidden rounded-2xl sm:rounded-3xl zaure-grad-hero zaure-shadow-hero text-white',
+  sectionHeroBanner:
+    'relative overflow-hidden rounded-2xl sm:rounded-3xl zaure-grad-hero zaure-shadow-hero text-white px-4 py-4 sm:px-7 sm:py-6',
+  navItemActive: 'zaure-nav-pill-active',
+  navItemIdle:
+    'text-slate-600 dark:text-slate-300 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 hover:text-blue-700 dark:hover:text-blue-300',
   modalPanel:
     'bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-3xl zaure-shadow-modal zaure-animate-scale-in',
   popoverMenu:
     'bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl zaure-shadow-modal zaure-animate-scale-in',
   primaryButton:
     'zaure-btn-primary zaure-focus-ring font-bold rounded-full inline-flex items-center justify-center gap-1.5',
+  gradientButton:
+    'zaure-btn-primary zaure-focus-ring font-bold rounded-xl inline-flex items-center justify-center gap-1.5',
   secondaryButton:
     'bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 zaure-btn-press zaure-shadow-xs zaure-focus-ring font-semibold rounded-full inline-flex items-center justify-center gap-1.5',
   skeleton: 'zaure-animate-shimmer rounded-xl',

@@ -38,6 +38,8 @@ import {
 } from './communityAssets';
 import CreateCommunityModal from './CreateCommunityModal';
 import CommunityGroupPage from './CommunityGroupPage';
+import ZaureGeometricBackdrop from '../ui/ZaureGeometricBackdrop';
+import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface CommunitiesHubProps {
   currentUser: UserProfile;
@@ -50,13 +52,13 @@ interface CommunitiesHubProps {
 }
 
 const CATEGORY_META: Record<string, { icon: React.ElementType; tone: string }> = {
-  'Médecine & Santé': { icon: Stethoscope, tone: 'text-rose-600 bg-rose-50' },
-  'Sciences & Tech': { icon: Cpu, tone: 'text-blue-600 bg-blue-50' },
-  'Langues & Culture': { icon: BookOpen, tone: 'text-amber-600 bg-amber-50' },
-  'Éducation & Études': { icon: GraduationCap, tone: 'text-indigo-600 bg-indigo-50' },
-  'Agriculture & Écologie': { icon: Sprout, tone: 'text-emerald-600 bg-emerald-50' },
-  Entrepreneuriat: { icon: Briefcase, tone: 'text-slate-700 bg-slate-100' },
-  'Vie communautaire': { icon: UsersRound, tone: 'text-cyan-600 bg-cyan-50' }
+  'Médecine & Santé': { icon: Stethoscope, tone: ZAURE_ICON_CHIPS.rose },
+  'Sciences & Tech': { icon: Cpu, tone: ZAURE_ICON_CHIPS.blue },
+  'Langues & Culture': { icon: BookOpen, tone: ZAURE_ICON_CHIPS.amber },
+  'Éducation & Études': { icon: GraduationCap, tone: ZAURE_ICON_CHIPS.indigo },
+  'Agriculture & Écologie': { icon: Sprout, tone: ZAURE_ICON_CHIPS.emerald },
+  Entrepreneuriat: { icon: Briefcase, tone: ZAURE_ICON_CHIPS.violet },
+  'Vie communautaire': { icon: UsersRound, tone: ZAURE_ICON_CHIPS.sky }
 };
 
 function formatRelative(iso?: string): string {
@@ -397,14 +399,13 @@ export default function CommunitiesHub({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.18), ease: [0.16, 1, 0.3, 1] }}
-        whileHover={{ y: -2 }}
-        className="bg-white border border-slate-200/85 rounded-3xl overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_28px_-10px_rgba(15,23,42,0.12)] transition-shadow duration-200 flex flex-col justify-between"
+        className={`${ZAURE_SURFACES.cardInteractive} overflow-hidden flex flex-col justify-between group`}
       >
         <div>
           {/* Cover Photo */}
           <div
             onClick={() => selectGroup(group.id)}
-            className="relative h-32 sm:h-36 bg-slate-100 cursor-pointer overflow-hidden group"
+            className="relative h-32 sm:h-36 bg-slate-100 dark:bg-slate-800 cursor-pointer overflow-hidden"
           >
             <img
               src={cover}
@@ -412,10 +413,10 @@ export default function CommunitiesHub({
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-slate-950/15 to-transparent" />
+            <div className="absolute inset-0 zaure-grad-scrim" />
 
             {/* Top-right privacy indicator */}
-            <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-xl bg-slate-950/75 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1.5">
+            <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-xl bg-slate-950/75 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1.5 border border-white/15">
               {group.privacy === 'private' ? (
                 <>
                   <Lock className="w-3 h-3 text-amber-400" />
@@ -438,40 +439,40 @@ export default function CommunitiesHub({
                 alt={group.name}
                 referrerPolicy="no-referrer"
                 onClick={() => selectGroup(group.id)}
-                className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white shadow-sm bg-white cursor-pointer"
+                className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white dark:ring-slate-900 shadow-sm bg-white dark:bg-slate-800 cursor-pointer"
               />
 
               {isActive && roleLabel && (
                 <span
                   className={`text-[11px] font-bold ${
                     roleLabel === 'Créateur'
-                      ? 'text-indigo-700'
+                      ? 'text-indigo-700 dark:text-indigo-400'
                       : roleLabel === 'Administrateur'
-                        ? 'text-blue-700'
+                        ? 'text-blue-700 dark:text-blue-400'
                         : roleLabel === 'Modérateur'
-                          ? 'text-emerald-700'
-                          : 'text-slate-600'
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : 'text-slate-600 dark:text-slate-400'
                   }`}
                 >
                   {roleLabel}
                 </span>
               )}
               {isPending && (
-                <span className="text-[11px] font-bold text-amber-700">
+                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
                   Demande en attente
                 </span>
               )}
               {isSuspended && (
-                <span className="text-[11px] font-bold text-red-600">
+                <span className="text-[11px] font-bold text-red-600 dark:text-red-400">
                   Accès suspendu
                 </span>
               )}
             </div>
 
             {/* Zero-pill unboxed metadata */}
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium truncate">
-              <span className="text-blue-700 font-semibold truncate">{group.category}</span>
-              <span aria-hidden="true" className="text-slate-300">·</span>
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+              <span className="text-blue-700 dark:text-blue-400 font-semibold truncate">{group.category}</span>
+              <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
               <span className="tabular-nums shrink-0">
                 {group.memberCount} {group.memberCount > 1 ? 'membres' : 'membre'}
               </span>
@@ -479,21 +480,21 @@ export default function CommunitiesHub({
 
             <h3
               onClick={() => selectGroup(group.id)}
-              className="text-[15px] font-extrabold text-slate-950 mt-1 truncate cursor-pointer hover:text-blue-700 transition-colors"
+              className="text-[15px] font-extrabold text-slate-950 dark:text-white mt-1 truncate cursor-pointer hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
             >
               {group.name}
             </h3>
 
-            <p className="text-xs text-slate-600 mt-1 line-clamp-2 min-h-[2.25rem] leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 min-h-[2.25rem] leading-relaxed">
               {group.description || 'Espace communautaire Zaure dédié au partage et à l’entraide.'}
             </p>
           </div>
         </div>
 
         {/* Footer CTA */}
-        <div className="px-4 pb-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 tabular-nums">
-            <Users className="w-3.5 h-3.5 text-slate-400" />
+        <div className="px-4 pb-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+            <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span>
               {group.postCount} {group.postCount > 1 ? 'publications' : 'publication'}
             </span>
@@ -505,7 +506,7 @@ export default function CommunitiesHub({
                 type="button"
                 whileTap={{ scale: 0.97 }}
                 onClick={() => selectGroup(group.id)}
-                className="min-h-[40px] px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition whitespace-nowrap"
+                className="min-h-[40px] px-4 py-2 bg-slate-950 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-950 text-xs font-bold rounded-xl transition whitespace-nowrap"
               >
                 Voir la communauté
               </motion.button>
@@ -515,7 +516,7 @@ export default function CommunitiesHub({
                   type="button"
                   whileTap={{ scale: 0.97 }}
                   onClick={() => selectGroup(group.id)}
-                  className="min-h-[40px] px-3 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs font-bold rounded-xl transition whitespace-nowrap"
+                  className="min-h-[40px] px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition whitespace-nowrap"
                 >
                   Voir
                 </motion.button>
@@ -524,7 +525,7 @@ export default function CommunitiesHub({
                   whileTap={{ scale: 0.97 }}
                   disabled={busyActionId === group.id}
                   onClick={() => handleQuickJoin(group)}
-                  className="min-h-[40px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition disabled:opacity-50 whitespace-nowrap shadow-xs"
+                  className={`min-h-[40px] px-4 py-2 ${ZAURE_SURFACES.gradientButton} text-xs disabled:opacity-50 whitespace-nowrap`}
                 >
                   {busyActionId === group.id
                     ? 'Envoi...'
@@ -545,256 +546,263 @@ export default function CommunitiesHub({
       {/* ============================================================ */}
       {/* 1. EN-TÊTE « COMMUNAUTÉS », RECHERCHE & CRÉATION             */}
       {/* ============================================================ */}
-      <section className="bg-white border border-slate-200/85 rounded-3xl p-4 sm:p-6 shadow-[0_1px_3px_rgba(15,23,42,0.04)] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shadow-sm shrink-0">
-              <UsersRound className="w-6 h-6" />
+      <section className="space-y-3.5">
+        <div className={ZAURE_SURFACES.sectionHeroBanner}>
+          <ZaureGeometricBackdrop variant="hero" />
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/15 backdrop-blur-xs border border-white/25 text-white flex items-center justify-center shrink-0 zaure-shadow-xs">
+                <UsersRound className="w-6 h-6 sm:w-7 sm:h-7" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight truncate">
+                  Communautés
+                </h1>
+                <p className="text-xs sm:text-sm text-blue-50/95 font-medium mt-0.5">
+                  {groups.length} {groups.length > 1 ? 'communautés actives' : 'communauté active'} ·{' '}
+                  {memberships.filter((m) => m.status === 'active').length} rejointe(s)
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight truncate">
-                Communautés
-              </h1>
-              <p className="text-xs sm:text-[13px] text-slate-500 mt-0.5">
-                {groups.length} {groups.length > 1 ? 'communautés actives' : 'communauté active'} ·{' '}
-                {memberships.filter((m) => m.status === 'active').length} rejointe(s)
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-            {/* Code d'invitation toggle */}
-            <button
-              type="button"
-              onClick={() => setShowInviteCodeBox((v) => !v)}
-              className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap ${
-                showInviteCodeBox
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-              }`}
-              title="Utiliser un code d'invitation"
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>Code</span>
-            </button>
-
-            {/* Notifications Bell */}
-            <div ref={notifRef} className="relative">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+              {/* Code d'invitation toggle */}
               <button
                 type="button"
-                onClick={() => setShowNotifPanel((v) => !v)}
-                className="min-h-[44px] px-3 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-800 rounded-xl flex items-center gap-1.5 text-xs font-bold relative transition whitespace-nowrap"
-                title="Notifications des communautés"
+                onClick={() => setShowInviteCodeBox((v) => !v)}
+                className={`min-h-[42px] px-3 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap border ${
+                  showInviteCodeBox
+                    ? 'bg-slate-950/70 border-white/40 text-white'
+                    : 'bg-white/15 hover:bg-white/25 border-white/25 text-white backdrop-blur-xs'
+                }`}
+                title="Utiliser un code d'invitation"
               >
-                <Bell className="w-4 h-4 text-blue-600" />
-                <span className="hidden sm:inline">Alertes</span>
-                {unreadNotifCount > 0 && (
-                  <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center tabular-nums">
-                    {unreadNotifCount}
-                  </span>
-                )}
+                <KeyRound className="w-4 h-4" />
+                <span>Code</span>
               </button>
 
-              <AnimatePresence>
-                {showNotifPanel && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-3xl shadow-xl p-4 z-40 space-y-3 origin-top-right"
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                      <p className="text-xs font-extrabold text-slate-900">
-                        Notifications communautaires
-                      </p>
-                      <div className="flex items-center gap-2">
-                        {unreadNotifCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              communityService.markAllNotificationsRead(
-                                notifications.filter((n) => !n.isRead).map((n) => n.id)
-                              )
-                            }
-                            className="text-[11px] font-bold text-blue-700 hover:underline flex items-center gap-1"
-                          >
-                            <CheckCheck className="w-3.5 h-3.5" />
-                            <span>Tout lire</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setShowNotifPanel(false)}
-                          className="p-1 text-slate-400 hover:text-slate-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
+              {/* Notifications Bell */}
+              <div ref={notifRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowNotifPanel((v) => !v)}
+                  className="min-h-[42px] px-3 py-2 bg-white/15 hover:bg-white/25 border border-white/25 text-white backdrop-blur-xs rounded-full flex items-center gap-1.5 text-xs font-bold relative transition whitespace-nowrap"
+                  title="Notifications des communautés"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span className="hidden sm:inline">Alertes</span>
+                  {unreadNotifCount > 0 && (
+                    <span className="min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-black rounded-full flex items-center justify-center tabular-nums">
+                      {unreadNotifCount}
+                    </span>
+                  )}
+                </button>
 
-                    <div className="max-h-72 overflow-y-auto space-y-1.5">
-                      {notifications.length === 0 ? (
-                        <p className="text-xs text-slate-400 text-center py-6">
-                          Aucune notification pour le moment.
+                <AnimatePresence>
+                  {showNotifPanel && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className={`absolute right-0 mt-2 w-80 sm:w-96 p-4 z-40 space-y-3 origin-top-right ${ZAURE_SURFACES.popoverMenu}`}
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                        <p className="text-xs font-extrabold text-slate-900 dark:text-white">
+                          Notifications communautaires
                         </p>
-                      ) : (
-                        notifications.slice(0, 20).map((n) => (
+                        <div className="flex items-center gap-2">
+                          {unreadNotifCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                communityService.markAllNotificationsRead(
+                                  notifications.filter((n) => !n.isRead).map((n) => n.id)
+                                )
+                              }
+                              className="text-[11px] font-bold text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"
+                            >
+                              <CheckCheck className="w-3.5 h-3.5" />
+                              <span>Tout lire</span>
+                            </button>
+                          )}
                           <button
-                            key={n.id}
                             type="button"
-                            onClick={() => {
-                              if (!n.isRead) communityService.markNotificationRead(n.id);
-                              setShowNotifPanel(false);
-                              selectGroup(n.groupId);
-                            }}
-                            className={`w-full text-left p-2.5 rounded-2xl transition flex items-start gap-2.5 ${
-                              n.isRead ? 'bg-white hover:bg-slate-50' : 'bg-blue-50/80 hover:bg-blue-50'
-                            }`}
+                            onClick={() => setShowNotifPanel(false)}
+                            className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                           >
-                            <span
-                              className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                                n.isRead ? 'bg-slate-300' : 'bg-blue-600'
-                              }`}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-slate-800 leading-snug">
-                                {n.message}
-                              </p>
-                              <p className="text-[11px] text-slate-400 mt-1">
-                                {n.groupName} · {formatRelative(n.createdAt)}
-                              </p>
-                            </div>
+                            <X className="w-4 h-4" />
                           </button>
-                        ))
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                        </div>
+                      </div>
 
-            {/* Primary CTA: Créer une communauté */}
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowCreateModal(true)}
-              className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition whitespace-nowrap flex-1 sm:flex-initial justify-center"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Créer une communauté</span>
-            </motion.button>
+                      <div className="max-h-72 overflow-y-auto space-y-1.5">
+                        {notifications.length === 0 ? (
+                          <p className="text-xs text-slate-400 text-center py-6">
+                            Aucune notification pour le moment.
+                          </p>
+                        ) : (
+                          notifications.slice(0, 20).map((n) => (
+                            <button
+                              key={n.id}
+                              type="button"
+                              onClick={() => {
+                                if (!n.isRead) communityService.markNotificationRead(n.id);
+                                setShowNotifPanel(false);
+                                selectGroup(n.groupId);
+                              }}
+                              className={`w-full text-left p-2.5 rounded-2xl transition flex items-start gap-2.5 ${
+                                n.isRead ? 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800' : 'bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-50'
+                              }`}
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                                  n.isRead ? 'bg-slate-300 dark:bg-slate-600' : 'bg-blue-600'
+                                }`}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-snug">
+                                  {n.message}
+                                </p>
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                  {n.groupName} · {formatRelative(n.createdAt)}
+                                </p>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Primary CTA: Créer une communauté */}
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowCreateModal(true)}
+                className="min-h-[42px] px-4 py-2 bg-white hover:bg-blue-50 text-[#1D4ED8] text-xs font-bold rounded-full flex items-center gap-1.5 shadow-md transition whitespace-nowrap flex-1 sm:flex-initial justify-center"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Créer une communauté</span>
+              </motion.button>
+            </div>
           </div>
         </div>
 
         {/* Search & Privacy Segmented Filter */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher une communauté par nom, sujet ou description..."
-              className="w-full min-h-[44px] bg-slate-100/90 focus:bg-white text-xs sm:text-sm pl-10 pr-9 py-2 rounded-2xl border border-transparent focus:border-blue-500 focus:outline-none transition"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1"
-                aria-label="Effacer la recherche"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <div
-            className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl shrink-0"
-            role="group"
-            aria-label="Filtrer par confidentialité"
-          >
-            {(
-              [
-                { id: 'all', label: 'Toutes' },
-                { id: 'public', label: 'Publiques' },
-                { id: 'private', label: 'Privées' }
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setPrivacyFilter(opt.id)}
-                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap flex-1 md:flex-initial ${
-                  privacyFilter === opt.id
-                    ? 'bg-white text-slate-950 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Collapsible Invite Code Redemption */}
-        <AnimatePresence>
-          {showInviteCodeBox && (
-            <motion.form
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              onSubmit={handleRedeemCodeSubmit}
-              className="overflow-hidden"
-            >
-              <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={inviteCodeInput}
-                    onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
-                    placeholder="Saisissez un code d'invitation (ex : A7K2M9)..."
-                    className="w-full min-h-[44px] bg-slate-100 focus:bg-white text-xs font-mono pl-10 pr-3 py-2 rounded-2xl border border-transparent focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
+        <div className={`${ZAURE_SURFACES.card} p-3.5 sm:p-4 space-y-3`}>
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher une communauté par nom, sujet ou description..."
+                className="w-full min-h-[42px] bg-[#F3F6FB] dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs sm:text-sm pl-10 pr-9 py-2 rounded-full border border-slate-200/80 dark:border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 dark:text-slate-100 focus:outline-none transition"
+              />
+              {searchQuery && (
                 <button
-                  type="submit"
-                  disabled={redeemingCode || !inviteCodeInput.trim()}
-                  className="min-h-[44px] px-5 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl disabled:opacity-40 transition shrink-0"
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1"
+                  aria-label="Effacer la recherche"
                 >
-                  {redeemingCode ? 'Vérification...' : 'Rejoindre avec le code'}
+                  <X className="w-4 h-4" />
                 </button>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
+              )}
+            </div>
 
-        {toast && (
-          <div
-            className={`px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 ${
-              toast.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}
-          >
-            <span>{toast.text}</span>
-            <button type="button" onClick={() => setToast(null)} className="p-1">
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div
+              className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-full shrink-0"
+              role="group"
+              aria-label="Filtrer par confidentialité"
+            >
+              {(
+                [
+                  { id: 'all', label: 'Toutes' },
+                  { id: 'public', label: 'Publiques' },
+                  { id: 'private', label: 'Privées' }
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setPrivacyFilter(opt.id)}
+                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap flex-1 md:flex-initial ${
+                    privacyFilter === opt.id
+                      ? `zaure-grad-primary text-white ${ZAURE_GLOWS.blue}`
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+
+          {/* Collapsible Invite Code Redemption */}
+          <AnimatePresence>
+            {showInviteCodeBox && (
+              <motion.form
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                onSubmit={handleRedeemCodeSubmit}
+                className="overflow-hidden"
+              >
+                <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={inviteCodeInput}
+                      onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+                      placeholder="Saisissez un code d'invitation (ex : A7K2M9)..."
+                      className="w-full min-h-[42px] bg-[#F3F6FB] dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 text-xs font-mono pl-10 pr-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 focus:border-blue-500 text-slate-900 dark:text-slate-100 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={redeemingCode || !inviteCodeInput.trim()}
+                    className={`min-h-[42px] px-5 ${ZAURE_SURFACES.primaryButton} text-xs disabled:opacity-40 shrink-0`}
+                  >
+                    {redeemingCode ? 'Vérification...' : 'Rejoindre avec le code'}
+                  </button>
+                </div>
+              </motion.form>
+            )}
+          </AnimatePresence>
+
+          {toast && (
+            <div
+              className={`px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 ${
+                toast.type === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800'
+                  : 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800'
+              }`}
+            >
+              <span>{toast.text}</span>
+              <button type="button" onClick={() => setToast(null)} className="p-1">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ============================================================ */}
       {/* 2. INVITATIONS EN ATTENTE (SI PRÉSENTES)                     */}
       {/* ============================================================ */}
       {pendingInvitations.length > 0 && (
-        <section className="bg-white border border-blue-200/80 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
+        <section className={`${ZAURE_SURFACES.card} border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 space-y-3`}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-extrabold text-slate-950 flex items-center gap-2">
-              <MailCheck className="w-4 h-4 text-blue-600" />
+            <h2 className="text-sm font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
+              <span className={`w-7 h-7 rounded-xl ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center`}>
+                <MailCheck className="w-4 h-4" />
+              </span>
               <span>Invitations en attente ({pendingInvitations.length})</span>
             </h2>
           </div>
@@ -803,20 +811,20 @@ export default function CommunitiesHub({
             {pendingInvitations.map((inv) => (
               <div
                 key={inv.id}
-                className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-3"
+                className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700 flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <img
                     src={inv.groupAvatar || getDefaultAvatar()}
                     alt={inv.groupName}
                     referrerPolicy="no-referrer"
-                    className="w-11 h-11 rounded-2xl object-cover shrink-0 bg-white border border-slate-200"
+                    className="w-11 h-11 rounded-2xl object-cover shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
                   />
                   <div className="min-w-0">
-                    <p className="text-xs font-extrabold text-slate-900 truncate">
+                    <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
                       {inv.groupName}
                     </p>
-                    <p className="text-[11px] text-slate-500 truncate">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                       Par {inv.inviterName} · {inv.groupPrivacy === 'private' ? 'Privée' : 'Publique'}
                     </p>
                   </div>
@@ -827,7 +835,7 @@ export default function CommunitiesHub({
                     type="button"
                     disabled={busyActionId === inv.id}
                     onClick={() => handleAcceptInvitation(inv)}
-                    className="min-h-[38px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1 transition"
+                    className={`min-h-[38px] px-3 py-1.5 ${ZAURE_SURFACES.gradientButton} text-xs`}
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>Accepter</span>
@@ -836,7 +844,7 @@ export default function CommunitiesHub({
                     type="button"
                     disabled={busyActionId === inv.id}
                     onClick={() => handleDeclineInvitation(inv)}
-                    className="min-h-[38px] px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-slate-200 text-xs font-bold rounded-xl transition"
+                    className="min-h-[38px] px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl transition"
                     title="Refuser"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -851,11 +859,13 @@ export default function CommunitiesHub({
       {/* ============================================================ */}
       {/* 3. DÉCOUVERTE PAR CATÉGORIES                                 */}
       {/* ============================================================ */}
-      <section className="bg-white border border-slate-200/85 rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] space-y-3">
+      <section className={`${ZAURE_SURFACES.card} p-4 sm:p-5 space-y-3`}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Compass className="w-4 h-4 text-blue-600" />
-            <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+            <span className={`w-7 h-7 rounded-xl ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center`}>
+              <Compass className="w-4 h-4" />
+            </span>
+            <h2 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
               Découvrir par catégories
             </h2>
           </div>
@@ -864,7 +874,7 @@ export default function CommunitiesHub({
             <button
               type="button"
               onClick={() => setSelectedCategory('Toutes')}
-              className="text-xs font-bold text-blue-700 hover:underline whitespace-nowrap"
+              className="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline whitespace-nowrap"
             >
               Tout afficher ({groups.length})
             </button>
@@ -877,21 +887,21 @@ export default function CommunitiesHub({
             onClick={() => handleSelectCategory('Toutes')}
             className={`min-h-[56px] p-2.5 rounded-2xl border text-left transition flex items-center gap-2.5 ${
               selectedCategory === 'Toutes'
-                ? 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-2xs'
-                : 'border-slate-200/80 bg-slate-50/60 hover:bg-slate-100/70 text-slate-800'
+                ? `border-blue-500 bg-blue-50/80 dark:bg-blue-950/50 text-blue-950 dark:text-white ${ZAURE_GLOWS.soft}`
+                : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/50 hover:bg-blue-50/40 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
             }`}
           >
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl zaure-grad-primary text-white flex items-center justify-center shrink-0">
               <Compass className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold truncate">Toutes</p>
-              <p className="text-[11px] text-slate-500 tabular-nums">{groups.length} au total</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">{groups.length} au total</p>
             </div>
           </button>
 
           {COMMUNITY_CATEGORIES.map((cat) => {
-            const meta = CATEGORY_META[cat] || { icon: Compass, tone: 'text-slate-600 bg-slate-100' };
+            const meta = CATEGORY_META[cat] || { icon: Compass, tone: ZAURE_ICON_CHIPS.blue };
             const CatIcon = meta.icon;
             const count = categoryCounts[cat] || 0;
             const isSelected = selectedCategory === cat;
@@ -903,8 +913,8 @@ export default function CommunitiesHub({
                 onClick={() => handleSelectCategory(cat)}
                 className={`min-h-[56px] p-2.5 rounded-2xl border text-left transition flex items-center gap-2.5 ${
                   isSelected
-                    ? 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-2xs'
-                    : 'border-slate-200/80 bg-slate-50/60 hover:bg-slate-100/70 text-slate-800'
+                    ? `border-blue-500 bg-blue-50/80 dark:bg-blue-950/50 text-blue-950 dark:text-white ${ZAURE_GLOWS.soft}`
+                    : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/50 hover:bg-blue-50/40 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
                 }`}
               >
                 <div className={`w-9 h-9 rounded-xl ${meta.tone} flex items-center justify-center shrink-0`}>
@@ -912,7 +922,7 @@ export default function CommunitiesHub({
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-bold truncate">{cat}</p>
-                  <p className="text-[11px] text-slate-500 tabular-nums">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
                     {count} {count > 1 ? 'cercles' : 'cercle'}
                   </p>
                 </div>
@@ -932,7 +942,7 @@ export default function CommunitiesHub({
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="bg-white border border-slate-200/80 rounded-3xl h-72 animate-pulse"
+              className="zaure-card rounded-3xl h-72 zaure-animate-shimmer"
             />
           ))}
         </div>
@@ -942,8 +952,10 @@ export default function CommunitiesHub({
           <section className="space-y-3">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-blue-600" />
-                <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+                <span className={`w-6 h-6 rounded-lg ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center`}>
+                  <Users className="w-3.5 h-3.5" />
+                </span>
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
                   Mes communautés
                 </h2>
                 <span className="text-xs font-semibold text-slate-400 tabular-nums">
@@ -953,14 +965,14 @@ export default function CommunitiesHub({
             </div>
 
             {myCommunities.length === 0 ? (
-              <div className="bg-white border border-slate-200/85 rounded-3xl p-6 text-center shadow-xs">
-                <p className="text-xs sm:text-sm text-slate-600">
+              <div className={`${ZAURE_SURFACES.card} p-6 text-center`}>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
                   Vous n'êtes encore membre d'aucune communauté correspondant aux filtres actifs.
                 </p>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(true)}
-                  className="mt-3 min-h-[42px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5 transition"
+                  className={`mt-3 min-h-[42px] px-5 py-2 ${ZAURE_SURFACES.gradientButton} text-xs`}
                 >
                   <Plus className="w-4 h-4" />
                   <span>Créer une communauté</span>
@@ -977,8 +989,10 @@ export default function CommunitiesHub({
           <section className="space-y-3">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-red-500" />
-                <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+                <span className={`w-6 h-6 rounded-lg ${ZAURE_ICON_CHIPS.rose} flex items-center justify-center`}>
+                  <Flame className="w-3.5 h-3.5" />
+                </span>
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
                   Communautés populaires
                 </h2>
               </div>
@@ -988,7 +1002,7 @@ export default function CommunitiesHub({
             </div>
 
             {popularCommunities.length === 0 ? (
-              <div className="bg-white border border-slate-200/85 rounded-3xl p-5 text-xs text-slate-500">
+              <div className={`${ZAURE_SURFACES.card} p-5 text-xs text-slate-500 dark:text-slate-400`}>
                 Aucune communauté populaire ne correspond à votre recherche.
               </div>
             ) : (
@@ -1002,15 +1016,17 @@ export default function CommunitiesHub({
           <section className="space-y-3">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <h2 className="text-sm sm:text-base font-extrabold text-slate-950">
+                <span className={`w-6 h-6 rounded-lg ${ZAURE_ICON_CHIPS.amber} flex items-center justify-center`}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                </span>
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
                   Communautés recommandées pour vous
                 </h2>
               </div>
             </div>
 
             {recommendedCommunities.length === 0 ? (
-              <div className="bg-white border border-slate-200/85 rounded-3xl p-5 text-xs text-slate-500">
+              <div className={`${ZAURE_SURFACES.card} p-5 text-xs text-slate-500 dark:text-slate-400`}>
                 Vous faites déjà partie de toutes les communautés disponibles dans cette sélection.
               </div>
             ) : (

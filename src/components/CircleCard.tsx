@@ -9,6 +9,7 @@ import {
   getCircleMemberCount,
   getCircleMembershipStatus
 } from './circles/circleHelpers';
+import { getZaureCategoryStyle, ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../styles/designSystem';
 
 interface CircleCardProps {
   circle: Circle;
@@ -67,6 +68,7 @@ export default function CircleCard({
     latestCapsuleAt ? { [circle.id]: latestCapsuleAt } : undefined
   );
   const activityLabel = formatCircleRelativeActivity(latestAtMs);
+  const categoryStyle = getZaureCategoryStyle(circle.categorie);
 
   const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -83,7 +85,7 @@ export default function CircleCard({
         <button
           type="button"
           onClick={handleActionClick}
-          className="min-h-[34px] px-3.5 py-1.5 rounded-full zaure-grad-primary text-white text-[11.5px] font-bold zaure-btn-press zaure-shadow-xs shrink-0"
+          className={`min-h-[34px] px-3.5 py-1.5 ${ZAURE_SURFACES.primaryButton} text-[11.5px] shrink-0`}
         >
           Ouvrir le Cercle
         </button>
@@ -152,7 +154,7 @@ export default function CircleCard({
         <button
           type="button"
           onClick={handleActionClick}
-          className="min-h-[32px] px-3 py-1 rounded-full bg-[#2563EB] hover:bg-blue-700 text-white text-[11px] font-bold transition shadow-2xs active:scale-95 shrink-0"
+          className={`min-h-[32px] px-3 py-1 ${ZAURE_SURFACES.primaryButton} text-[11px] shrink-0`}
         >
           Demander à rejoindre
         </button>
@@ -162,7 +164,7 @@ export default function CircleCard({
       <button
         type="button"
         onClick={handleActionClick}
-        className="min-h-[32px] px-4 py-1 rounded-full bg-[#2563EB] hover:bg-blue-700 text-white text-[11.5px] font-bold transition shadow-2xs active:scale-95 shrink-0"
+        className={`min-h-[32px] px-4 py-1 ${ZAURE_SURFACES.primaryButton} text-[11.5px] shrink-0`}
       >
         Rejoindre
       </button>
@@ -181,19 +183,21 @@ export default function CircleCard({
       <div className="flex sm:hidden items-center gap-3 p-3.5">
         {/* Left Circular Avatar + Green Checkmark Badge */}
         <div className="relative shrink-0">
-          <div className="w-14 h-14 rounded-full p-0.5 ring-2 ring-blue-500/25 bg-blue-50 dark:bg-slate-800 overflow-hidden">
-            {circle.image ? (
-              <img
-                src={circle.image}
-                alt={circle.nom}
-                className="w-full h-full rounded-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-black text-lg flex items-center justify-center">
-                {circle.nom.charAt(0).toUpperCase()}
-              </div>
-            )}
+          <div className={`w-14 h-14 rounded-full p-[2.5px] ${categoryStyle.gradientClass} overflow-hidden`}>
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-white dark:border-slate-900 bg-blue-50 dark:bg-slate-800">
+              {circle.image ? (
+                <img
+                  src={circle.image}
+                  alt={circle.nom}
+                  className="w-full h-full rounded-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full zaure-grad-primary text-white font-black text-lg flex items-center justify-center">
+                  {circle.nom.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
           </div>
           <span
             title={isPrivate ? 'Cercle privé' : 'Cercle vérifié & actif'}
@@ -282,19 +286,21 @@ export default function CircleCard({
         {/* Center Logo & Text */}
         <div className="flex flex-col items-center text-center px-1">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full p-1 ring-2 ring-blue-500/25 bg-blue-50/70 dark:bg-slate-800 overflow-hidden group-hover:ring-blue-500/50 transition-all">
-              {circle.image ? (
-                <img
-                  src={circle.image}
-                  alt={circle.nom}
-                  className="w-full h-full rounded-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-black text-2xl flex items-center justify-center">
-                  {circle.nom.charAt(0).toUpperCase()}
-                </div>
-              )}
+            <div className={`w-20 h-20 rounded-full p-[3px] ${categoryStyle.gradientClass} group-hover:${ZAURE_GLOWS.soft} transition-all`}>
+              <div className="w-full h-full rounded-full overflow-hidden border-2 border-white dark:border-slate-900 bg-blue-50/70 dark:bg-slate-800">
+                {circle.image ? (
+                  <img
+                    src={circle.image}
+                    alt={circle.nom}
+                    className="w-full h-full rounded-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full zaure-grad-primary text-white font-black text-2xl flex items-center justify-center">
+                    {circle.nom.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
             </div>
             <span
               title={isPrivate ? 'Cercle privé' : 'Cercle actif'}
@@ -327,7 +333,9 @@ export default function CircleCard({
         {/* Footer: Member count + Action Button */}
         <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-slate-600 dark:text-slate-300 min-w-0">
-            <Users className="w-4 h-4 text-[#2563EB] shrink-0" />
+            <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${ZAURE_ICON_CHIPS.blue}`}>
+              <Users className="w-3.5 h-3.5" />
+            </span>
             <span className="truncate tabular-nums">{memberLabel}</span>
           </div>
           {renderDesktopActionButton()}

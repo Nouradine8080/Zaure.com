@@ -70,6 +70,8 @@ import ProfileMediaGallery from './ProfileMediaGallery';
 import FollowListModal from './FollowListModal';
 import EditProfileModal from './EditProfileModal';
 import ProfilePrivacyModal from './ProfilePrivacyModal';
+import { ZaureGeometricBackdrop } from '../ui/ZaureGeometricBackdrop';
+import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
 
 export type ProfileTabId = 'publications' | 'about' | 'photos' | 'videos' | 'communities';
 
@@ -442,19 +444,19 @@ export default function ProfilePage({
   ];
 
   const renderPrivacyGateCard = (reason: string, title = 'Contenu protégé') => (
-    <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-8 sm:p-10 text-center shadow-xs space-y-3">
-      <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center">
+    <div className={`${ZAURE_SURFACES.card} p-8 sm:p-10 text-center space-y-3`}>
+      <div className={`w-14 h-14 mx-auto rounded-2xl ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center`}>
         <Lock className="w-7 h-7" />
       </div>
-      <h4 className="text-sm sm:text-base font-extrabold text-slate-950">{title}</h4>
-      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">{reason}</p>
+      <h4 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">{title}</h4>
+      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">{reason}</p>
       {!isOwnProfile && !isFollower && !isBlocked && (
         <div className="pt-1">
           <button
             type="button"
             disabled={followBusy}
             onClick={() => handleToggleFollow(profile.id)}
-            className="min-h-[42px] px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-2 shadow-xs transition"
+            className={`${ZAURE_SURFACES.gradientButton} min-h-[42px] px-5 py-2 text-xs`}
           >
             <UserPlus className="w-4 h-4" />
             <span>Suivre {profile.nom}</span>
@@ -486,15 +488,15 @@ export default function ProfilePage({
         <button
           type="button"
           onClick={onBack}
-          className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200/85 text-slate-700 text-xs font-bold inline-flex items-center gap-2 shadow-2xs transition"
+          className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-white/90 dark:bg-slate-900/90 hover:bg-blue-50 dark:hover:bg-slate-800 border border-slate-200/85 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold inline-flex items-center gap-2 shadow-2xs transition"
         >
-          <ArrowLeft className="w-4 h-4 text-slate-500" />
+          <ArrowLeft className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           <span>Retour au fil</span>
         </button>
 
-        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500">
+        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
           {privacy.profileMode === 'private' && (
-            <span className="inline-flex items-center gap-1 text-amber-700">
+            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
               <Lock className="w-3.5 h-3.5" />
               <span>Profil privé</span>
             </span>
@@ -508,9 +510,9 @@ export default function ProfilePage({
       {/* ==================================================================== */}
       {/* 1. EN-TÊTE DU PROFIL                                                 */}
       {/* ==================================================================== */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-3xl shadow-[0_2px_10px_-3px_rgba(15,23,42,0.06)] overflow-hidden">
+      <section className="zaure-card rounded-3xl overflow-hidden">
         {/* Large Cover Photo */}
-        <div className="relative h-40 sm:h-56 md:h-64 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 overflow-hidden">
+        <div className="relative h-40 sm:h-56 md:h-64 zaure-grad-hero overflow-hidden">
           {profile.cover_url ? (
             <img
               src={profile.cover_url}
@@ -519,18 +521,17 @@ export default function ProfilePage({
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-950 relative">
-              <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl" />
-              <div className="absolute left-12 -bottom-20 w-56 h-56 rounded-full bg-red-500/20 blur-2xl" />
+            <div className="w-full h-full zaure-grad-hero relative">
+              <ZaureGeometricBackdrop variant="hero" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/35 via-transparent to-transparent" />
+          <div className="absolute inset-0 zaure-grad-scrim opacity-50" />
 
           {isOwnProfile && (
             <button
               type="button"
               onClick={() => setShowEditModal(true)}
-              className="absolute bottom-3 right-3 min-h-[38px] px-3.5 py-1.5 rounded-xl bg-slate-950/65 hover:bg-slate-950/85 text-white text-xs font-bold backdrop-blur-xs flex items-center gap-1.5 transition"
+              className="absolute bottom-3 right-3 min-h-[38px] px-3.5 py-1.5 rounded-xl bg-slate-950/65 hover:bg-slate-950/85 text-white text-xs font-bold backdrop-blur-xs border border-white/15 flex items-center gap-1.5 transition"
             >
               <Camera className="w-3.5 h-3.5" />
               <span className="hidden xs:inline">Modifier la couverture</span>
@@ -543,22 +544,24 @@ export default function ProfilePage({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 sm:-mt-16 relative z-10">
             {/* Avatar */}
             <div className="relative w-fit">
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.nom}
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover ring-4 ring-white shadow-lg bg-white"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-blue-600 text-white text-3xl sm:text-4xl font-black flex items-center justify-center ring-4 ring-white shadow-lg">
-                  {profile.nom.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <div className={`rounded-full zaure-grad-sky-ring p-[3px] ${ZAURE_GLOWS.soft}`}>
+                {profile.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={profile.nom}
+                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover ring-4 ring-white dark:ring-slate-900 bg-white dark:bg-slate-900"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full zaure-grad-primary text-white text-3xl sm:text-4xl font-black flex items-center justify-center ring-4 ring-white dark:ring-slate-900">
+                    {profile.nom.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
 
               {/* Live Availability Dot */}
               <span
-                className={`absolute bottom-1.5 right-1.5 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-white shadow-xs ${
+                className={`absolute bottom-1.5 right-1.5 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-white dark:border-slate-900 shadow-xs ${
                   profile.availability === 'busy'
                     ? 'bg-amber-500'
                     : profile.availability === 'offline'
@@ -583,7 +586,7 @@ export default function ProfilePage({
                     type="button"
                     whileTap={{ scale: 0.96 }}
                     onClick={() => setShowEditModal(true)}
-                    className="min-h-[42px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+                    className={`${ZAURE_SURFACES.gradientButton} min-h-[42px] px-4 py-2 text-xs`}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>Modifier le profil</span>
@@ -593,9 +596,9 @@ export default function ProfilePage({
                     type="button"
                     whileTap={{ scale: 0.96 }}
                     onClick={() => setShowPrivacyModal(true)}
-                    className="min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition"
+                    className="min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold flex items-center gap-1.5 transition"
                   >
-                    <Shield className="w-3.5 h-3.5 text-blue-600" />
+                    <Shield className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
                     <span>Confidentialité</span>
                   </motion.button>
 
@@ -603,9 +606,9 @@ export default function ProfilePage({
                     type="button"
                     whileTap={{ scale: 0.96 }}
                     onClick={onOpenSettings}
-                    className="min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition"
+                    className="min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold flex items-center gap-1.5 transition"
                   >
-                    <Settings className="w-3.5 h-3.5 text-slate-600" />
+                    <Settings className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                     <span className="hidden xs:inline">Paramètres du profil</span>
                     <span className="xs:hidden">Paramètres</span>
                   </motion.button>
@@ -614,7 +617,7 @@ export default function ProfilePage({
                     type="button"
                     whileTap={{ scale: 0.94 }}
                     onClick={handleShareProfile}
-                    className="min-h-[42px] w-10 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center justify-center transition"
+                    className="min-h-[42px] w-10 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center transition"
                     title="Partager mon profil"
                     aria-label="Partager mon profil"
                   >
@@ -630,13 +633,13 @@ export default function ProfilePage({
                     onClick={() => handleToggleFollow(profile.id)}
                     className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
                       isFollower
-                        ? 'bg-slate-100 hover:bg-red-50 text-slate-900 hover:text-red-700 border border-slate-200/80'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs disabled:opacity-45'
+                        ? 'bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-900 dark:text-slate-100 hover:text-red-700 dark:hover:text-red-400 border border-slate-200/80 dark:border-slate-700'
+                        : `${ZAURE_SURFACES.gradientButton} disabled:opacity-45`
                     }`}
                   >
                     {isFollower ? (
                       <>
-                        <UserCheck className="w-4 h-4 text-blue-600" />
+                        <UserCheck className="w-4 h-4 text-blue-600 dark:text-sky-400" />
                         <span>Abonné · Ne plus suivre</span>
                       </>
                     ) : (
@@ -657,7 +660,7 @@ export default function ProfilePage({
                         ? `Envoyer un message à ${profile.nom}`
                         : "Ce membre limite la réception de messages directs."
                     }
-                    className="min-h-[42px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold flex items-center gap-1.5 transition"
+                    className="min-h-[42px] px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 disabled:bg-slate-200 dark:disabled:bg-slate-800/40 disabled:text-slate-400 text-white text-xs font-bold flex items-center gap-1.5 transition"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                     <span>Envoyer un message</span>
@@ -667,7 +670,7 @@ export default function ProfilePage({
                     type="button"
                     whileTap={{ scale: 0.94 }}
                     onClick={handleShareProfile}
-                    className="min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition"
+                    className="min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition"
                     title="Partager le profil"
                   >
                     <Share2 className="w-4 h-4" />
@@ -679,7 +682,7 @@ export default function ProfilePage({
                     <button
                       type="button"
                       onClick={() => setShowOptionsMenu((prev) => !prev)}
-                      className="min-h-[42px] w-10 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 flex items-center justify-center transition"
+                      className="min-h-[42px] w-10 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition"
                       title="Menu des options"
                       aria-label="Menu des options"
                     >
@@ -693,7 +696,7 @@ export default function ProfilePage({
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.95, y: -4 }}
                           transition={{ duration: 0.14 }}
-                          className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-200/90 rounded-2xl shadow-xl z-30 p-1.5 space-y-0.5 origin-top-right"
+                          className={`absolute right-0 mt-1.5 w-56 z-30 p-1.5 space-y-0.5 origin-top-right ${ZAURE_SURFACES.popoverMenu}`}
                         >
                           <button
                             type="button"
@@ -701,7 +704,7 @@ export default function ProfilePage({
                               setShowOptionsMenu(false);
                               handleShareProfile();
                             }}
-                            className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-800 hover:bg-slate-50 flex items-center gap-2.5 transition"
+                            className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
                           >
                             <Link2 className="w-4 h-4 text-slate-500" />
                             <span>Copier le lien du profil</span>
@@ -710,7 +713,7 @@ export default function ProfilePage({
                           <button
                             type="button"
                             onClick={handleCopyUserId}
-                            className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-800 hover:bg-slate-50 flex items-center gap-2.5 transition"
+                            className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
                           >
                             <Copy className="w-4 h-4 text-slate-500" />
                             <span>Copier l'identifiant</span>
@@ -721,8 +724,8 @@ export default function ProfilePage({
                             onClick={handleToggleBlock}
                             className={`w-full px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition ${
                               isBlocked
-                                ? 'text-blue-700 hover:bg-blue-50'
-                                : 'text-red-600 hover:bg-red-50'
+                                ? 'text-blue-700 dark:text-sky-400 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                                : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
                             }`}
                           >
                             <UserX className="w-4 h-4" />
@@ -735,7 +738,7 @@ export default function ProfilePage({
                               setShowOptionsMenu(false);
                               setShowReportModal(true);
                             }}
-                            className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition"
+                            className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 flex items-center gap-2.5 transition"
                           >
                             <Flag className="w-4 h-4" />
                             <span>Signaler le profil</span>
@@ -753,34 +756,34 @@ export default function ProfilePage({
           <div className="mt-4 space-y-2.5">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white tracking-tight">
                   {profile.nom}
                 </h1>
                 {profile.role === 'verifie' && (
                   <span
-                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-700"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-sky-400"
                     title="Professionnel vérifié"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-sky-400" />
                     <span className="hidden sm:inline">Vérifié</span>
                   </span>
                 )}
                 {profile.role === 'mentor' && (
                   <span
-                    className="inline-flex items-center gap-1 text-xs font-bold text-red-700"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-red-700 dark:text-rose-400"
                     title="Mentor certifié Zaure"
                   >
-                    <Award className="w-4 h-4 text-red-600" />
+                    <Award className="w-4 h-4 text-red-600 dark:text-rose-400" />
                     <span className="hidden sm:inline">Mentor</span>
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 mt-0.5">
-                <span className="font-semibold text-slate-600">{formatMemberHandle(profile)}</span>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{formatMemberHandle(profile)}</span>
                 {canViewInfo && profile.profession && (
                   <>
-                    <span aria-hidden="true" className="text-slate-300">·</span>
-                    <span className="font-semibold text-slate-800">{profile.profession}</span>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{profile.profession}</span>
                   </>
                 )}
               </div>
@@ -788,23 +791,23 @@ export default function ProfilePage({
 
             {/* Bio */}
             {isBlocked ? (
-              <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1.5">
                 <ShieldAlert className="w-4 h-4" />
                 <span>Vous avez bloqué ce membre. Débloquez-le pour interagir.</span>
               </p>
             ) : canViewInfo && profile.bio ? (
-              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed max-w-2xl whitespace-pre-line">
+              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl whitespace-pre-line">
                 {profile.bio}
               </p>
             ) : !canViewInfo ? (
-              <p className="text-xs text-slate-500 italic flex items-center gap-1.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 italic flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5 text-slate-400" />
                 <span>Profil protégé par des paramètres de confidentialité.</span>
               </p>
             ) : null}
 
             {/* Zero-Pill Metadata Strip */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 pt-0.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400 pt-0.5">
               {canViewInfo && profile.localisation && (
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-slate-400" />
@@ -822,7 +825,7 @@ export default function ProfilePage({
                   href={cleanWebsite}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-blue-700 hover:underline font-semibold"
+                  className="inline-flex items-center gap-1 text-blue-700 dark:text-sky-400 hover:underline font-semibold"
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span>{cleanWebsite.replace(/^https?:\/\//, '')}</span>
@@ -832,16 +835,16 @@ export default function ProfilePage({
             </div>
 
             {/* Interactive Metrics Row (Abonnés / Abonnements / Publications) */}
-            <div className="flex flex-wrap items-center gap-5 sm:gap-7 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-5 sm:gap-7 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setFollowModalTab('followers')}
                 className="group text-left min-h-[36px] flex items-baseline gap-1.5 hover:opacity-80 transition"
               >
-                <span className="font-mono text-base sm:text-lg font-black text-slate-950 tabular-nums group-hover:text-blue-700 transition-colors">
+                <span className="font-mono text-base sm:text-lg font-black text-slate-950 dark:text-white tabular-nums group-hover:text-blue-700 dark:group-hover:text-sky-400 transition-colors">
                   {followers.length}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Abonné{followers.length > 1 ? 's' : ''}
                 </span>
               </button>
@@ -851,10 +854,10 @@ export default function ProfilePage({
                 onClick={() => setFollowModalTab('following')}
                 className="group text-left min-h-[36px] flex items-baseline gap-1.5 hover:opacity-80 transition"
               >
-                <span className="font-mono text-base sm:text-lg font-black text-slate-950 tabular-nums group-hover:text-blue-700 transition-colors">
+                <span className="font-mono text-base sm:text-lg font-black text-slate-950 dark:text-white tabular-nums group-hover:text-blue-700 dark:group-hover:text-sky-400 transition-colors">
                   {following.length}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Abonnement{following.length > 1 ? 's' : ''}
                 </span>
               </button>
@@ -864,10 +867,10 @@ export default function ProfilePage({
                 onClick={() => selectProfileTab('publications')}
                 className="group text-left min-h-[36px] flex items-baseline gap-1.5 hover:opacity-80 transition"
               >
-                <span className="font-mono text-base sm:text-lg font-black text-slate-950 tabular-nums group-hover:text-blue-700 transition-colors">
+                <span className="font-mono text-base sm:text-lg font-black text-slate-950 dark:text-white tabular-nums group-hover:text-blue-700 dark:group-hover:text-sky-400 transition-colors">
                   {totalPublicationsCount}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Publication{totalPublicationsCount > 1 ? 's' : ''}
                 </span>
               </button>
@@ -878,7 +881,7 @@ export default function ProfilePage({
         {/* ==================================================================== */}
         {/* 2. SYSTÈME D'ONGLETS                                                 */}
         {/* ==================================================================== */}
-        <div className="border-t border-slate-100 px-2 sm:px-4 flex items-center gap-1 overflow-x-auto scrollbar-none">
+        <div className="border-t border-slate-100 dark:border-slate-800 px-2 sm:px-4 flex items-center gap-1 overflow-x-auto scrollbar-none">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -888,7 +891,9 @@ export default function ProfilePage({
                 type="button"
                 onClick={() => selectProfileTab(tab.id)}
                 className={`relative min-h-[46px] px-3 sm:px-4 py-2.5 text-xs sm:text-[13px] font-bold flex items-center gap-1.5 shrink-0 transition whitespace-nowrap ${
-                  isActive ? 'text-blue-700' : 'text-slate-500 hover:text-slate-900'
+                  isActive
+                    ? 'text-blue-700 dark:text-sky-400'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -896,7 +901,7 @@ export default function ProfilePage({
                 {typeof tab.count === 'number' && (
                   <span
                     className={`font-mono text-[11px] tabular-nums ${
-                      isActive ? 'text-blue-600' : 'text-slate-400'
+                      isActive ? 'text-blue-600 dark:text-sky-400' : 'text-slate-400'
                     }`}
                   >
                     {tab.count}
@@ -906,7 +911,7 @@ export default function ProfilePage({
                   <motion.span
                     layoutId="zaure-profile-tab-indicator"
                     transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                    className="absolute bottom-0 inset-x-2 h-[3px] bg-blue-600 rounded-t-full"
+                    className="absolute bottom-0 inset-x-2 h-[3px] zaure-grad-primary rounded-t-full shadow-[0_0_10px_rgba(37,99,235,0.55)]"
                   />
                 )}
               </button>
@@ -939,28 +944,28 @@ export default function ProfilePage({
                   {[1, 2].map((n) => (
                     <div
                       key={n}
-                      className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs animate-pulse space-y-3"
+                      className={`${ZAURE_SURFACES.card} p-4 sm:p-5 animate-pulse space-y-3`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-200" />
+                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700" />
                         <div className="space-y-1.5 flex-1">
-                          <div className="h-3.5 bg-slate-200 rounded w-1/3" />
-                          <div className="h-2.5 bg-slate-100 rounded w-1/4" />
+                          <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
+                          <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded w-1/4" />
                         </div>
                       </div>
-                      <div className="h-16 bg-slate-100 rounded-2xl w-full" />
+                      <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full" />
                     </div>
                   ))}
                 </div>
               ) : mergedPublications.length === 0 ? (
-                <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center shadow-xs space-y-2.5">
-                  <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <div className={`${ZAURE_SURFACES.card} p-8 sm:p-12 text-center space-y-2.5`}>
+                  <div className={`w-16 h-16 mx-auto rounded-2xl ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center`}>
                     <FileText className="w-8 h-8" />
                   </div>
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-950">
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
                     Aucune publication pour l'instant
                   </h4>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
                     {isOwnProfile
                       ? "Partagez vos réflexions, photos, vidéos ou notes vocales depuis le fil d'actualité pour enrichir votre profil."
                       : `${profile.nom} n'a pas encore publié de contenu public visible.`}
@@ -1001,17 +1006,17 @@ export default function ProfilePage({
                   'Informations personnelles restreintes'
                 )
               ) : (
-                <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xs space-y-5">
+                <div className={`${ZAURE_SURFACES.card} p-4 sm:p-6 space-y-5`}>
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm sm:text-base font-extrabold text-slate-950 flex items-center gap-2">
-                      <Info className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
+                      <Info className="w-4 h-4 text-blue-600 dark:text-sky-400" />
                       <span>À propos de {profile.nom}</span>
                     </h3>
                     {isOwnProfile && (
                       <button
                         type="button"
                         onClick={() => setShowEditModal(true)}
-                        className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1"
+                        className="text-xs font-bold text-blue-700 dark:text-sky-400 hover:underline flex items-center gap-1"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                         <span>Modifier</span>
@@ -1020,89 +1025,89 @@ export default function ProfilePage({
                   </div>
 
                   {profile.bio && (
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/75">
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/75 dark:border-slate-700/70">
                       <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
                         Biographie
                       </p>
-                      <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line">
+                      <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line">
                         {profile.bio}
                       </p>
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-2xl border border-slate-200/80 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center shrink-0`}>
                         <Briefcase className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Profession
                         </p>
-                        <p className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5 break-words">
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
                           {profile.profession || 'Non renseignée'}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl border border-slate-200/80 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl ${ZAURE_ICON_CHIPS.indigo} flex items-center justify-center shrink-0`}>
                         <GraduationCap className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Formation / Parcours
                         </p>
-                        <p className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5 break-words">
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
                           {profile.formation || 'Non renseignée'}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl border border-slate-200/80 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl ${ZAURE_ICON_CHIPS.emerald} flex items-center justify-center shrink-0`}>
                         <MapPin className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Localisation
                         </p>
-                        <p className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5 break-words">
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
                           {profile.localisation || 'Non renseignée'}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl border border-slate-200/80 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                    <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl ${ZAURE_ICON_CHIPS.amber} flex items-center justify-center shrink-0`}>
                         <Languages className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Langue principale
                         </p>
-                        <p className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                           {formatLanguageLabel(profile.langue_preferee)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl border border-slate-200/80 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                    <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl ${ZAURE_ICON_CHIPS.violet} flex items-center justify-center shrink-0`}>
                         <Calendar className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Date d'inscription
                         </p>
-                        <p className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">
+                        <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                           {formatJoinedDate(profile.created_at)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl border border-slate-200/80 flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-xl ${ZAURE_ICON_CHIPS.sky} flex items-center justify-center shrink-0`}>
                         <Globe className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1114,7 +1119,7 @@ export default function ProfilePage({
                             href={cleanWebsite}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs sm:text-sm font-bold text-blue-700 hover:underline mt-0.5 inline-flex items-center gap-1 break-all"
+                            className="text-xs sm:text-sm font-bold text-blue-700 dark:text-sky-400 hover:underline mt-0.5 inline-flex items-center gap-1 break-all"
                           >
                             <span>{cleanWebsite.replace(/^https?:\/\//, '')}</span>
                             <ExternalLink className="w-3.5 h-3.5 shrink-0" />
@@ -1129,11 +1134,11 @@ export default function ProfilePage({
                   </div>
 
                   {profile.infos_complementaires && (
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/75">
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/75 dark:border-slate-700/70">
                       <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
                         Informations complémentaires
                       </p>
-                      <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line">
+                      <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line">
                         {profile.infos_complementaires}
                       </p>
                     </div>
@@ -1194,19 +1199,19 @@ export default function ProfilePage({
                   {[1, 2].map((n) => (
                     <div
                       key={n}
-                      className="h-44 bg-white border border-slate-200/80 rounded-2xl animate-pulse"
+                      className={`h-44 ${ZAURE_SURFACES.card} animate-pulse`}
                     />
                   ))}
                 </div>
               ) : totalCommunitiesCount === 0 ? (
-                <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center shadow-xs space-y-2.5">
-                  <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                <div className={`${ZAURE_SURFACES.card} p-8 sm:p-12 text-center space-y-2.5`}>
+                  <div className={`w-16 h-16 mx-auto rounded-2xl ${ZAURE_ICON_CHIPS.sky} flex items-center justify-center`}>
                     <Users className="w-8 h-8" />
                   </div>
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-950">
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
                     Aucune communauté visible
                   </h4>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
                     {isOwnProfile
                       ? 'Rejoignez des communautés et cercles de savoir pour échanger avec des pairs.'
                       : `${profile.nom} ne participe à aucune communauté publique pour le moment.`}
@@ -1233,7 +1238,7 @@ export default function ProfilePage({
                           <motion.div
                             key={group.id}
                             whileHover={{ y: -2 }}
-                            className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between"
+                            className={`${ZAURE_SURFACES.cardInteractive} overflow-hidden flex flex-col justify-between`}
                           >
                             <div>
                               <div className="relative h-24 bg-slate-900 overflow-hidden">
@@ -1243,7 +1248,7 @@ export default function ProfilePage({
                                   className="w-full h-full object-cover"
                                   referrerPolicy="no-referrer"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 to-transparent" />
+                                <div className="absolute inset-0 zaure-grad-scrim" />
                                 <span className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-slate-950/65 text-white text-[10px] font-bold backdrop-blur-xs flex items-center gap-1">
                                   {group.privacy === 'private' ? (
                                     <Lock className="w-3 h-3" />
@@ -1259,32 +1264,32 @@ export default function ProfilePage({
                                   <img
                                     src={avatarSrc}
                                     alt={group.name}
-                                    className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white shadow-sm bg-white"
+                                    className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white dark:ring-slate-900 shadow-sm bg-white dark:bg-slate-900"
                                     referrerPolicy="no-referrer"
                                   />
-                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full">
+                                  <span className="text-[10px] font-bold text-blue-700 dark:text-sky-300 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 rounded-full">
                                     {roleLabel}
                                   </span>
                                 </div>
 
-                                <h4 className="text-sm font-extrabold text-slate-950 mt-2.5 truncate">
+                                <h4 className="text-sm font-extrabold text-slate-950 dark:text-white mt-2.5 truncate">
                                   {group.name}
                                 </h4>
-                                <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
                                   {group.description}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
+                            <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
                                 {Math.max(1, group.memberCount || 1)} membre
                                 {(group.memberCount || 1) > 1 ? 's' : ''}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => onOpenCommunityGroup(group.id)}
-                                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold transition"
+                                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/70 text-blue-800 dark:text-sky-300 text-xs font-bold transition"
                               >
                                 Voir la communauté
                               </button>
@@ -1296,7 +1301,7 @@ export default function ProfilePage({
                   )}
 
                   {ownLegacyCircles.length > 0 && (
-                    <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
+                    <div className={`${ZAURE_SURFACES.card} p-4 sm:p-5 space-y-3`}>
                       <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
                         Cercles de savoir rejoints ({ownLegacyCircles.length})
                       </h4>
@@ -1306,19 +1311,19 @@ export default function ProfilePage({
                             key={circle.id}
                             type="button"
                             onClick={() => onOpenCircle(circle.id)}
-                            className="flex items-center gap-3 p-2.5 rounded-2xl border border-slate-200/80 hover:border-blue-300 hover:bg-blue-50/40 text-left transition"
+                            className="flex items-center gap-3 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/40 dark:hover:bg-blue-950/30 text-left transition"
                           >
                             <img
                               src={circle.image}
                               alt={circle.nom}
-                              className="w-11 h-11 rounded-xl object-cover shrink-0 bg-slate-100"
+                              className="w-11 h-11 rounded-xl object-cover shrink-0 bg-slate-100 dark:bg-slate-800"
                               referrerPolicy="no-referrer"
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-slate-900 truncate">
+                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                                 {circle.nom}
                               </p>
-                              <p className="text-[10px] text-slate-500 truncate">
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                                 {circle.categorie}
                               </p>
                             </div>
@@ -1399,39 +1404,39 @@ export default function ProfilePage({
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4"
+              className={`w-full max-w-md ${ZAURE_SURFACES.modalPanel} p-5 sm:p-6 space-y-4`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <h3 className="text-base font-extrabold text-slate-950">
+                  <h3 className="text-base font-extrabold text-slate-950 dark:text-white">
                     Signaler {profile.nom}
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowReportModal(false)}
-                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+                  className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {reportSent ? (
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold flex items-center gap-2">
                   <Check className="w-4 h-4 shrink-0" />
                   <span>Signalement envoyé de manière confidentielle.</span>
                 </div>
               ) : (
                 <form onSubmit={handleReportSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                       Motif du signalement
                     </label>
                     <select
                       value={reportReason}
                       onChange={(e) => setReportReason(e.target.value as any)}
-                      className="w-full min-h-[42px] px-3 py-2 rounded-xl bg-[#F0F2F5] border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-500"
+                      className="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
                     >
                       <option value="contenu_inapproprie">Contenu inapproprié</option>
                       <option value="spam">Spam ou sollicitation abusive</option>
@@ -1442,7 +1447,7 @@ export default function ProfilePage({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                       Précisions (optionnel)
                     </label>
                     <textarea
@@ -1451,7 +1456,7 @@ export default function ProfilePage({
                       value={reportDetails}
                       onChange={(e) => setReportDetails(e.target.value)}
                       placeholder="Décrivez brièvement la situation..."
-                      className="w-full p-3 rounded-xl bg-[#F0F2F5] border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-blue-500 resize-none"
+                      className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 resize-none"
                     />
                   </div>
 
@@ -1459,7 +1464,7 @@ export default function ProfilePage({
                     <button
                       type="button"
                       onClick={() => setShowReportModal(false)}
-                      className="min-h-[42px] px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                      className="min-h-[42px] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       Annuler
                     </button>

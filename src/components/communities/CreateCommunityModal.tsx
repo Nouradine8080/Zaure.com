@@ -24,6 +24,8 @@ import {
   getDefaultAvatar,
   getDefaultCoverByCategory
 } from './communityAssets';
+import ZaureGeometricBackdrop from '../ui/ZaureGeometricBackdrop';
+import { ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface CreateCommunityModalProps {
   currentUser: UserProfile;
@@ -178,29 +180,30 @@ export default function CreateCommunityModal({
         initial={{ opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col overflow-hidden"
+        className={`${ZAURE_SURFACES.modalPanel} rounded-t-3xl sm:rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle on mobile */}
-        <div className="sm:hidden pt-2.5 pb-1 flex justify-center shrink-0">
-          <div className="w-10 h-1 bg-slate-300 rounded-full" />
-        </div>
-
         {/* Header */}
-        <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-          <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-slate-950">
-              Créer une communauté
-            </h2>
-            <p className="text-xs text-slate-500">
-              Vous serez automatiquement désigné créateur et administrateur principal.
-            </p>
+        <div className="relative overflow-hidden zaure-grad-hero px-5 sm:px-6 py-4 flex items-center justify-between shrink-0 text-white">
+          <ZaureGeometricBackdrop variant="hero" />
+          <div className="relative flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/20 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-extrabold text-white leading-tight">
+                Créer une communauté
+              </h2>
+              <p className="text-xs text-blue-100 truncate">
+                Vous serez automatiquement désigné créateur et administrateur principal.
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white transition"
             aria-label="Fermer"
           >
             <X className="w-5 h-5" />
@@ -570,19 +573,19 @@ export default function CreateCommunityModal({
           </div>
 
           {/* Footer Submit */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="min-h-[44px] px-4 py-2 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition"
+              className="min-h-[44px] px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isSubmitting || uploadingCover || uploadingAvatar}
-              className="min-h-[44px] px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-extrabold rounded-xl transition shadow-sm flex items-center gap-1.5"
+              className={`min-h-[44px] px-5 py-2 ${ZAURE_SURFACES.gradientButton} disabled:opacity-50 text-xs`}
             >
               <Check className="w-4 h-4" />
               <span>{isSubmitting ? 'Création en cours...' : 'Créer la communauté'}</span>

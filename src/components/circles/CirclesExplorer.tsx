@@ -28,7 +28,8 @@ import {
   filterAndSortCircles,
   PRIMARY_CIRCLE_CATEGORIES
 } from './circleHelpers';
-import { ZAURE_SURFACES } from '../../styles/designSystem';
+import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
+import ZaureGeometricBackdrop from '../ui/ZaureGeometricBackdrop';
 
 interface CirclesExplorerProps {
   circles: Circle[];
@@ -194,19 +195,7 @@ export default function CirclesExplorer({
     <div className="space-y-4 zaure-animate-fade-in pb-6" id="circles-explorer-view">
       {/* 1. HERO BANNER (Global ZAURE Hero Gradient & Shadow) */}
       <section className={`${ZAURE_SURFACES.heroBanner} px-4 py-4 sm:px-7 sm:py-6`}>
-        {/* Decorative subtle translucent arcs */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-10 right-16 w-48 h-48 rounded-full bg-white/10"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-16 right-44 w-56 h-56 rounded-full bg-white/8"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-12 -left-10 w-40 h-40 rounded-full bg-white/8"
-        />
+        <ZaureGeometricBackdrop variant="hero" />
 
         <div className="relative z-10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -251,7 +240,7 @@ export default function CirclesExplorer({
                 }}
                 className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold transition flex items-center gap-1.5 shrink-0 ${
                   isActive
-                    ? 'bg-[#2563EB] text-white shadow-xs'
+                    ? `zaure-grad-primary text-white ${ZAURE_GLOWS.blue}`
                     : 'bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-blue-300 dark:hover:border-blue-700'
                 }`}
               >
@@ -278,7 +267,7 @@ export default function CirclesExplorer({
               aria-expanded={showMoreCategories}
               className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold transition flex items-center gap-1 shrink-0 ${
                 isExtraCategorySelected
-                  ? 'bg-[#2563EB] text-white shadow-xs'
+                  ? `zaure-grad-primary text-white ${ZAURE_GLOWS.blue}`
                   : 'bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-blue-300'
               }`}
             >
@@ -328,7 +317,7 @@ export default function CirclesExplorer({
             onChange={(e) => onSearchQueryChange(e.target.value)}
             placeholder="Rechercher un cercle..."
             aria-label="Rechercher un cercle"
-            className="w-full min-h-[42px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 focus:border-[#2563EB] rounded-full pl-10 pr-9 py-2 text-xs sm:text-[13px] text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none shadow-2xs transition"
+            className="w-full min-h-[42px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 focus:border-[#2563EB] focus:ring-2 focus:ring-blue-500/20 rounded-full pl-10 pr-9 py-2 text-xs sm:text-[13px] text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none zaure-shadow-xs transition"
           />
           {searchQuery && (
             <button
@@ -407,7 +396,7 @@ export default function CirclesExplorer({
         </div>
       ) : displayedCircles.length === 0 ? (
         <div className="zaure-card rounded-3xl p-8 text-center space-y-3 zaure-animate-fade-in">
-          <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/60 text-[#2563EB] dark:text-blue-400 flex items-center justify-center mx-auto">
+          <div className={`w-14 h-14 rounded-2xl ${ZAURE_ICON_CHIPS.blue} ${ZAURE_GLOWS.soft} flex items-center justify-center mx-auto`}>
             <Compass className="w-7 h-7" />
           </div>
           <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
@@ -436,7 +425,7 @@ export default function CirclesExplorer({
             <button
               type="button"
               onClick={onOpenCreateCircle}
-              className="min-h-[38px] px-4 py-2 rounded-full bg-[#2563EB] hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+              className={`min-h-[38px] px-4 py-2 ${ZAURE_SURFACES.primaryButton} text-xs`}
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Créer un cercle</span>

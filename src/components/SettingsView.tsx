@@ -35,6 +35,8 @@ import AccessibilitySection from './settings/AccessibilitySection';
 import BlockedUsersSection from './settings/BlockedUsersSection';
 import HelpSupportSection from './settings/HelpSupportSection';
 import AboutSection from './settings/AboutSection';
+import { ZaureGeometricBackdrop } from './ui/ZaureGeometricBackdrop';
+import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../styles/designSystem';
 
 export type SettingsCategoryId =
   | 'compte'
@@ -170,7 +172,7 @@ export default function SettingsView({
       fallbackTitle: 'Mon compte',
       description: 'Nom, @identifiant, e-mail, téléphone, photo et profil personnel',
       icon: <User className="w-5 h-5" />,
-      accentBg: 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+      accentBg: ZAURE_ICON_CHIPS.blue
     },
     {
       id: 'securite',
@@ -178,7 +180,7 @@ export default function SettingsView({
       fallbackTitle: 'Sécurité',
       description: 'Mot de passe, vérification e-mail, appareils actifs et 2FA',
       icon: <Lock className="w-5 h-5" />,
-      accentBg: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+      accentBg: ZAURE_ICON_CHIPS.emerald
     },
     {
       id: 'confidentialite',
@@ -186,7 +188,7 @@ export default function SettingsView({
       fallbackTitle: 'Confidentialité',
       description: 'Visibilité du profil, messages, commentaires et mentions',
       icon: <Shield className="w-5 h-5" />,
-      accentBg: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400'
+      accentBg: ZAURE_ICON_CHIPS.indigo
     },
     {
       id: 'notifications',
@@ -194,7 +196,7 @@ export default function SettingsView({
       fallbackTitle: 'Notifications',
       description: 'Réactions, mentions, messages, communautés et alertes Push',
       icon: <Bell className="w-5 h-5" />,
-      accentBg: 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400'
+      accentBg: ZAURE_ICON_CHIPS.amber
     },
     {
       id: 'apparence',
@@ -202,7 +204,7 @@ export default function SettingsView({
       fallbackTitle: 'Apparence',
       description: 'Thème clair, sombre, automatique système, densité et données',
       icon: <Palette className="w-5 h-5" />,
-      accentBg: 'bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400'
+      accentBg: ZAURE_ICON_CHIPS.violet
     },
     {
       id: 'langue',
@@ -210,7 +212,7 @@ export default function SettingsView({
       fallbackTitle: 'Langue',
       description: 'Français, English, Hausa et traduction des capsules',
       icon: <Globe className="w-5 h-5" />,
-      accentBg: 'bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400'
+      accentBg: ZAURE_ICON_CHIPS.sky
     },
     {
       id: 'accessibilite',
@@ -218,7 +220,7 @@ export default function SettingsView({
       fallbackTitle: 'Accessibilité',
       description: 'Taille du texte, contraste élevé, animations et lisibilité',
       icon: <Accessibility className="w-5 h-5" />,
-      accentBg: 'bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400'
+      accentBg: ZAURE_ICON_CHIPS.emerald
     },
     {
       id: 'bloques',
@@ -226,7 +228,7 @@ export default function SettingsView({
       fallbackTitle: 'Utilisateurs bloqués',
       description: `${(settings.utilisateurs_bloques || []).length} compte(s) bloqué(s) · Déblocage`,
       icon: <UserX className="w-5 h-5" />,
-      accentBg: 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+      accentBg: ZAURE_ICON_CHIPS.rose
     },
     {
       id: 'aide',
@@ -234,7 +236,7 @@ export default function SettingsView({
       fallbackTitle: 'Aide et assistance',
       description: 'FAQ, support technique, signalement et confidentialité',
       icon: <HelpCircle className="w-5 h-5" />,
-      accentBg: 'bg-orange-50 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400'
+      accentBg: ZAURE_ICON_CHIPS.amber
     },
     {
       id: 'apropos',
@@ -242,7 +244,7 @@ export default function SettingsView({
       fallbackTitle: 'À propos de ZAURE',
       description: 'Mission, cercles, documents légaux, déconnexion et compte',
       icon: <Info className="w-5 h-5" />,
-      accentBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+      accentBg: ZAURE_ICON_CHIPS.blue
     }
   ];
 
@@ -365,27 +367,28 @@ export default function SettingsView({
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 pb-20 space-y-5">
       {/* En-tête principal « Paramètres » */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shrink-0 shadow-sm">
+      <div className={`${ZAURE_SURFACES.sectionHeroBanner} flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+        <ZaureGeometricBackdrop variant="hero" />
+        <div className="relative z-10 flex items-center gap-3.5 min-w-0">
+          <div className="w-12 h-12 rounded-2xl bg-white/15 border border-white/25 backdrop-blur-xs text-white flex items-center justify-center shrink-0">
             <Settings className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
               {settingsHeading}
             </h1>
-            <p className="text-xs sm:text-[13px] text-slate-500 dark:text-slate-400 truncate">
+            <p className="text-xs sm:text-[13px] text-blue-100/90 truncate">
               Gérez votre compte, votre sécurité, votre confidentialité et votre expérience ZAURE
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="relative z-10 flex items-center gap-3 shrink-0">
           {onOpenOwnProfile && (
             <button
               type="button"
               onClick={onOpenOwnProfile}
-              className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 transition"
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-white text-blue-700 hover:bg-blue-50 text-xs font-bold shadow-sm flex items-center gap-2 transition"
             >
               <img
                 src={
@@ -395,10 +398,10 @@ export default function SettingsView({
                   )}`
                 }
                 alt={currentUser.nom}
-                className="w-6 h-6 rounded-full object-cover"
+                className="w-6 h-6 rounded-full object-cover ring-1 ring-blue-200"
               />
               <span>Voir mon profil</span>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              <ExternalLink className="w-3.5 h-3.5 text-blue-500" />
             </button>
           )}
         </div>
@@ -412,7 +415,7 @@ export default function SettingsView({
             mobileShowDetail ? 'hidden lg:block' : 'block'
           }`}
         >
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-2.5 sm:p-3 space-y-1">
+          <div className={`${ZAURE_SURFACES.card} p-2.5 sm:p-3 space-y-1`}>
             {categories.map((cat) => {
               const isSelected = activeCategory === cat.id;
               return (
@@ -422,7 +425,7 @@ export default function SettingsView({
                   onClick={() => handleSelectCategory(cat.id)}
                   className={`w-full min-h-[56px] p-3 rounded-2xl flex items-center gap-3 text-left transition ${
                     isSelected
-                      ? 'bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 shadow-2xs'
+                      ? `bg-gradient-to-r from-blue-50 to-sky-50/80 dark:from-blue-950/70 dark:to-sky-950/40 border border-blue-300 dark:border-blue-700 ${ZAURE_GLOWS.soft}`
                       : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
                   }`}
                 >
@@ -435,7 +438,7 @@ export default function SettingsView({
                     <p
                       className={`text-xs sm:text-[13px] font-extrabold truncate ${
                         isSelected
-                          ? 'text-blue-700 dark:text-blue-300'
+                          ? 'text-blue-700 dark:text-sky-300'
                           : 'text-slate-900 dark:text-slate-100'
                       }`}
                     >
@@ -447,7 +450,7 @@ export default function SettingsView({
                   </div>
                   <ChevronRight
                     className={`w-4 h-4 shrink-0 ${
-                      isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'
+                      isSelected ? 'text-blue-600 dark:text-sky-400' : 'text-slate-400'
                     }`}
                   />
                 </button>
@@ -463,7 +466,7 @@ export default function SettingsView({
           }`}
         >
           {/* Barre retour mobile */}
-          <div className="lg:hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between gap-3">
+          <div className={`lg:hidden ${ZAURE_SURFACES.card} px-3 py-2 flex items-center justify-between gap-3`}>
             <button
               type="button"
               onClick={() => setMobileShowDetail(false)}

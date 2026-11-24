@@ -47,6 +47,7 @@ import {
   UserAvatar
 } from './chatUtils';
 import { VoiceNotePlayer } from './chatUtils';
+import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface ChatThreadProps {
   currentUser: UserProfile | null;
@@ -175,19 +176,19 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
   if (!activeConversation) {
     return (
-      <section className="flex flex-1 flex-col items-center justify-center bg-[#F0F2F5] px-6 text-center">
-        <div className="max-w-sm rounded-3xl border border-slate-200/80 bg-white p-8 shadow-xs">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+      <section className="relative z-10 flex flex-1 flex-col items-center justify-center bg-transparent px-6 text-center">
+        <div className={`${ZAURE_SURFACES.card} ${ZAURE_GLOWS.soft} max-w-sm p-8`}>
+          <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${ZAURE_ICON_CHIPS.blue}`}>
             <Sparkles className="h-7 w-7" />
           </div>
-          <h2 className="text-lg font-extrabold text-slate-950">Votre messagerie Zaure</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+          <h2 className="text-lg font-extrabold text-slate-950 dark:text-white">Votre messagerie Zaure</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
             Sélectionnez une discussion à gauche ou démarrez un nouvel échange privé ou de groupe avec la communauté.
           </p>
           <button
             type="button"
             onClick={onOpenNewChatModal}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition min-h-[44px]"
+            className={`${ZAURE_SURFACES.gradientButton} mt-5 px-5 py-2.5 text-xs min-h-[44px]`}
           >
             <UserPlus className="h-4 w-4" />
             <span>Démarrer une conversation</span>
@@ -225,26 +226,26 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className="relative flex flex-1 flex-col h-full min-w-0 bg-[#F0F2F5]"
+      className="relative z-10 flex flex-1 flex-col h-full min-w-0 bg-transparent"
     >
       {/* Overlay Drag & Drop */}
       {isDraggingOver && (
         <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-600/10 backdrop-blur-[2px] border-2 border-dashed border-blue-500 m-3 rounded-3xl">
-          <div className="rounded-2xl bg-white px-6 py-4 text-center shadow-xl border border-blue-100">
-            <Paperclip className="mx-auto h-7 w-7 text-blue-600 mb-2" />
-            <p className="text-sm font-bold text-slate-900">Déposez votre fichier ici</p>
-            <p className="text-xs text-slate-500 mt-0.5">Image, vidéo ou document sécurisé</p>
+          <div className={`${ZAURE_SURFACES.card} ${ZAURE_GLOWS.blue} px-6 py-4 text-center`}>
+            <Paperclip className="mx-auto h-7 w-7 text-blue-600 dark:text-sky-400 mb-2" />
+            <p className="text-sm font-bold text-slate-900 dark:text-white">Déposez votre fichier ici</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Image, vidéo ou document sécurisé</p>
           </div>
         </div>
       )}
 
       {/* 1. En-tête conversation active */}
-      <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200/90 bg-white px-3 sm:px-5 z-20">
+      <header className={`${ZAURE_SURFACES.glassHeader} flex h-16 shrink-0 items-center justify-between gap-2 px-3 sm:px-5 z-20`}>
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
             onClick={onBackMobile}
-            className="flex md:hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100 transition"
+            className="flex md:hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             aria-label="Retour aux conversations"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -271,21 +272,21 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             className="min-w-0 cursor-pointer"
           >
             <div className="flex items-center gap-1.5 min-w-0">
-              <h2 className="truncate text-sm sm:text-base font-extrabold text-slate-950">
+              <h2 className="truncate text-sm sm:text-base font-extrabold text-slate-950 dark:text-white">
                 {convTitle}
               </h2>
               {!isGroup && activeOtherUser?.role === 'verifie' && (
-                <BadgeCheck className="h-4 w-4 shrink-0 text-blue-600" />
+                <BadgeCheck className="h-4 w-4 shrink-0 text-blue-600 dark:text-sky-400" />
               )}
               {isFav && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" />}
             </div>
             <p
               className={`truncate text-xs ${
                 isOtherUserTyping
-                  ? 'font-semibold text-blue-600'
+                  ? 'font-semibold text-blue-600 dark:text-sky-400'
                   : !isGroup && activeOtherUser?.availability === 'online'
-                    ? 'font-semibold text-emerald-600'
-                    : 'text-slate-500'
+                    ? 'font-semibold text-emerald-600 dark:text-emerald-400'
+                    : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               {sublineText}
@@ -300,8 +301,8 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             onClick={() => onToggleInChatSearch(!inChatSearchOpen)}
             className={`flex h-10 w-10 items-center justify-center rounded-xl transition ${
               inChatSearchOpen
-                ? 'bg-blue-50 text-blue-600'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-sky-400'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white'
             }`}
             title="Rechercher dans la conversation"
           >
@@ -311,7 +312,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
           <button
             type="button"
             onClick={() => onStartCall('audio')}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-sky-400 transition"
             title="Appel audio"
           >
             <Phone className="h-4 w-4" />
@@ -320,7 +321,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
           <button
             type="button"
             onClick={() => onStartCall('video')}
-            className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition"
+            className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-sky-400 transition"
             title="Appel vidéo"
           >
             <Video className="h-4 w-4" />
@@ -331,8 +332,8 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             onClick={onToggleRightPanel}
             className={`flex h-10 w-10 items-center justify-center rounded-xl transition ${
               showRightPanel
-                ? 'bg-blue-50 text-blue-600'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-sky-400'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white'
             }`}
             title="Détails de la conversation"
           >
@@ -343,21 +344,21 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             <button
               type="button"
               onClick={() => setHeaderMenuOpen((v) => !v)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-950 transition"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-white transition"
               title="Plus d'options"
             >
               <MoreVertical className="h-4 w-4" />
             </button>
 
             {headerMenuOpen && (
-              <div className="absolute right-0 top-12 z-30 w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl animate-fadeIn">
+              <div className={`absolute right-0 top-12 z-30 w-56 p-1.5 ${ZAURE_SURFACES.popoverMenu}`}>
                 <button
                   type="button"
                   onClick={() => {
                     setHeaderMenuOpen(false);
                     onToggleFavorite(activeConversation.id);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <Star className={`h-4 w-4 ${isFav ? 'fill-amber-400 text-amber-500' : ''}`} />
                   <span>{isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}</span>
@@ -368,7 +369,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                     setHeaderMenuOpen(false);
                     onToggleMute(activeConversation.id);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <BellOff className="h-4 w-4" />
                   <span>{isMuted ? 'Activer les notifications' : 'Mettre en sourdine'}</span>
@@ -379,7 +380,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                     setHeaderMenuOpen(false);
                     onToggleArchive(activeConversation.id);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <Archive className="h-4 w-4" />
                   <span>{isArchived ? 'Désarchiver' : 'Archiver'}</span>
@@ -387,14 +388,14 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
                 {isGroup && (
                   <>
-                    <div className="my-1 border-t border-slate-100" />
+                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                     <button
                       type="button"
                       onClick={() => {
                         setHeaderMenuOpen(false);
                         onOpenManageMembersModal();
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       <Users className="h-4 w-4" />
                       <span>Membres du groupe ({activeConversation.participant_ids.length})</span>
@@ -406,7 +407,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                           setHeaderMenuOpen(false);
                           onOpenEditGroupModal();
                         }}
-                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <Settings className="h-4 w-4" />
                         <span>Modifier le groupe</span>
@@ -415,14 +416,14 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                   </>
                 )}
 
-                <div className="my-1 border-t border-slate-100" />
+                <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                 <button
                   type="button"
                   onClick={() => {
                     setHeaderMenuOpen(false);
                     onRequestDeleteConversation(activeConversation);
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                 >
                   <Trash2 className="h-4 w-4" />
                   <span>{isGroup && isGroupAdmin ? 'Supprimer la discussion' : 'Effacer la discussion'}</span>
@@ -435,7 +436,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
       {/* 2. Barre de recherche dans la discussion */}
       {inChatSearchOpen && (
-        <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 animate-fadeIn">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 py-2 animate-fadeIn">
           <Search className="h-4 w-4 text-slate-400 shrink-0" />
           <input
             type="text"
@@ -443,10 +444,10 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             value={inChatSearchQuery}
             onChange={(e) => onInChatSearchQueryChange(e.target.value)}
             placeholder="Rechercher un mot dans cette discussion..."
-            className="flex-1 bg-transparent text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none"
           />
           {inChatSearchQuery.trim() && (
-            <span className="text-[11px] font-bold text-slate-500 tabular-nums shrink-0">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
               {matchingMessageIds.length > 0
                 ? `${(currentMatchIndex % matchingMessageIds.length) + 1} / ${matchingMessageIds.length}`
                 : '0 résultat'}
@@ -456,7 +457,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             type="button"
             onClick={onPrevSearchMatch}
             disabled={matchingMessageIds.length === 0}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+            className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
             title="Résultat précédent"
           >
             <ChevronUp className="h-4 w-4" />
@@ -465,7 +466,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
             type="button"
             onClick={onNextSearchMatch}
             disabled={matchingMessageIds.length === 0}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+            className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
             title="Résultat suivant"
           >
             <ChevronDown className="h-4 w-4" />
@@ -476,7 +477,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
               onToggleInChatSearch(false);
               onInChatSearchQueryChange('');
             }}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
             title="Fermer la recherche"
           >
             <X className="h-4 w-4" />
@@ -486,7 +487,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
       {/* 3. Bannière des messages épinglés */}
       {activePinned && (
-        <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-blue-50/90 px-4 py-2 text-xs">
+        <div className="flex items-center justify-between gap-3 border-b border-blue-100 dark:border-blue-900/50 bg-blue-50/90 dark:bg-blue-950/40 px-4 py-2 text-xs">
           <button
             type="button"
             onClick={() => {
@@ -595,13 +596,13 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                 <React.Fragment key={msg.id}>
                   {showDateDivider && (
                     <div className="my-3 flex justify-center">
-                      <span className="rounded-lg bg-slate-200/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                      <span className="rounded-lg bg-slate-200/80 dark:bg-slate-800/90 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                         {formatDateDivider(msg.created_at)}
                       </span>
                     </div>
                   )}
                   <div className="my-2 flex justify-center">
-                    <span className="rounded-xl bg-white/80 border border-slate-200/70 px-3 py-1 text-[11px] font-medium text-slate-600">
+                    <span className="rounded-xl bg-white/85 dark:bg-slate-900/85 border border-slate-200/70 dark:border-slate-700/70 px-3 py-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                       {msg.content}
                     </span>
                   </div>
@@ -615,7 +616,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
               <React.Fragment key={msg.id}>
                 {showDateDivider && (
                   <div className="my-4 flex justify-center">
-                    <span className="rounded-lg bg-slate-200/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    <span className="rounded-lg bg-slate-200/80 dark:bg-slate-800/90 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       {formatDateDivider(msg.created_at)}
                     </span>
                   </div>
@@ -627,7 +628,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                     isMe ? 'justify-end' : 'justify-start'
                   } ${
                     isHighlighted
-                      ? 'rounded-2xl bg-blue-100/70 p-1.5 ring-2 ring-blue-500/60'
+                      ? 'rounded-2xl bg-blue-100/70 dark:bg-blue-950/60 p-1.5 ring-2 ring-blue-500/60'
                       : ''
                   }`}
                 >
@@ -648,7 +649,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
                   <div className={`flex flex-col max-w-[82%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                     {isGroup && !isMe && showSenderAvatar && (
-                      <span className="mb-1 ml-1 text-[11px] font-bold text-slate-500">
+                      <span className="mb-1 ml-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
                         {msg.sender_nom}
                       </span>
                     )}
@@ -662,8 +663,8 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                             e.stopPropagation();
                             setActiveActionMsgId(actionOpen ? null : msg.id);
                           }}
-                          className={`rounded-xl p-1.5 text-slate-400 hover:bg-white hover:text-slate-700 transition ${
-                            actionOpen ? 'opacity-100 bg-white shadow-xs' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+                          className={`rounded-xl p-1.5 text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition ${
+                            actionOpen ? 'opacity-100 bg-white dark:bg-slate-800 shadow-xs' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
                           }`}
                           title="Actions sur le message"
                         >
@@ -672,12 +673,12 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                       )}
 
                       <div
-                        className={`relative rounded-2xl px-3.5 py-2.5 shadow-2xs transition ${
+                        className={`relative rounded-2xl px-3.5 py-2.5 transition ${
                           msg.is_pinned ? 'ring-2 ring-amber-400/70' : ''
                         } ${
                           isMe
-                            ? 'bg-blue-600 text-white rounded-br-sm'
-                            : 'bg-white text-slate-900 border border-slate-200/80 rounded-bl-sm'
+                            ? 'zaure-grad-primary text-white zaure-shadow-xs rounded-br-sm'
+                            : 'zaure-card text-slate-900 dark:text-slate-100 rounded-bl-sm'
                         }`}
                       >
                         {msg.is_pinned && !msg.is_deleted && (
@@ -880,7 +881,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                       {actionOpen && !msg.is_deleted && (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className={`absolute -top-12 z-30 flex items-center gap-0.5 rounded-2xl border border-slate-200 bg-white px-2 py-1.5 shadow-xl animate-fadeIn ${
+                          className={`absolute -top-12 z-30 flex items-center gap-0.5 px-2 py-1.5 ${ZAURE_SURFACES.popoverMenu} ${
                             isMe ? 'right-0' : 'left-0'
                           }`}
                         >
@@ -892,19 +893,19 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                                 setActiveActionMsgId(null);
                                 onAddReaction(msg.id, emoji);
                               }}
-                              className="rounded-lg px-1.5 py-1 text-sm hover:bg-slate-100 hover:scale-110 transition"
+                              className="rounded-lg px-1.5 py-1 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-110 transition"
                             >
                               {emoji}
                             </button>
                           ))}
-                          <div className="mx-1 h-4 w-px bg-slate-200" />
+                          <div className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
                           <button
                             type="button"
                             onClick={() => {
                               setActiveActionMsgId(null);
                               onReplyMessage(msg);
                             }}
-                            className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-blue-600"
+                            className="rounded-lg p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-sky-400"
                             title="Répondre"
                           >
                             <Reply className="h-3.5 w-3.5" />
@@ -915,7 +916,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                               setActiveActionMsgId(null);
                               onTogglePinMessage(msg);
                             }}
-                            className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-amber-600"
+                            className="rounded-lg p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-amber-600"
                             title={msg.is_pinned ? 'Désépingler' : 'Épingler'}
                           >
                             {msg.is_pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
@@ -927,7 +928,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                                 setActiveActionMsgId(null);
                                 onCopyMessage(msg.content);
                               }}
-                              className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-blue-600"
+                              className="rounded-lg p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-sky-400"
                               title="Copier"
                             >
                               <Copy className="h-3.5 w-3.5" />
@@ -940,7 +941,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                                 setActiveActionMsgId(null);
                                 onEditMessage(msg);
                               }}
-                              className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-blue-600"
+                              className="rounded-lg p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-sky-400"
                               title="Modifier"
                             >
                               <Edit3 className="h-3.5 w-3.5" />
@@ -953,7 +954,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                                 setActiveActionMsgId(null);
                                 onDeleteMessage(msg.id);
                               }}
-                              className="rounded-lg p-1.5 text-slate-600 hover:bg-red-50 hover:text-red-600"
+                              className="rounded-lg p-1.5 text-slate-600 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-950/50 hover:text-red-600 dark:hover:text-red-400"
                               title="Supprimer"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -977,8 +978,8 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
                               onClick={() => onAddReaction(msg.id, emoji)}
                               className={`flex items-center gap-1 rounded-lg border px-2 py-0.5 text-xs transition ${
                                 reacted
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700 font-bold'
-                                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-sky-300 font-bold'
+                                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
                               }`}
                             >
                               <span>{emoji}</span>
@@ -1010,14 +1011,14 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
 
         {isOtherUserTyping && (
           <div className="flex items-center gap-2 py-1 pl-10">
-            <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-2xs">
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" />
+            <div className="zaure-card flex items-center gap-1 rounded-2xl px-3.5 py-2.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce" />
               <span
-                className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+                className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
                 style={{ animationDelay: '0.15s' }}
               />
               <span
-                className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+                className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce"
                 style={{ animationDelay: '0.3s' }}
               />
             </div>
@@ -1032,7 +1033,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
         <button
           type="button"
           onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
-          className="absolute bottom-24 right-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg hover:bg-slate-50 transition"
+          className="absolute bottom-24 right-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 shadow-lg hover:bg-blue-50 dark:hover:bg-slate-800 transition"
           aria-label="Aller aux messages les plus récents"
         >
           <ArrowDown className="h-4 w-4" />

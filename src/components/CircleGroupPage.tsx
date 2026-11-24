@@ -51,6 +51,7 @@ import CircleOptionsMenu, { CircleLocalPrefs, readCirclePrefs } from './CircleOp
 import { zaureService } from '../firebaseClient';
 import { compressImageFile } from '../utils/imageCompressor';
 import { formatCircleMemberCount, getCircleMemberCount } from './circles/circleHelpers';
+import { ZAURE_GLOWS, ZAURE_SURFACES } from '../styles/designSystem';
 
 interface CircleGroupPageProps {
   circle: Circle;
@@ -519,19 +520,21 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
           <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-10 sm:-mt-12">
             <div className="flex items-end gap-3.5 min-w-0">
               <div className="relative shrink-0">
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white dark:border-slate-900 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
-                  {circle.image ? (
-                    <img
-                      src={circle.image}
-                      alt={circle.nom}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-[#2563EB] text-white font-black text-2xl flex items-center justify-center">
-                      {circle.nom.charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full p-[3px] zaure-grad-sky-ring ${ZAURE_GLOWS.soft} shadow-lg`}>
+                  <div className="w-full h-full rounded-full border-4 border-white dark:border-slate-900 bg-white dark:bg-slate-800 overflow-hidden">
+                    {circle.image ? (
+                      <img
+                        src={circle.image}
+                        alt={circle.nom}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full zaure-grad-primary text-white font-black text-2xl flex items-center justify-center">
+                        {circle.nom.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <span
                   className={`absolute bottom-1 right-1 w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-xs ${
@@ -583,7 +586,7 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
                     ? 'bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-800 dark:text-slate-200 hover:text-red-700 border border-slate-200 dark:border-slate-700'
                     : isPending
                       ? 'bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
-                      : 'bg-[#2563EB] hover:bg-blue-700 text-white shadow-sm'
+                      : `${ZAURE_SURFACES.primaryButton}`
                 }`}
               >
                 {isJoined ? (
@@ -616,7 +619,7 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
                     setActiveSubTab('feed');
                     setShowPostBox((prev) => !prev);
                   }}
-                  className="min-h-[40px] px-4 py-2 rounded-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0"
+                  className="min-h-[40px] px-4 py-2 rounded-full bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 zaure-shadow-xs"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Publier</span>
@@ -708,9 +711,9 @@ export const CircleGroupPage: React.FC<CircleGroupPageProps> = ({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveSubTab(tab.id)}
-                className={`min-h-[44px] shrink-0 px-3.5 sm:px-4 py-2.5 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
+                className={`relative min-h-[44px] shrink-0 px-3.5 sm:px-4 py-2.5 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
                   active
-                    ? 'border-[#2563EB] text-[#2563EB] dark:text-blue-400 bg-white dark:bg-slate-900'
+                    ? 'border-[#2563EB] text-[#2563EB] dark:text-blue-400 bg-white dark:bg-slate-900 shadow-[inset_0_-2px_0_0_rgba(37,99,235,0.2)]'
                     : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >

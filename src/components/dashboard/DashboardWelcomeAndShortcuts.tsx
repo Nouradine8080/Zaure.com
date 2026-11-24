@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { Circle, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../constants/registration';
-import { ZAURE_SURFACES } from '../../styles/designSystem';
+import { ZAURE_GLOWS, ZAURE_SURFACES } from '../../styles/designSystem';
+import ZaureGeometricBackdrop from '../ui/ZaureGeometricBackdrop';
 
 export interface ProfileCompletionSummary {
   percent: number;
@@ -82,12 +83,9 @@ export default function DashboardWelcomeAndShortcuts({
       {currentUser && (
         <section
           aria-label="Bienvenue sur ZAURE"
-          className={`${ZAURE_SURFACES.heroBanner} p-3 sm:p-5`}
+          className={`${ZAURE_SURFACES.heroBanner} p-3.5 sm:p-5`}
         >
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-10 -top-10 w-36 h-36 rounded-full bg-white/15 blur-2xl"
-          />
+          <ZaureGeometricBackdrop variant="hero" />
 
           <div className="relative flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap sm:flex-nowrap">
             {/* Avatar + Greeting */}
@@ -179,7 +177,7 @@ export default function DashboardWelcomeAndShortcuts({
               onClick={onOpenQuickPost}
               className="w-[62px] sm:w-[68px] shrink-0 flex flex-col items-center text-center group"
             >
-              <span className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-[#E6EDF8] dark:bg-slate-800 border border-blue-200/80 dark:border-slate-700 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-105 group-active:scale-95 transition">
+              <span className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-blue-50 to-sky-100 dark:from-slate-800 dark:to-slate-800 border border-blue-200/90 dark:border-slate-700 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-105 group-hover:${ZAURE_GLOWS.sky} group-active:scale-95 transition`}>
                 <Plus className="w-6 h-6 stroke-[2.5]" />
               </span>
               <span className="mt-1.5 text-[10.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight line-clamp-2">
@@ -196,7 +194,7 @@ export default function DashboardWelcomeAndShortcuts({
           >
             <span
               className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] zaure-grad-sky-ring transition group-hover:scale-105 group-active:scale-95 ${
-                normalizedQuery === 'santé' ? 'ring-2 ring-blue-500/30' : ''
+                normalizedQuery === 'santé' ? `ring-2 ring-blue-500/40 ${ZAURE_GLOWS.sky}` : ''
               }`}
             >
               <span className="w-full h-full rounded-full zaure-grad-health border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">

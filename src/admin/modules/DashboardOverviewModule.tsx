@@ -45,6 +45,7 @@ import {
   resolvePeriodBounds,
   TimeRangePreset
 } from '../utils/adminAnalytics';
+import { ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface DashboardOverviewProps {
   users: UserProfile[];
@@ -256,15 +257,17 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
   return (
     <div className="space-y-6">
       {/* Analytics Period Filter Toolbar */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className={`${ZAURE_SURFACES.card} p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3`}>
         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-          <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${ZAURE_ICON_CHIPS.blue}`}>
+            <Calendar className="w-3.5 h-3.5" />
+          </span>
           <span className="font-semibold text-slate-900 dark:text-white">Période d&apos;analyse :</span>
           <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">{bounds.label}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex flex-wrap rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-950 p-0.5">
+          <div className="inline-flex flex-wrap rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-950 p-0.5">
             {(
               [
                 { id: '24h', label: '24h' },
@@ -278,9 +281,9 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
                 key={opt.id}
                 type="button"
                 onClick={() => setPreset(opt.id)}
-                className={`min-h-[34px] px-3 py-1 text-xs font-semibold rounded-md transition ${
+                className={`min-h-[34px] px-3 py-1 text-xs font-semibold rounded-lg transition zaure-btn-press ${
                   preset === opt.id
-                    ? 'bg-blue-600 text-white'
+                    ? 'zaure-nav-pill-active'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -316,11 +319,13 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('users')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Utilisateurs inscrits</span>
-            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${ZAURE_ICON_CHIPS.blue}`}>
+              <Users className="w-4 h-4" />
+            </span>
           </div>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-2">
             {metrics.totalUsers}
@@ -336,11 +341,13 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('users')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Utilisateurs actifs</span>
-            <UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${ZAURE_ICON_CHIPS.emerald}`}>
+              <UserCheck className="w-4 h-4" />
+            </span>
           </div>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-2">
             {metrics.activeUsersCount}
@@ -357,11 +364,13 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('users')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Nouveaux utilisateurs</span>
-            <UserPlus className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${ZAURE_ICON_CHIPS.sky}`}>
+              <UserPlus className="w-4 h-4" />
+            </span>
           </div>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-2">
             {metrics.newUsersPeriod}
@@ -378,11 +387,13 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('posts')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Publications totales</span>
-            <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${ZAURE_ICON_CHIPS.indigo}`}>
+              <FileText className="w-4 h-4" />
+            </span>
           </div>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-2">
             {metrics.totalPosts}
@@ -398,11 +409,13 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('comments')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Commentaires</span>
-            <MessageSquare className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${ZAURE_ICON_CHIPS.violet}`}>
+              <MessageSquare className="w-4 h-4" />
+            </span>
           </div>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-2">
             {metrics.totalComments}
@@ -419,11 +432,13 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('circles')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Communautés</span>
-            <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${ZAURE_ICON_CHIPS.emerald}`}>
+              <Layers className="w-4 h-4" />
+            </span>
           </div>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums mt-2">
             {metrics.totalCommunities}
@@ -440,15 +455,17 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('reports')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Signalements en attente</span>
-            <AlertTriangle
-              className={`w-4 h-4 ${
-                metrics.pendingReportsTotal > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+            <span
+              className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                metrics.pendingReportsTotal > 0 ? ZAURE_ICON_CHIPS.amber : ZAURE_ICON_CHIPS.emerald
               }`}
-            />
+            >
+              <AlertTriangle className="w-4 h-4" />
+            </span>
           </div>
           <p
             className={`text-2xl font-extrabold font-mono tabular-nums mt-2 ${
@@ -470,15 +487,17 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
         <button
           type="button"
           onClick={() => onNavigateModule('moderation')}
-          className="text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 hover:border-blue-400 dark:hover:border-blue-600 transition group"
+          className={`text-left ${ZAURE_SURFACES.cardInteractive} p-4 group`}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Contenus en attente</span>
-            <ShieldAlert
-              className={`w-4 h-4 ${
-                metrics.pendingPostsCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+            <span
+              className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                metrics.pendingPostsCount > 0 ? ZAURE_ICON_CHIPS.rose : ZAURE_ICON_CHIPS.emerald
               }`}
-            />
+            >
+              <ShieldAlert className="w-4 h-4" />
+            </span>
           </div>
           <p
             className={`text-2xl font-extrabold font-mono tabular-nums mt-2 ${
@@ -500,10 +519,10 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
 
       {/* Primary Interactive Charts Row */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+        <div className={`xl:col-span-2 ${ZAURE_SURFACES.card} p-5`}>
           <ActivityTimelineChart series={timelineSeries} periodLabel={bounds.label} />
         </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+        <div className={`${ZAURE_SURFACES.card} p-5`}>
           <ContentBreakdownChart
             publicPostsCount={metrics.publicPostsCount}
             circlePostsCount={metrics.circlePostsCount}
@@ -515,17 +534,17 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
 
       {/* Secondary Growth & Community Activity Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+        <div className={`${ZAURE_SURFACES.card} p-5`}>
           <UserGrowthChart series={timelineSeries} periodLabel={bounds.label} />
         </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+        <div className={`${ZAURE_SURFACES.card} p-5`}>
           <CommunityActivityChart communities={topCommunities} periodLabel={bounds.label} />
         </div>
       </div>
 
       {/* Operational Lists Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+        <div className={`${ZAURE_SURFACES.card} overflow-hidden`}>
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Utilisateurs récemment inscrits</h3>
             <button
@@ -581,7 +600,7 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
           )}
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+        <div className={`${ZAURE_SURFACES.card} overflow-hidden`}>
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Publications récentes</h3>
             <button
@@ -636,7 +655,7 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
           )}
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+        <div className={`${ZAURE_SURFACES.card} overflow-hidden`}>
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Signalements & Tickets ouverts</h3>
             <button
@@ -692,7 +711,7 @@ export const DashboardOverviewModule: React.FC<DashboardOverviewProps> = ({
           )}
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+        <div className={`${ZAURE_SURFACES.card} overflow-hidden`}>
           <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Activité administrative</h3>
             <button

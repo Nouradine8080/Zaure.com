@@ -14,6 +14,8 @@ import {
 import { CirclePostPermission, CircleVisibility } from '../../types';
 import { compressImageFile } from '../../utils/imageCompressor';
 import { ALL_CREATE_CIRCLE_CATEGORIES } from './circleHelpers';
+import ZaureGeometricBackdrop from '../ui/ZaureGeometricBackdrop';
+import { ZAURE_SURFACES } from '../../styles/designSystem';
 
 export interface CreateCircleFormPayload {
   nom: string;
@@ -177,13 +179,14 @@ export default function CreateCircleModal({
       }}
     >
       <div
-        className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200/80 dark:border-slate-800 my-auto overflow-hidden"
+        className={`${ZAURE_SURFACES.modalPanel} max-w-xl w-full my-auto overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#174EE2] via-[#1D63F0] to-[#2380FF] px-5 py-4 flex items-center justify-between text-white">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+        <div className="relative overflow-hidden zaure-grad-hero px-5 py-4 flex items-center justify-between text-white">
+          <ZaureGeometricBackdrop variant="hero" />
+          <div className="relative flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/20 flex items-center justify-center shrink-0">
               <UsersRound className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
@@ -197,7 +200,7 @@ export default function CreateCircleModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition"
+            className="relative w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition"
             aria-label="Fermer"
           >
             <X className="w-4 h-4" />
@@ -475,7 +478,7 @@ export default function CreateCircleModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="min-h-[42px] px-6 py-2 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs rounded-full transition shadow-sm"
+              className={`min-h-[42px] px-6 py-2 ${ZAURE_SURFACES.primaryButton} disabled:opacity-50 text-xs`}
             >
               {isSubmitting ? 'Création...' : 'Créer'}
             </button>

@@ -27,6 +27,8 @@ import {
   ReportModal,
   UserProfileModal
 } from './chat/ChatModals';
+import { ZaureGeometricBackdrop } from './ui/ZaureGeometricBackdrop';
+import { ZAURE_GLOWS, ZAURE_SURFACES } from '../styles/designSystem';
 
 interface ChatViewProps {
   currentUser: UserProfile | null;
@@ -872,32 +874,34 @@ export default function ChatView({
   // Render
   // --------------------------------------------------------------------------
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#F0F2F5] text-slate-900">
+    <div className={`${ZAURE_SURFACES.canvas} relative flex h-full w-full flex-col overflow-hidden text-slate-900 dark:text-slate-100`}>
+      <ZaureGeometricBackdrop variant="canvas" />
       {/* Top Bar Zaure Messages */}
       <header
-        className={`h-14 sm:h-16 shrink-0 items-center justify-between border-b border-slate-200/90 bg-white px-3 sm:px-5 z-20 ${
+        className={`${ZAURE_SURFACES.glassHeader} relative h-14 sm:h-16 shrink-0 items-center justify-between px-3 sm:px-5 z-20 ${
           mobileView === 'chat' ? 'hidden md:flex' : 'flex'
         }`}
       >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] zaure-grad-hero opacity-85" />
         <div className="flex items-center gap-2.5">
           {onExitChat && (
             <button
               type="button"
               onClick={onExitChat}
-              className="flex h-10 items-center gap-1.5 rounded-xl bg-slate-100 px-3 text-xs font-bold text-slate-700 hover:bg-slate-200 hover:text-slate-950 transition"
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 px-3 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-950 dark:hover:text-white transition"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Retour</span>
             </button>
           )}
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-base font-black text-white shadow-xs">
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl zaure-grad-primary text-base font-black text-white ${ZAURE_GLOWS.blue}`}>
             Z
           </div>
           <div className="leading-none">
-            <span className="text-base font-black tracking-tight text-slate-950">
-              Zaure <span className="text-blue-600">Messages</span>
+            <span className="text-base font-black tracking-tight text-slate-950 dark:text-white">
+              Zaure <span className="bg-gradient-to-r from-blue-600 to-sky-500 bg-clip-text text-transparent">Messages</span>
             </span>
-            <p className="mt-0.5 hidden sm:block text-[10px] font-bold uppercase tracking-wider text-red-600">
+            <p className="mt-0.5 hidden sm:block text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-sky-400">
               Savoirs du Sahel
             </p>
           </div>
@@ -905,12 +909,12 @@ export default function ChatView({
 
         <div className="flex items-center gap-2">
           {currentUser && (
-            <div className="hidden sm:flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-1.5 border border-slate-200/70">
-              <span className="text-xs font-bold text-slate-800">{currentUser.nom}</span>
+            <div className="hidden sm:flex items-center gap-2 rounded-xl bg-slate-50/90 dark:bg-slate-800/80 px-3 py-1.5 border border-slate-200/70 dark:border-slate-700/70">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{currentUser.nom}</span>
               <span
                 className={`h-2 w-2 rounded-full ${
                   presenceStatus === 'online'
-                    ? 'bg-emerald-500'
+                    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]'
                     : presenceStatus === 'busy'
                       ? 'bg-amber-500'
                       : 'bg-slate-400'
@@ -922,9 +926,9 @@ export default function ChatView({
             <button
               type="button"
               onClick={() => setShowRightPanel((v) => !v)}
-              className="hidden lg:flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+              className="hidden lg:flex h-9 items-center gap-1.5 rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 px-3 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50/70 dark:hover:bg-slate-700 transition"
             >
-              <Info className="h-4 w-4 text-blue-600" />
+              <Info className="h-4 w-4 text-blue-600 dark:text-sky-400" />
               <span>{showRightPanel ? 'Masquer détails' : 'Détails'}</span>
             </button>
           )}

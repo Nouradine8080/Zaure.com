@@ -17,6 +17,8 @@ import { zaureService } from '../firebaseClient';
 import { Circle, UserProfile } from '../types';
 import { DEFAULT_AVATAR_URL, REGISTRATION_ROUTES } from '../constants/registration';
 import { PWAInstallButton } from './PWAInstallButton';
+import { ZAURE_GLOWS, ZAURE_SURFACES } from '../styles/designSystem';
+import { ZaureGeometricBackdrop } from './ui/ZaureGeometricBackdrop';
 
 interface AuthPortalProps {
   onAuthSuccess: (user: UserProfile) => void;
@@ -263,20 +265,15 @@ export default function AuthPortal({
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden zaure-grad-canvas-soft flex flex-col items-center justify-center px-4 py-8 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-100">
-      {/* Subtle Decorative Blue Geometric Background Waves matching mockup */}
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full bg-gradient-to-br from-blue-600/20 to-sky-400/15 blur-2xl" />
-        <div className="absolute top-1/4 -left-32 w-[360px] h-[360px] rounded-full bg-blue-500/12 blur-2xl" />
-        <div className="absolute -bottom-28 -right-16 w-[400px] h-[400px] rounded-full bg-gradient-to-tl from-blue-600/22 to-sky-400/10 blur-xl" />
-      </div>
+    <div className="relative min-h-screen overflow-hidden zaure-grad-canvas-soft flex flex-col items-center justify-center px-4 py-8 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-100 dark:selection:bg-blue-900/50">
+      <ZaureGeometricBackdrop variant="auth" />
 
       <div className="relative z-10 w-full max-w-[440px] mx-auto zaure-animate-scale-in">
         {/* Top Back to Landing & PWA Install */}
         <div className="mb-4 flex items-center justify-between gap-2">
           <Link
             to="/"
-            className="min-h-[40px] inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white/85 hover:bg-white border border-blue-100 px-3.5 py-2 rounded-full zaure-shadow-xs zaure-btn-press"
+            className="min-h-[40px] inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-400 bg-white/85 dark:bg-slate-900/85 hover:bg-white dark:hover:bg-slate-900 border border-blue-100 dark:border-slate-700 px-3.5 py-2 rounded-full zaure-shadow-xs zaure-btn-press"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Retour à l'accueil</span>
@@ -284,25 +281,25 @@ export default function AuthPortal({
           <PWAInstallButton compact />
         </div>
 
-        {/* Centered Crisp White Login Card */}
-        <section className="w-full bg-white dark:bg-slate-900 rounded-[28px] p-7 sm:p-9 zaure-shadow-modal border border-blue-100/90 dark:border-slate-800">
-          {/* Top Brand Lockup matching Mockup */}
+        {/* Centered Luminous Auth Card */}
+        <section className={`w-full zaure-card ${ZAURE_GLOWS.soft} rounded-[28px] p-7 sm:p-9 border-blue-100/90 dark:border-slate-800`}>
+          {/* Top Brand Lockup */}
           <div className="flex flex-col items-center text-center">
             <Link
               to="/"
               className="inline-flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 rounded-xl"
             >
-              <span className="w-12 h-12 rounded-2xl zaure-grad-primary flex items-center justify-center text-white font-black text-2xl zaure-shadow-primary">
+              <span className={`w-12 h-12 rounded-2xl zaure-grad-primary flex items-center justify-center text-white font-black text-2xl ${ZAURE_GLOWS.blue}`}>
                 Z
               </span>
               <span className="flex flex-col items-start">
-                <span className="text-3xl font-extrabold tracking-tight text-blue-600 leading-none">
+                <span className="text-3xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400 leading-none">
                   ZAURE
                 </span>
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 110 10"
-                  className="w-24 h-2.5 mt-1 text-blue-600"
+                  className="w-24 h-2.5 mt-1 text-blue-600 dark:text-blue-400"
                   fill="none"
                 >
                   <path
@@ -317,19 +314,19 @@ export default function AuthPortal({
 
             {authMode === 'login' ? (
               <>
-                <h1 className="mt-5 text-2xl sm:text-[28px] font-extrabold text-slate-950 tracking-tight">
+                <h1 className="mt-5 text-2xl sm:text-[28px] font-extrabold text-slate-950 dark:text-white tracking-tight">
                   Connexion
                 </h1>
-                <p className="mt-1.5 text-sm text-slate-600 font-medium">
+                <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400 font-medium">
                   Accédez à votre compte en toute sécurité
                 </p>
               </>
             ) : (
               <>
-                <h1 className="mt-5 text-2xl font-extrabold text-slate-950 tracking-tight">
+                <h1 className="mt-5 text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">
                   Mot de passe oublié
                 </h1>
-                <p className="mt-1.5 text-sm text-slate-600 font-medium">
+                <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400 font-medium">
                   Recevez un lien sécurisé par e-mail
                 </p>
               </>
@@ -340,9 +337,9 @@ export default function AuthPortal({
           {errorMessage && (
             <div
               role="alert"
-              className="mt-5 p-3.5 bg-red-50 border border-red-200 text-xs text-red-700 rounded-2xl flex items-start gap-2.5 animate-fadeIn"
+              className="mt-5 p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs text-red-700 dark:text-red-300 rounded-2xl flex items-start gap-2.5 animate-fadeIn"
             >
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
               <span className="font-semibold flex-1 leading-snug">{errorMessage}</span>
             </div>
           )}
@@ -350,9 +347,9 @@ export default function AuthPortal({
           {successMessage && (
             <div
               role="status"
-              className="mt-5 p-3.5 bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 rounded-2xl flex items-start gap-2.5 animate-fadeIn"
+              className="mt-5 p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 text-xs text-emerald-800 dark:text-emerald-300 rounded-2xl flex items-start gap-2.5 animate-fadeIn"
             >
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <span className="font-semibold flex-1 leading-snug">{successMessage}</span>
             </div>
           )}
@@ -369,8 +366,8 @@ export default function AuthPortal({
                     <label htmlFor="login-email" className="sr-only">
                       Adresse e-mail
                     </label>
-                    <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
-                      <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                    <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800/80 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                      <span className="pl-4 pr-3 py-3 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                         <User className="w-4 h-4" />
                       </span>
                       <input
@@ -381,7 +378,7 @@ export default function AuthPortal({
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                        className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       />
                     </div>
                   </div>
@@ -391,8 +388,8 @@ export default function AuthPortal({
                     <label htmlFor="login-password" className="sr-only">
                       Mot de passe
                     </label>
-                    <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
-                      <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                    <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800/80 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                      <span className="pl-4 pr-3 py-3 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                         <Lock className="w-4 h-4" />
                       </span>
                       <input
@@ -403,7 +400,7 @@ export default function AuthPortal({
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                        className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       />
                       <button
                         type="button"
@@ -413,7 +410,7 @@ export default function AuthPortal({
                             ? 'Masquer le mot de passe'
                             : 'Afficher le mot de passe'
                         }
-                        className="pr-4 pl-2 min-h-[44px] flex items-center text-slate-500 hover:text-slate-800 cursor-pointer"
+                        className="pr-4 pl-2 min-h-[44px] flex items-center text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
                         tabIndex={-1}
                       >
                         {showPassword ? (
@@ -429,14 +426,14 @@ export default function AuthPortal({
                   <div className="flex items-center justify-between gap-2 pt-0.5 px-1">
                     <label
                       htmlFor="login-remember"
-                      className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 cursor-pointer select-none min-h-[36px]"
+                      className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none min-h-[36px]"
                     >
                       <input
                         id="login-remember"
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-600 cursor-pointer"
                       />
                       <span>Se souvenir de moi</span>
                     </label>
@@ -447,7 +444,7 @@ export default function AuthPortal({
                         resetFormState();
                         setAuthMode('forgot_password');
                       }}
-                      className="text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-4 cursor-pointer min-h-[36px]"
+                      className="text-xs sm:text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4 cursor-pointer min-h-[36px]"
                     >
                       Mot de passe oublié ?
                     </button>
@@ -457,7 +454,7 @@ export default function AuthPortal({
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full min-h-[52px] py-3 px-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-base transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+                    className={`w-full min-h-[52px] py-3 px-6 text-base gap-2.5 disabled:opacity-50 cursor-pointer ${ZAURE_SURFACES.primaryButton}`}
                   >
                     {isLoading ? (
                       <>
@@ -479,12 +476,12 @@ export default function AuthPortal({
                       <div>
                         <label
                           htmlFor="login-phone"
-                          className="block text-xs font-bold text-slate-700 mb-1.5 px-2"
+                          className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 px-2"
                         >
                           Numéro de téléphone (format international)
                         </label>
-                        <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
-                          <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                        <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800/80 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                          <span className="pl-4 pr-3 py-3 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                             <Smartphone className="w-4 h-4" />
                           </span>
                           <input
@@ -494,7 +491,7 @@ export default function AuthPortal({
                             required
                             value={phoneNumber}
                             onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                            className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                           />
                         </div>
                       </div>
@@ -504,7 +501,7 @@ export default function AuthPortal({
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full min-h-[50px] py-3 px-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-sm transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                        className={`w-full min-h-[50px] py-3 px-6 text-sm gap-2 disabled:opacity-50 cursor-pointer ${ZAURE_SURFACES.primaryButton}`}
                       >
                         {isLoading ? 'Envoi du SMS...' : 'Envoyer le code SMS'}
                       </button>
@@ -514,7 +511,7 @@ export default function AuthPortal({
                       <div>
                         <label
                           htmlFor="login-sms-code"
-                          className="block text-xs font-bold text-slate-700 mb-1.5 px-2"
+                          className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 px-2"
                         >
                           Code de vérification SMS (6 chiffres)
                         </label>
@@ -526,14 +523,14 @@ export default function AuthPortal({
                           required
                           value={smsCode}
                           onChange={(e) => setSmsCode(e.target.value)}
-                          className="w-full min-h-[50px] text-center tracking-widest text-lg font-mono px-4 py-2.5 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-[#F8FAFC] focus:bg-white transition"
+                          className="w-full min-h-[50px] text-center tracking-widest text-lg font-mono px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 dark:text-slate-100 bg-[#F8FAFC] dark:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-800 transition"
                         />
                       </div>
 
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full min-h-[50px] py-3 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                        className="w-full min-h-[50px] py-3 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer zaure-btn-press"
                       >
                         {isLoading ? 'Vérification...' : 'Valider le code & Se connecter'}
                       </button>
@@ -544,7 +541,7 @@ export default function AuthPortal({
                           setConfirmationResult(null);
                           setSmsCode('');
                         }}
-                        className="w-full text-center text-xs text-blue-600 hover:underline pt-1 font-semibold cursor-pointer"
+                        className="w-full text-center text-xs text-blue-600 dark:text-blue-400 hover:underline pt-1 font-semibold cursor-pointer"
                       >
                         Utiliser un autre numéro
                       </button>
@@ -557,7 +554,7 @@ export default function AuthPortal({
                       resetFormState();
                       setAuthMethod('email');
                     }}
-                    className="w-full text-center text-xs font-bold text-slate-600 hover:text-blue-700 py-1.5 cursor-pointer"
+                    className="w-full text-center text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 py-1.5 cursor-pointer"
                   >
                     ← Revenir à la connexion par e-mail
                   </button>
@@ -566,9 +563,9 @@ export default function AuthPortal({
 
               {/* Divider "Ou" */}
               <div className="relative flex py-4 items-center">
-                <div className="flex-grow border-t border-slate-200" />
-                <span className="shrink mx-3 text-xs font-semibold text-slate-400">Ou</span>
-                <div className="flex-grow border-t border-slate-200" />
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
+                <span className="shrink mx-3 text-xs font-semibold text-slate-400 dark:text-slate-500">Ou</span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
               </div>
 
               {/* Google Sign-In Only (Facebook & Apple deliberately excluded) */}
@@ -577,7 +574,7 @@ export default function AuthPortal({
                   type="button"
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="w-full min-h-[48px] py-2.5 px-5 rounded-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm border border-slate-200 transition shadow-2xs flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
+                  className="w-full min-h-[48px] py-2.5 px-5 rounded-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/90 text-slate-800 dark:text-slate-100 font-bold text-sm border border-slate-200 dark:border-slate-700 transition shadow-2xs flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer zaure-btn-press"
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -607,7 +604,7 @@ export default function AuthPortal({
                       resetFormState();
                       setAuthMethod('phone');
                     }}
-                    className="w-full min-h-[40px] py-2 px-4 rounded-full text-xs font-semibold text-slate-600 hover:text-blue-700 hover:bg-blue-50/60 transition flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full min-h-[40px] py-2 px-4 rounded-full text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50/60 dark:hover:bg-slate-800/80 transition flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Smartphone className="w-3.5 h-3.5" />
                     <span>Se connecter par téléphone (SMS)</span>
@@ -615,14 +612,14 @@ export default function AuthPortal({
                 )}
               </div>
 
-              {/* Bottom Create Account Link matching Mockup */}
-              <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-                <p className="text-xs sm:text-sm text-slate-600">
+              {/* Bottom Create Account Link */}
+              <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 text-center">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                   Vous n’avez pas de compte ?{' '}
                   <Link
                     to={REGISTRATION_ROUTES.IDENTITE}
                     onClick={() => resetFormState()}
-                    className="font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                    className="font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
                   >
                     Créer un compte
                   </Link>
@@ -636,11 +633,11 @@ export default function AuthPortal({
           {/* ======================================================== */}
           {authMode === 'forgot_password' && (
             <form onSubmit={handlePasswordResetSubmit} className="mt-6 space-y-4 animate-fadeIn">
-              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100">
-                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/35 border border-blue-100 dark:border-blue-900/50">
+                <div className={`w-9 h-9 rounded-xl zaure-grad-primary text-white flex items-center justify-center shrink-0 ${ZAURE_GLOWS.soft}`}>
                   <KeyRound className="w-4 h-4" />
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                   Saisissez l'adresse e-mail associée à votre compte Zaure pour recevoir un lien
                   officiel de réinitialisation.
                 </p>
@@ -650,8 +647,8 @@ export default function AuthPortal({
                 <label htmlFor="reset-email" className="sr-only">
                   Adresse e-mail du compte
                 </label>
-                <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 bg-[#F8FAFC] focus-within:bg-white focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
-                  <span className="pl-4 pr-3 py-3 border-r border-slate-200 text-slate-600 flex items-center justify-center shrink-0">
+                <div className="flex items-center min-h-[50px] rounded-full border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800/80 focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/20 overflow-hidden transition">
+                  <span className="pl-4 pr-3 py-3 border-r border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4" />
                   </span>
                   <input
@@ -662,7 +659,7 @@ export default function AuthPortal({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                    className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
               </div>
@@ -674,14 +671,14 @@ export default function AuthPortal({
                     resetFormState();
                     setAuthMode('login');
                   }}
-                  className="min-h-[46px] px-5 py-2.5 border border-slate-200 text-slate-700 text-xs font-bold rounded-full hover:bg-slate-50 transition cursor-pointer"
+                  className="min-h-[46px] px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer zaure-btn-press"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="flex-1 min-h-[46px] px-6 py-2.5 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs sm:text-sm transition shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className={`flex-1 min-h-[46px] px-6 py-2.5 text-xs sm:text-sm gap-2 disabled:opacity-50 cursor-pointer ${ZAURE_SURFACES.primaryButton}`}
                 >
                   {isLoading ? (
                     <>

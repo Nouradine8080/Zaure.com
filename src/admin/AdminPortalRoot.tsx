@@ -91,6 +91,8 @@ import {
   applyAndPersistAppearancePreferences,
   loadStoredAppearancePreferences
 } from '../utils/appearancePreferences';
+import { ZAURE_GLOWS, ZAURE_SURFACES } from '../styles/designSystem';
+import { ZaureGeometricBackdrop } from '../components/ui/ZaureGeometricBackdrop';
 
 type NavGroup = 'Vue générale' | 'Opérations' | 'Modération et médias' | 'Gouvernance';
 
@@ -481,10 +483,12 @@ export const AdminPortalRoot: React.FC = () => {
   const renderSidebar = (isMobileDrawer: boolean) => {
     const collapsed = !isMobileDrawer && sidebarCollapsed;
     return (
-      <div className="flex flex-col h-full bg-slate-950 text-slate-200 border-r border-slate-800 select-none">
+      <div className="relative overflow-hidden flex flex-col h-full zaure-grad-night text-slate-200 border-r border-slate-800/90 select-none">
+        <ZaureGeometricBackdrop variant="night" />
+
         {/* Brand Header */}
         <div
-          className={`h-14 flex items-center border-b border-slate-800 shrink-0 ${
+          className={`relative z-10 h-14 flex items-center border-b border-white/10 shrink-0 ${
             collapsed ? 'justify-center px-2' : 'justify-between px-4'
           }`}
         >
@@ -493,13 +497,13 @@ export const AdminPortalRoot: React.FC = () => {
             onClick={() => navigateModule('dashboard')}
             className="flex items-center gap-2.5 text-left"
           >
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-black text-sm flex items-center justify-center shrink-0">
+            <div className={`w-8 h-8 rounded-lg zaure-grad-primary text-white font-black text-sm flex items-center justify-center shrink-0 ${ZAURE_GLOWS.blue}`}>
               Z
             </div>
             {!collapsed && (
               <div className="leading-tight">
                 <p className="text-sm font-extrabold text-white tracking-tight">Zaure Admin</p>
-                <p className="text-[10px] font-mono text-slate-400">CONSOLE SAAS</p>
+                <p className="text-[10px] font-mono text-sky-300/80">CONSOLE SAAS</p>
               </div>
             )}
           </button>
@@ -519,7 +523,7 @@ export const AdminPortalRoot: React.FC = () => {
                 type="button"
                 onClick={toggleSidebarCollapse}
                 title="Réduire le menu latéral"
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-900 rounded-md"
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-md"
               >
                 <PanelLeftClose className="w-4 h-4" />
               </button>
@@ -528,13 +532,13 @@ export const AdminPortalRoot: React.FC = () => {
         </div>
 
         {/* Navigation Links */}
-        <nav className={`flex-1 overflow-y-auto py-4 space-y-5 ${collapsed ? 'px-2' : 'px-3'}`}>
+        <nav className={`relative z-10 flex-1 overflow-y-auto py-4 space-y-5 ${collapsed ? 'px-2' : 'px-3'}`}>
           {collapsed && !isMobileDrawer && (
             <button
               type="button"
               onClick={toggleSidebarCollapse}
               title="Déplier le menu latéral"
-              className="w-full flex items-center justify-center py-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg"
+              className="w-full flex items-center justify-center py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -546,7 +550,7 @@ export const AdminPortalRoot: React.FC = () => {
             return (
               <div key={groupName}>
                 {!collapsed && (
-                  <p className="px-2.5 mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+                  <p className="px-2.5 mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-400/80">
                     {groupName}
                   </p>
                 )}
@@ -569,10 +573,10 @@ export const AdminPortalRoot: React.FC = () => {
                         onClick={() => navigateModule(item.id)}
                         className={`w-full flex items-center ${
                           collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-2.5 py-2'
-                        } ${isMobileDrawer ? 'min-h-[44px]' : ''} rounded-lg text-xs font-medium transition relative ${
+                        } ${isMobileDrawer ? 'min-h-[44px]' : ''} rounded-lg text-xs font-medium transition zaure-btn-press relative ${
                           isActive
-                            ? 'bg-blue-600 text-white font-semibold'
-                            : 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                            ? `${ZAURE_SURFACES.navItemActive} font-semibold`
+                            : 'text-slate-300 hover:bg-white/10 hover:text-white'
                         }`}
                       >
                         <span className="flex items-center gap-2.5 truncate">
@@ -597,11 +601,11 @@ export const AdminPortalRoot: React.FC = () => {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className={`p-3 border-t border-slate-800 space-y-2 shrink-0 ${collapsed ? 'px-2' : ''}`}>
+        <div className={`relative z-10 p-3 border-t border-white/10 space-y-2 shrink-0 ${collapsed ? 'px-2' : ''}`}>
           {!collapsed && (
-            <div className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800">
+            <div className="px-2.5 py-2 rounded-lg bg-white/5 border border-white/10 backdrop-blur-xs">
               <p className="text-xs font-bold text-white truncate">{session.displayName}</p>
-              <p className="text-[11px] font-mono text-blue-400 mt-0.5">{session.role}</p>
+              <p className="text-[11px] font-mono text-sky-300 mt-0.5">{session.role}</p>
             </div>
           )}
 
@@ -610,7 +614,7 @@ export const AdminPortalRoot: React.FC = () => {
               type="button"
               title="App Zaure"
               onClick={() => navigate('/')}
-              className="min-h-[36px] px-2.5 py-1.5 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-lg inline-flex items-center justify-center gap-1"
+              className="min-h-[36px] px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg inline-flex items-center justify-center gap-1 transition zaure-btn-press"
             >
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               {!collapsed && <span>App Zaure</span>}
@@ -623,7 +627,7 @@ export const AdminPortalRoot: React.FC = () => {
                 await adminService.signOutAdmin();
                 await refreshSession();
               }}
-              className="min-h-[36px] px-2.5 py-1.5 text-[11px] font-medium text-red-300 hover:text-red-200 bg-slate-900 hover:bg-slate-800 rounded-lg inline-flex items-center justify-center gap-1"
+              className="min-h-[36px] px-2.5 py-1.5 text-[11px] font-medium text-red-300 hover:text-red-200 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg inline-flex items-center justify-center gap-1 transition zaure-btn-press"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" />
               {!collapsed && <span>Quitter</span>}
@@ -635,7 +639,7 @@ export const AdminPortalRoot: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex">
+    <div className={`min-h-screen ${ZAURE_SURFACES.canvas} text-slate-900 dark:text-slate-100 flex`}>
       {/* Desktop Retractable Sidebar */}
       <aside
         className={`hidden lg:block shrink-0 sticky top-0 h-screen transition-all duration-200 ${
@@ -660,7 +664,7 @@ export const AdminPortalRoot: React.FC = () => {
       {/* Main Content Workspace */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top Bar */}
-        <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 flex items-center justify-between gap-2 sticky top-0 z-30">
+        <header className={`h-14 ${ZAURE_SURFACES.glassHeader} px-3 sm:px-6 flex items-center justify-between gap-2 sticky top-0 z-30`}>
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
@@ -770,7 +774,7 @@ export const AdminPortalRoot: React.FC = () => {
               </button>
 
               {notifPopoverOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-40">
+                <div className={`absolute right-0 mt-2 w-80 sm:w-96 ${ZAURE_SURFACES.popoverMenu} overflow-hidden z-40`}>
                   <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <p className="text-xs font-bold text-slate-900 dark:text-white">
                       Alertes & Files d&apos;attente
@@ -903,7 +907,7 @@ export const AdminPortalRoot: React.FC = () => {
               </button>
 
               {profileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-40 text-xs">
+                <div className={`absolute right-0 mt-2 w-60 ${ZAURE_SURFACES.popoverMenu} overflow-hidden z-40 text-xs`}>
                   <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
                     <p className="font-bold text-slate-900 dark:text-white truncate">
                       {session.displayName}

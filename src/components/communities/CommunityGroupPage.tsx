@@ -56,6 +56,7 @@ import { getDefaultAvatar, getDefaultCoverByCategory } from './communityAssets';
 import CommunityPostComposer from './CommunityPostComposer';
 import CommunityPostCard from './CommunityPostCard';
 import CommunityAdminDashboard from './CommunityAdminDashboard';
+import { ZAURE_GLOWS, ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface CommunityGroupPageProps {
   group: CommunityGroup;
@@ -614,9 +615,9 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="min-h-[44px] px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200/85 rounded-2xl text-xs font-bold text-slate-800 flex items-center gap-2 shadow-xs transition"
+          className="min-h-[44px] px-3.5 py-2 zaure-card hover:bg-blue-50/70 dark:hover:bg-slate-800 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 transition"
         >
-          <ArrowLeft className="w-4 h-4 text-blue-600" />
+          <ArrowLeft className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           <span>Communautés</span>
         </button>
 
@@ -624,10 +625,10 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('admin')}
-            className={`min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition ${
+            className={`min-h-[44px] px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition ${
               activeTab === 'admin'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white hover:bg-blue-50 text-blue-700 border border-slate-200/85'
+                ? ZAURE_SURFACES.navItemActive
+                : 'zaure-card hover:bg-blue-50/70 dark:hover:bg-slate-800 text-blue-700 dark:text-blue-300'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
@@ -643,8 +644,8 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
         <div
           className={`px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 shadow-xs ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-red-50 text-red-700 border border-red-200'
+              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800'
+              : 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800'
           }`}
         >
           <span>{toast.text}</span>
@@ -657,19 +658,19 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
       {/* ============================================================ */}
       {/* EN-TÊTE DE LA COMMUNAUTÉ                                     */}
       {/* ============================================================ */}
-      <section className="bg-white border border-slate-200/85 rounded-3xl overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      <section className="zaure-card rounded-3xl overflow-hidden">
         {/* Cover Photo */}
-        <div className="relative h-44 sm:h-60 bg-slate-200">
+        <div className="relative h-44 sm:h-60 bg-slate-900">
           <img
             src={coverUrl}
             alt={group.name}
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-slate-950/15 to-transparent" />
+          <div className="absolute inset-0 zaure-grad-scrim" />
 
           <div className="absolute top-3 right-3 flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-xl bg-slate-950/75 backdrop-blur-md text-white text-[11px] font-bold flex items-center gap-1.5">
+            <span className="px-3 py-1.5 rounded-xl bg-slate-950/75 backdrop-blur-md border border-white/15 text-white text-[11px] font-bold flex items-center gap-1.5">
               {group.privacy === 'private' ? (
                 <>
                   <Lock className="w-3.5 h-3.5 text-amber-400" />
@@ -689,25 +690,27 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
         <div className="px-4 sm:px-6 pb-4">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-10 sm:-mt-12 relative z-10">
             <div className="flex items-end gap-3.5 min-w-0">
-              <img
-                src={avatarUrl}
-                alt={group.name}
-                referrerPolicy="no-referrer"
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl object-cover ring-4 ring-white shadow-md bg-white shrink-0"
-              />
+              <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl p-[2.5px] zaure-grad-sky-ring ${ZAURE_GLOWS.soft} shadow-md shrink-0`}>
+                <img
+                  src={avatarUrl}
+                  alt={group.name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full rounded-[21px] object-cover ring-2 ring-white dark:ring-slate-900 bg-white dark:bg-slate-800"
+                />
+              </div>
               <div className="min-w-0 pb-1">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 mb-0.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-700 dark:text-blue-400 mb-0.5">
                   <span>{group.category}</span>
                   {currentMember?.status === 'active' && (
                     <>
-                      <span aria-hidden="true" className="text-slate-300">·</span>
-                      <span className="text-slate-600">
+                      <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
+                      <span className="text-slate-600 dark:text-slate-300">
                         {getDisplayRole(currentMember, group.createdBy).label}
                       </span>
                     </>
                   )}
                 </div>
-                <h1 className="text-lg sm:text-2xl font-black text-slate-950 truncate">
+                <h1 className="text-lg sm:text-2xl font-black text-slate-950 dark:text-white truncate">
                   {group.name}
                 </h1>
               </div>
@@ -721,7 +724,7 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
                   whileTap={{ scale: 0.97 }}
                   disabled={membershipBusy}
                   onClick={handleJoinCircle}
-                  className="min-h-[44px] px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition disabled:opacity-50 whitespace-nowrap"
+                  className={`min-h-[44px] px-5 py-2 ${ZAURE_SURFACES.gradientButton} text-xs disabled:opacity-50 whitespace-nowrap`}
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>
@@ -738,7 +741,7 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
                 <button
                   type="button"
                   onClick={handleLeaveCircle}
-                  className="min-h-[44px] px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition whitespace-nowrap"
+                  className="min-h-[44px] px-4 py-2 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition whitespace-nowrap"
                 >
                   <Clock className="w-4 h-4" />
                   <span>En attente (Annuler)</span>
@@ -751,7 +754,7 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
                     type="button"
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setShowInviteModal(true)}
-                    className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition whitespace-nowrap"
+                    className={`min-h-[44px] px-4 py-2 ${ZAURE_SURFACES.gradientButton} text-xs whitespace-nowrap`}
                   >
                     <UserPlus className="w-4 h-4" />
                     <span>Inviter</span>
@@ -760,7 +763,7 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
                     <button
                       type="button"
                       onClick={handleLeaveCircle}
-                      className="min-h-[44px] px-3.5 py-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition whitespace-nowrap"
+                      className="min-h-[44px] px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-400 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition whitespace-nowrap"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Quitter</span>
@@ -858,31 +861,31 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
             </div>
           </div>
 
-          <p className="text-xs sm:text-sm text-slate-600 mt-3 leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-3 leading-relaxed">
             {group.description || 'Communauté Zaure dédiée au partage de connaissances et à l’entraide.'}
           </p>
 
           {/* Zero-pill metadata */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-slate-500 font-medium">
-            <span className="flex items-center gap-1.5 text-slate-900 font-bold tabular-nums">
-              <Users className="w-4 h-4 text-blue-600" />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <span className="flex items-center gap-1.5 text-slate-900 dark:text-white font-bold tabular-nums">
+              <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               {Math.max(group.memberCount, activeMembers.length)}{' '}
               {Math.max(group.memberCount, activeMembers.length) > 1 ? 'membres' : 'membre'}
             </span>
-            <span aria-hidden="true" className="text-slate-300">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
             <span>
               {group.privacy === 'private'
                 ? 'Accès réservé aux membres'
                 : 'Ouverte à toute la plateforme'}
             </span>
-            <span aria-hidden="true" className="text-slate-300">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
             <span className="text-slate-400">Créée le {formatDateFr(group.createdAt)}</span>
           </div>
         </div>
 
         {/* Navigation Tabs */}
         {canViewContent && (
-          <div className="border-t border-slate-100 px-2 sm:px-4 flex items-center gap-1 overflow-x-auto scrollbar-none">
+          <div className="border-t border-slate-100 dark:border-slate-800 px-2 sm:px-4 flex items-center gap-1 overflow-x-auto scrollbar-none bg-[#F8FAFC] dark:bg-slate-900/80">
             {navigationTabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -893,8 +896,8 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
                   onClick={() => setActiveTab(tab.id)}
                   className={`min-h-[48px] px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 shrink-0 border-b-2 transition whitespace-nowrap ${
                     active
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-950'
+                      ? 'border-blue-600 text-blue-700 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-[inset_0_-2px_0_0_rgba(37,99,235,0.2)]'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -902,7 +905,7 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
                   {typeof tab.badge === 'number' && tab.badge > 0 && (
                     <span
                       className={`text-[11px] font-bold tabular-nums ${
-                        active ? 'text-blue-700' : 'text-slate-400'
+                        active ? 'text-blue-700 dark:text-blue-400' : 'text-slate-400'
                       }`}
                     >
                       ({tab.badge})
@@ -917,10 +920,10 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
 
       {/* Suspended Notice */}
       {isSuspendedMember && (
-        <div className="bg-red-50 border border-red-200 rounded-3xl p-5 text-center space-y-2">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-3xl p-5 text-center space-y-2">
           <AlertTriangle className="w-8 h-8 text-red-600 mx-auto" />
-          <h3 className="text-sm font-extrabold text-red-900">Accès temporairement suspendu</h3>
-          <p className="text-xs text-red-700 max-w-md mx-auto">
+          <h3 className="text-sm font-extrabold text-red-900 dark:text-red-200">Accès temporairement suspendu</h3>
+          <p className="text-xs text-red-700 dark:text-red-300 max-w-md mx-auto">
             Un administrateur a suspendu votre participation dans cette communauté. Vous ne pouvez plus consulter ou publier de contenus.
           </p>
         </div>
@@ -928,16 +931,16 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
 
       {/* PRIVATE COMMUNITY GATE */}
       {!canViewContent && !isSuspendedMember && (
-        <div className="bg-white border border-slate-200/85 rounded-3xl p-8 text-center shadow-xs space-y-3">
-          <div className="w-14 h-14 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+        <div className={`${ZAURE_SURFACES.card} p-8 text-center space-y-3`}>
+          <div className="w-14 h-14 rounded-3xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
             <Lock className="w-7 h-7" />
           </div>
-          <h2 className="text-base font-extrabold text-slate-950">Cette communauté est privée</h2>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
+          <h2 className="text-base font-extrabold text-slate-950 dark:text-white">Cette communauté est privée</h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
             Les publications, discussions, médias, événements et la liste des membres sont protégés et réservés aux membres approuvés.
           </p>
           {isPendingMember ? (
-            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
+            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 text-xs font-bold border border-amber-200 dark:border-amber-800">
               <Clock className="w-4 h-4" />
               <span>Votre demande d'adhésion est en cours d'examen par la modération.</span>
             </div>
@@ -946,7 +949,7 @@ const CommunityGroupPage: React.FC<CommunityGroupPageProps> = ({
               type="button"
               disabled={membershipBusy}
               onClick={handleJoinCircle}
-              className="min-h-[44px] px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition inline-flex items-center gap-2"
+              className={`min-h-[44px] px-6 py-2.5 ${ZAURE_SURFACES.gradientButton} text-xs`}
             >
               <UserPlus className="w-4 h-4" />
               <span>{membershipBusy ? 'Envoi en cours...' : "Envoyer une demande d'adhésion"}</span>

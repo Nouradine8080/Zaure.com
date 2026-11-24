@@ -40,6 +40,8 @@ import {
   requestBrowserPushPermission
 } from '../../services/notificationService';
 import { communityService } from '../../services/communityService';
+import { ZaureGeometricBackdrop } from '../ui/ZaureGeometricBackdrop';
+import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface NotificationsCenterProps {
   currentUser: UserProfile;
@@ -99,96 +101,96 @@ function getNotificationIconMeta(type: AppNotificationType): {
       return {
         Icon: Heart,
         badgeBg: 'bg-rose-600 text-white',
-        accentBg: 'bg-rose-50',
-        accentText: 'text-rose-600'
+        accentBg: 'bg-rose-50 dark:bg-rose-950/50',
+        accentText: 'text-rose-600 dark:text-rose-400'
       };
     case 'comment':
     case 'comment_reply':
       return {
         Icon: MessageCircle,
         badgeBg: 'bg-blue-600 text-white',
-        accentBg: 'bg-blue-50',
-        accentText: 'text-blue-600'
+        accentBg: 'bg-blue-50 dark:bg-blue-950/50',
+        accentText: 'text-blue-600 dark:text-sky-400'
       };
     case 'share':
       return {
         Icon: Share2,
         badgeBg: 'bg-emerald-600 text-white',
-        accentBg: 'bg-emerald-50',
-        accentText: 'text-emerald-600'
+        accentBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        accentText: 'text-emerald-600 dark:text-emerald-400'
       };
     case 'new_follower':
       return {
         Icon: UserPlus,
         badgeBg: 'bg-indigo-600 text-white',
-        accentBg: 'bg-indigo-50',
-        accentText: 'text-indigo-600'
+        accentBg: 'bg-indigo-50 dark:bg-indigo-950/50',
+        accentText: 'text-indigo-600 dark:text-indigo-400'
       };
     case 'mention':
     case 'group_mention':
       return {
         Icon: AtSign,
         badgeBg: 'bg-amber-600 text-white',
-        accentBg: 'bg-amber-50',
-        accentText: 'text-amber-700'
+        accentBg: 'bg-amber-50 dark:bg-amber-950/50',
+        accentText: 'text-amber-700 dark:text-amber-400'
       };
     case 'new_message':
       return {
         Icon: MessagesSquare,
         badgeBg: 'bg-blue-600 text-white',
-        accentBg: 'bg-blue-50',
-        accentText: 'text-blue-600'
+        accentBg: 'bg-blue-50 dark:bg-blue-950/50',
+        accentText: 'text-blue-600 dark:text-sky-400'
       };
     case 'community_invitation':
       return {
         Icon: Users,
         badgeBg: 'bg-blue-700 text-white',
-        accentBg: 'bg-blue-50',
-        accentText: 'text-blue-700'
+        accentBg: 'bg-blue-50 dark:bg-blue-950/50',
+        accentText: 'text-blue-700 dark:text-sky-400'
       };
     case 'community_approved':
     case 'community_role':
       return {
         Icon: UserCheck,
         badgeBg: 'bg-emerald-600 text-white',
-        accentBg: 'bg-emerald-50',
-        accentText: 'text-emerald-700'
+        accentBg: 'bg-emerald-50 dark:bg-emerald-950/50',
+        accentText: 'text-emerald-700 dark:text-emerald-400'
       };
     case 'community_announcement':
       return {
         Icon: Megaphone,
         badgeBg: 'bg-amber-600 text-white',
-        accentBg: 'bg-amber-50',
-        accentText: 'text-amber-700'
+        accentBg: 'bg-amber-50 dark:bg-amber-950/50',
+        accentText: 'text-amber-700 dark:text-amber-400'
       };
     case 'community_rules':
       return {
         Icon: ScrollText,
         badgeBg: 'bg-slate-800 text-white',
-        accentBg: 'bg-slate-100',
-        accentText: 'text-slate-700'
+        accentBg: 'bg-slate-100 dark:bg-slate-800',
+        accentText: 'text-slate-700 dark:text-slate-300'
       };
     case 'community_post':
       return {
         Icon: Sparkles,
         badgeBg: 'bg-blue-600 text-white',
-        accentBg: 'bg-blue-50',
-        accentText: 'text-blue-600'
+        accentBg: 'bg-blue-50 dark:bg-blue-950/50',
+        accentText: 'text-blue-600 dark:text-sky-400'
       };
     case 'security_alert':
       return {
         Icon: ShieldAlert,
         badgeBg: 'bg-red-600 text-white',
-        accentBg: 'bg-red-50',
-        accentText: 'text-red-600'
+        accentBg: 'bg-red-50 dark:bg-red-950/50',
+        accentText: 'text-red-600 dark:text-red-400'
       };
     case 'system':
     default:
       return {
         Icon: BellRing,
         badgeBg: 'bg-slate-900 text-white',
-        accentBg: 'bg-slate-100',
-        accentText: 'text-slate-700'
+        accentBg: 'bg-slate-100 dark:bg-slate-800',
+        accentText: 'text-slate-700 dark:text-slate-300'
       };
   }
 }
@@ -433,27 +435,28 @@ export default function NotificationsCenter({
   return (
     <div className="space-y-4 pb-8" id="notifications-center-page">
       {/* 1. EN-TÊTE PRINCIPAL + FILTRES */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+      <section className={ZAURE_SURFACES.sectionHeroBanner}>
+        <ZaureGeometricBackdrop variant="hero" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/25 backdrop-blur-xs text-white flex items-center justify-center shrink-0">
               <Bell className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-lg sm:text-xl font-extrabold text-slate-950 dark:text-white tracking-tight">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
                   Notifications
                 </h1>
                 {unreadCount > 0 && (
                   <span
-                    className="inline-flex items-center px-2 py-0.5 rounded-lg bg-red-50 border border-red-200/80 text-red-700 text-xs font-extrabold tabular-nums"
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white text-blue-700 text-xs font-extrabold tabular-nums shadow-xs"
                     aria-label={`${unreadCount} notifications non lues`}
                   >
                     {unreadCount} non {unreadCount > 1 ? 'lues' : 'lue'}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-blue-100/90 mt-0.5">
                 Activités de votre réseau, mentions, communautés et alertes en temps réel
               </p>
             </div>
@@ -465,7 +468,7 @@ export default function NotificationsCenter({
               whileTap={{ scale: 0.97 }}
               disabled={unreadCount === 0 || markingAll}
               onClick={handleMarkAllAsRead}
-              className="min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-45 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 text-slate-700 text-xs font-bold transition flex items-center gap-1.5"
+              className="min-h-[42px] px-3.5 py-2 rounded-xl bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-45 text-xs font-bold shadow-xs transition flex items-center gap-1.5"
             >
               <CheckCheck className="w-4 h-4 shrink-0" />
               <span>{markingAll ? 'Mise à jour...' : 'Tout marquer comme lu'}</span>
@@ -476,10 +479,10 @@ export default function NotificationsCenter({
               whileTap={{ scale: 0.97 }}
               onClick={() => setShowSettingsDrawer((prev) => !prev)}
               aria-expanded={showSettingsDrawer}
-              className={`min-h-[42px] px-3.5 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`min-h-[42px] px-3.5 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 backdrop-blur-xs ${
                 showSettingsDrawer
-                  ? 'bg-slate-950 border-slate-950 text-white'
-                  : 'bg-white border-slate-200/90 hover:bg-slate-50 text-slate-700'
+                  ? 'bg-slate-950/90 border-white/30 text-white'
+                  : 'bg-white/15 border-white/25 hover:bg-white/25 text-white'
               }`}
             >
               <Settings className="w-4 h-4 shrink-0" />
@@ -490,7 +493,7 @@ export default function NotificationsCenter({
 
         {/* BARRE DE FILTRES */}
         <div
-          className="mt-4 pt-3.5 border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5"
+          className="relative z-10 mt-4 pt-3.5 border-t border-white/20 flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5"
           role="tablist"
           aria-label="Filtres de notifications"
         >
@@ -508,15 +511,15 @@ export default function NotificationsCenter({
                 onClick={() => setActiveFilter(tab.id)}
                 className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shrink-0 ${
                   isActive
-                    ? 'bg-slate-950 text-white shadow-xs'
-                    : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'bg-white/15 text-white hover:bg-white/25'
                 }`}
               >
                 <span>{tab.label}</span>
                 {badgeCount > 0 && (
                   <span
                     className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold tabular-nums ${
-                      isActive ? 'bg-blue-600 text-white' : 'bg-white text-blue-700'
+                      isActive ? 'bg-blue-600 text-white' : 'bg-white/25 text-white'
                     }`}
                   >
                     {badgeCount}
@@ -538,13 +541,13 @@ export default function NotificationsCenter({
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div className={`${ZAURE_SURFACES.card} p-4 sm:p-5 space-y-4`}>
+              <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div>
-                  <h2 className="text-sm font-extrabold text-slate-950">
+                  <h2 className="text-sm font-extrabold text-slate-950 dark:text-white">
                     Préférences des notifications
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Activez ou désactivez les alertes par catégorie selon vos besoins.
                   </p>
                 </div>
@@ -552,7 +555,7 @@ export default function NotificationsCenter({
                   <button
                     type="button"
                     onClick={onOpenAccountSettings}
-                    className="min-h-[38px] px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition flex items-center gap-1"
+                    className="min-h-[38px] px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/70 text-blue-700 dark:text-sky-300 text-xs font-bold transition flex items-center gap-1"
                   >
                     <span>Tous les réglages</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -561,7 +564,7 @@ export default function NotificationsCenter({
                     type="button"
                     onClick={() => setShowSettingsDrawer(false)}
                     aria-label="Fermer les préférences"
-                    className="min-w-[40px] min-h-[40px] rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition"
+                    className="min-w-[40px] min-h-[40px] rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -572,11 +575,11 @@ export default function NotificationsCenter({
                 {preferenceRows.map((row) => (
                   <div
                     key={row.key}
-                    className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50/90 border border-slate-200/60"
+                    className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50/90 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900">{row.title}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{row.desc}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-100">{row.title}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{row.desc}</p>
                     </div>
                     <button
                       type="button"
@@ -585,7 +588,7 @@ export default function NotificationsCenter({
                       aria-label={row.title}
                       onClick={() => handleTogglePreference(row.key, !row.value)}
                       className={`w-12 h-7 rounded-full transition p-1 flex items-center shrink-0 ${
-                        row.value ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
+                        row.value ? 'bg-blue-600 justify-end' : 'bg-slate-300 dark:bg-slate-600 justify-start'
                       }`}
                     >
                       <span className="w-5 h-5 rounded-full bg-white shadow-xs" />
@@ -594,13 +597,13 @@ export default function NotificationsCenter({
                 ))}
 
                 {pushSupported && (
-                  <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-blue-50/50 border border-blue-200/70 md:col-span-2">
+                  <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-blue-50/50 dark:bg-blue-950/35 border border-blue-200/70 dark:border-blue-800/60 md:col-span-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold text-slate-950">
+                        <p className="text-xs font-bold text-slate-950 dark:text-white">
                           Notifications Push navigateur
                         </p>
-                        <span className="text-[10px] font-bold text-blue-700">
+                        <span className="text-[10px] font-bold text-blue-700 dark:text-sky-400">
                           {pushPermission === 'granted'
                             ? '· Autorisées'
                             : pushPermission === 'denied'
@@ -608,11 +611,11 @@ export default function NotificationsCenter({
                               : '· Inactives'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-0.5">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
                         Recevez une alerte sur votre appareil lorsque vous consultez un autre onglet.
                       </p>
                       {pushError && (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1">{pushError}</p>
+                        <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1">{pushError}</p>
                       )}
                     </div>
                     <button
@@ -624,7 +627,7 @@ export default function NotificationsCenter({
                       className={`w-12 h-7 rounded-full transition p-1 flex items-center shrink-0 ${
                         settings.notif_push_enabled && pushPermission === 'granted'
                           ? 'bg-blue-600 justify-end'
-                          : 'bg-slate-300 justify-start'
+                          : 'bg-slate-300 dark:bg-slate-600 justify-start'
                       }`}
                     >
                       <span className="w-5 h-5 rounded-full bg-white shadow-xs" />
@@ -639,16 +642,16 @@ export default function NotificationsCenter({
 
       {/* 3. LISTE CHRONOLOGIQUE DES NOTIFICATIONS */}
       {groupedBuckets.length === 0 ? (
-        <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center">
+        <div className={`${ZAURE_SURFACES.card} p-8 sm:p-12 text-center`}>
+          <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl ${ZAURE_ICON_CHIPS.blue} flex items-center justify-center`}>
             <BellOff className="w-7 h-7 stroke-[1.75]" />
           </div>
-          <h3 className="text-base font-extrabold text-slate-950">
+          <h3 className="text-base font-extrabold text-slate-950 dark:text-white">
             {activeFilter === 'unread'
               ? 'Vous êtes à jour !'
               : 'Aucune notification dans cette catégorie'}
           </h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1.5 leading-relaxed">
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1.5 leading-relaxed">
             {activeFilter === 'unread'
               ? 'Toutes vos notifications ont été lues. Les nouvelles activités apparaîtront ici instantanément.'
               : 'Les réactions, commentaires, mentions, abonnements et annonces de vos communautés s’afficheront ici en temps réel.'}
@@ -657,7 +660,7 @@ export default function NotificationsCenter({
             <button
               type="button"
               onClick={() => setActiveFilter('all')}
-              className="mt-4 min-h-[42px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition"
+              className={`${ZAURE_SURFACES.gradientButton} mt-4 min-h-[42px] px-4 py-2 text-xs`}
             >
               Afficher toutes les notifications
             </button>
@@ -668,10 +671,10 @@ export default function NotificationsCenter({
           {groupedBuckets.map((bucket) => (
             <section
               key={bucket.key}
-              className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)]"
+              className={`${ZAURE_SURFACES.card} overflow-hidden`}
             >
-              <div className="px-4 sm:px-5 py-3 bg-slate-50/75 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+              <div className="px-4 sm:px-5 py-3 bg-slate-50/75 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {bucket.label}
                 </h2>
                 <span className="text-[11px] font-bold text-slate-400 tabular-nums">
@@ -679,7 +682,7 @@ export default function NotificationsCenter({
                 </span>
               </div>
 
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 <AnimatePresence initial={false}>
                   {bucket.items.map((notif) => {
                     const iconMeta = getNotificationIconMeta(notif.type);
@@ -701,8 +704,8 @@ export default function NotificationsCenter({
                         onClick={() => handleOpenNotification(notif)}
                         className={`group relative px-4 sm:px-5 py-3.5 sm:py-4 transition cursor-pointer flex items-start gap-3.5 ${
                           !notif.isRead
-                            ? 'bg-blue-50/45 hover:bg-blue-50/75'
-                            : 'bg-white hover:bg-slate-50/80'
+                            ? 'bg-blue-50/70 dark:bg-blue-950/35 hover:bg-blue-50 dark:hover:bg-blue-950/55'
+                            : 'bg-transparent hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
                         }`}
                       >
                         {/* Avatar + Badge type d'activité */}
@@ -732,12 +735,12 @@ export default function NotificationsCenter({
                             <img
                               src={notif.actorAvatar}
                               alt={notif.actorName}
-                              className="w-11 h-11 rounded-full object-cover ring-1 ring-slate-200 bg-slate-100"
+                              className="w-11 h-11 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-100 dark:bg-slate-800"
                               referrerPolicy="no-referrer"
                             />
                           ) : (
                             <div
-                              className={`w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-sm ring-1 ring-slate-200/70 ${iconMeta.accentBg} ${iconMeta.accentText}`}
+                              className={`w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-sm ring-1 ring-slate-200/70 dark:ring-slate-700 ${iconMeta.accentBg} ${iconMeta.accentText}`}
                             >
                               {notif.type === 'system' || notif.type === 'security_alert' ? (
                                 <TypeIcon className="w-5 h-5" />
@@ -748,7 +751,7 @@ export default function NotificationsCenter({
                           )}
 
                           <span
-                            className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-xs ${iconMeta.badgeBg}`}
+                            className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-xs ${iconMeta.badgeBg}`}
                           >
                             <TypeIcon className="w-2.5 h-2.5" />
                           </span>
@@ -761,12 +764,12 @@ export default function NotificationsCenter({
                               <p
                                 className={`text-xs sm:text-[13px] leading-snug ${
                                   !notif.isRead
-                                    ? 'font-bold text-slate-950'
-                                    : 'font-medium text-slate-800'
+                                    ? 'font-bold text-slate-950 dark:text-white'
+                                    : 'font-medium text-slate-800 dark:text-slate-200'
                                 }`}
                               >
                                 {notif.priority === 'urgent' && (
-                                  <span className="text-red-600 font-extrabold mr-1.5">
+                                  <span className="text-red-600 dark:text-red-400 font-extrabold mr-1.5">
                                     [Urgent]
                                   </span>
                                 )}
@@ -774,7 +777,7 @@ export default function NotificationsCenter({
                               </p>
 
                               {notif.previewText && (
-                                <p className="mt-1.5 pl-2.5 border-l-2 border-slate-200 text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                                <p className="mt-1.5 pl-2.5 border-l-2 border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
                                   {notif.previewText}
                                 </p>
                               )}
@@ -786,7 +789,7 @@ export default function NotificationsCenter({
                                 {notif.groupName && (
                                   <>
                                     <span>·</span>
-                                    <span className="font-semibold text-blue-700 truncate max-w-[200px]">
+                                    <span className="font-semibold text-blue-700 dark:text-sky-400 truncate max-w-[200px]">
                                       {notif.groupName}
                                     </span>
                                   </>
@@ -794,7 +797,7 @@ export default function NotificationsCenter({
                                 {!notif.isRead && (
                                   <>
                                     <span>·</span>
-                                    <span className="font-bold text-blue-600">Non lue</span>
+                                    <span className="font-bold text-blue-600 dark:text-sky-400">Non lue</span>
                                   </>
                                 )}
                               </div>
@@ -804,7 +807,7 @@ export default function NotificationsCenter({
                             <div className="flex items-center gap-1 shrink-0">
                               {!notif.isRead && (
                                 <span
-                                  className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0 mr-1"
+                                  className={`w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0 mr-1 ${ZAURE_GLOWS.blue}`}
                                   title="Non lue"
                                 />
                               )}
@@ -816,7 +819,7 @@ export default function NotificationsCenter({
                                     e.stopPropagation();
                                     notificationService.markAsRead(notif, currentUser.id);
                                   }}
-                                  className="min-w-[36px] min-h-[36px] sm:min-w-[34px] sm:min-h-[34px] rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 flex items-center justify-center transition"
+                                  className="min-w-[36px] min-h-[36px] sm:min-w-[34px] sm:min-h-[34px] rounded-xl text-slate-400 hover:text-blue-600 dark:hover:text-sky-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 flex items-center justify-center transition"
                                   title="Marquer comme lu"
                                   aria-label="Marquer comme lu"
                                 >
@@ -830,14 +833,14 @@ export default function NotificationsCenter({
                                   e.stopPropagation();
                                   notificationService.deleteNotification(notif, currentUser.id);
                                 }}
-                                className="min-w-[36px] min-h-[36px] sm:min-w-[34px] sm:min-h-[34px] rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition"
+                                className="min-w-[36px] min-h-[36px] sm:min-w-[34px] sm:min-h-[34px] rounded-xl text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center justify-center transition"
                                 title="Supprimer cette notification"
                                 aria-label="Supprimer cette notification"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
 
-                              <ChevronRight className="w-4 h-4 text-slate-300 hidden sm:block group-hover:text-slate-500 transition" />
+                              <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 hidden sm:block group-hover:text-slate-500 transition" />
                             </div>
                           </div>
 
@@ -848,7 +851,7 @@ export default function NotificationsCenter({
                                 type="button"
                                 disabled={busyInvitationId === notif.id}
                                 onClick={(e) => handleAcceptInvitation(e, notif)}
-                                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-1.5"
+                                className={`${ZAURE_SURFACES.gradientButton} min-h-[38px] px-3.5 py-1.5 disabled:opacity-50 text-xs`}
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>Accepter</span>
@@ -857,7 +860,7 @@ export default function NotificationsCenter({
                                 type="button"
                                 disabled={busyInvitationId === notif.id}
                                 onClick={(e) => handleDeclineInvitation(e, notif)}
-                                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-bold transition"
+                                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-200 text-xs font-bold transition"
                               >
                                 Refuser
                               </button>
@@ -865,12 +868,12 @@ export default function NotificationsCenter({
                           )}
 
                           {invStatus === 'accepted' && notif.type === 'community_invitation' && (
-                            <p className="mt-2 text-xs font-bold text-emerald-700">
+                            <p className="mt-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                               Invitation acceptée · Vous êtes membre de cette communauté.
                             </p>
                           )}
                           {invStatus === 'declined' && notif.type === 'community_invitation' && (
-                            <p className="mt-2 text-xs font-semibold text-slate-500">
+                            <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
                               Invitation déclinée.
                             </p>
                           )}

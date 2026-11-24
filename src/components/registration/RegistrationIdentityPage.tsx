@@ -16,6 +16,7 @@ import { useRegistration } from '../../context/RegistrationContext';
 import { UserProfile } from '../../types';
 import LegalDocumentModal from '../settings/LegalDocumentModal';
 import { RegistrationLayout } from './RegistrationLayout';
+import { ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface RegistrationIdentityPageProps {
   onRegistrationSuccess?: (user: UserProfile) => void;
@@ -77,7 +78,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
             Nom et prénom
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80 dark:text-blue-400">
               <User className="w-4 h-4" />
             </div>
             <input
@@ -88,7 +89,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
               required
               value={draft.nom}
               onChange={(e) => updateFields({ nom: e.target.value })}
-              className="w-full min-h-[46px] text-sm pl-11 pr-4 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+              className="w-full min-h-[46px] text-sm pl-11 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
             />
           </div>
         </div>
@@ -99,7 +100,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
             Adresse e-mail
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80 dark:text-blue-400">
               <Mail className="w-4 h-4" />
             </div>
             <input
@@ -110,7 +111,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
               required
               value={draft.email}
               onChange={(e) => updateFields({ email: e.target.value })}
-              className="w-full min-h-[46px] text-sm pl-11 pr-4 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+              className="w-full min-h-[46px] text-sm pl-11 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
             />
           </div>
         </div>
@@ -120,17 +121,17 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
           <label htmlFor="reg-phone" className="sr-only">
             Numéro de téléphone
           </label>
-          <div className="flex items-center min-h-[46px] border border-slate-200 rounded-full bg-white focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600 transition overflow-hidden">
-            <div className="pl-4 pr-2 flex items-center gap-1.5 border-r border-slate-200 shrink-0 bg-slate-50/70 self-stretch">
-              <Phone className="w-4 h-4 text-blue-600/80 shrink-0" />
+          <div className="flex items-center min-h-[46px] border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800/80 focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-blue-600 transition overflow-hidden">
+            <div className="pl-4 pr-2 flex items-center gap-1.5 border-r border-slate-200 dark:border-slate-700 shrink-0 bg-slate-50/70 dark:bg-slate-800 self-stretch">
+              <Phone className="w-4 h-4 text-blue-600/80 dark:text-blue-400 shrink-0" />
               <select
                 aria-label="Pays et indicatif téléphonique"
                 value={draft.countryCode}
                 onChange={(e) => selectCountry(e.target.value)}
-                className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer py-2 pr-1"
+                className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-transparent focus:outline-none cursor-pointer py-2 pr-1"
               >
                 {COUNTRY_DIAL_CODES.map((c) => (
-                  <option key={c.code} value={c.code}>
+                  <option key={c.code} value={c.code} className="dark:bg-slate-900 dark:text-slate-100">
                     {c.flag} {c.dial} ({c.name})
                   </option>
                 ))}
@@ -144,12 +145,12 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
               required
               value={draft.phoneLocal}
               onChange={(e) => handlePhoneLocalChange(e.target.value)}
-              className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+              className="flex-1 min-w-0 text-sm px-3.5 py-2.5 bg-transparent focus:outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
           {fullPhoneNumber && (
-            <p className="text-[11px] text-slate-500 mt-1 px-4">
-              Numéro complet : <span className="font-bold text-slate-700">{fullPhoneNumber}</span>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 px-4">
+              Numéro complet : <span className="font-bold text-slate-700 dark:text-slate-200">{fullPhoneNumber}</span>
             </p>
           )}
         </div>
@@ -160,7 +161,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
             Mot de passe
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80 dark:text-blue-400">
               <Lock className="w-4 h-4" />
             </div>
             <input
@@ -171,13 +172,13 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
               required
               value={draft.password}
               onChange={(e) => updateFields({ password: e.target.value })}
-              className="w-full min-h-[46px] text-sm pl-11 pr-11 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+              className="w-full min-h-[46px] text-sm pl-11 pr-11 py-2.5 border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
             />
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
               aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600"
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               tabIndex={-1}
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -191,7 +192,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
             Confirmer le mot de passe
           </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-600/80 dark:text-blue-400">
               <Lock className="w-4 h-4" />
             </div>
             <input
@@ -202,13 +203,13 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
               required
               value={draft.passwordConfirm}
               onChange={(e) => updateFields({ passwordConfirm: e.target.value })}
-              className="w-full min-h-[46px] text-sm pl-11 pr-16 py-2.5 border border-slate-200 rounded-full bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
+              className="w-full min-h-[46px] text-sm pl-11 pr-16 py-2.5 border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
             />
             <div className="absolute inset-y-0 right-0 pr-4 flex items-center gap-2">
               {passwordsMatch && (
                 <CheckCircle2
                   aria-label="Mots de passe identiques"
-                  className="w-4 h-4 text-emerald-600 shrink-0"
+                  className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"
                 />
               )}
               <button
@@ -219,7 +220,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
                     ? 'Masquer la confirmation du mot de passe'
                     : 'Afficher la confirmation du mot de passe'
                 }
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                 tabIndex={-1}
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -240,9 +241,9 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
               checked={draft.acceptedTerms}
               onChange={(e) => updateFields({ acceptedTerms: e.target.checked })}
               required
-              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600 shrink-0 cursor-pointer"
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-600 shrink-0 cursor-pointer"
             />
-            <span className="text-xs text-slate-600 leading-relaxed">
+            <span className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               J'accepte les{' '}
               <button
                 type="button"
@@ -251,7 +252,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
                   e.stopPropagation();
                   setLegalDoc('terms');
                 }}
-                className="font-bold text-blue-700 hover:text-blue-800 hover:underline"
+                className="font-bold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
               >
                 Conditions d'utilisation
               </button>{' '}
@@ -263,7 +264,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
                   e.stopPropagation();
                   setLegalDoc('privacy');
                 }}
-                className="font-bold text-blue-700 hover:text-blue-800 hover:underline"
+                className="font-bold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
               >
                 Politique de confidentialité
               </button>
@@ -276,7 +277,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full min-h-[48px] py-3 px-6 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-sm sm:text-base transition shadow-md shadow-blue-600/20 flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+            className={`w-full min-h-[48px] py-3 px-6 text-sm sm:text-base gap-2.5 disabled:opacity-50 cursor-pointer ${ZAURE_SURFACES.primaryButton}`}
           >
             {isSubmitting ? (
               <>
@@ -295,9 +296,9 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
 
         {/* Divider */}
         <div className="relative flex py-1.5 items-center">
-          <div className="flex-grow border-t border-slate-200" />
-          <span className="shrink mx-3 text-xs font-semibold text-slate-400">Ou</span>
-          <div className="flex-grow border-t border-slate-200" />
+          <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
+          <span className="shrink mx-3 text-xs font-semibold text-slate-400 dark:text-slate-500">Ou</span>
+          <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
         </div>
 
         {/* Continuer avec Google */}
@@ -305,7 +306,7 @@ export const RegistrationIdentityPage: React.FC<RegistrationIdentityPageProps> =
           type="button"
           onClick={handleGoogleContinue}
           disabled={isSubmitting}
-          className="w-full min-h-[46px] py-2.5 px-5 rounded-full bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm border border-slate-200 transition shadow-2xs flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
+          className="w-full min-h-[46px] py-2.5 px-5 rounded-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/90 text-slate-800 dark:text-slate-100 font-bold text-sm border border-slate-200 dark:border-slate-700 transition shadow-2xs flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer zaure-btn-press"
         >
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
             <path
