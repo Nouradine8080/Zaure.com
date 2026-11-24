@@ -16,6 +16,7 @@ import {
 import heroMentorImg from '../../assets/images/zaure_hero_mentor_1795453186546.jpg';
 import { useRegistration } from '../../context/RegistrationContext';
 import { PWAInstallButton } from '../PWAInstallButton';
+import { ZAURE_MOTION } from '../../styles/designSystem';
 
 interface RegistrationLayoutProps {
   title: string;
@@ -51,19 +52,19 @@ export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
   }, [pageTitle]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#EAF2FF] via-[#F5F9FF] to-[#DFECFF] flex flex-col text-slate-900 font-sans selection:bg-blue-100">
+    <div className="min-h-screen zaure-grad-canvas-soft flex flex-col text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-100">
       {/* Compact Top Navigation Bar */}
-      <header className="sticky top-0 z-30 h-16 bg-white/85 backdrop-blur-md border-b border-blue-100/90">
+      <header className="sticky top-0 z-30 h-16 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-blue-100/90 dark:border-slate-800">
         <div className="max-w-6xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
           <Link
             to="/"
             onClick={() => setErrorMessage(null)}
             className="flex items-center gap-2.5 whitespace-nowrap shrink-0 group focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 rounded-lg"
           >
-            <span className="w-9 h-9 rounded-xl bg-blue-600 group-hover:bg-blue-700 flex items-center justify-center text-white font-black text-lg shadow-xs transition">
+            <span className="w-9 h-9 rounded-xl zaure-grad-primary flex items-center justify-center text-white font-black text-lg zaure-shadow-xs transition">
               Z
             </span>
-            <span className="text-xl font-extrabold text-slate-950 tracking-tight">Zaure</span>
+            <span className="text-xl font-extrabold text-slate-950 dark:text-white tracking-tight">Zaure</span>
           </Link>
 
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
@@ -91,12 +92,10 @@ export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
       {/* Centered Split Container (Image 1 Showcase + Image 2 White Form Panel) */}
       <main className="flex-1 flex items-center justify-center px-3.5 sm:px-6 py-6 sm:py-10">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
+          {...ZAURE_MOTION.slideUp}
           className="w-full max-w-5xl mx-auto"
         >
-          <div className="bg-white rounded-[28px] shadow-[0_24px_60px_-20px_rgba(29,78,216,0.18)] border border-blue-100 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] zaure-shadow-modal border border-blue-100 dark:border-slate-800 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
             {/* Left Visual Showcase Column (Desktop) */}
             <aside className="hidden lg:flex lg:col-span-5 bg-gradient-to-b from-[#F4F8FF] via-[#EBF3FF] to-[#DBEAFE] p-8 flex-col justify-between border-r border-blue-100/90">
               <div>
@@ -195,11 +194,11 @@ export const RegistrationLayout: React.FC<RegistrationLayoutProps> = ({
             <section className="lg:col-span-7 bg-white p-6 sm:p-9 lg:p-10 flex flex-col justify-center">
               {/* Centered Blue Header Pill & Subtitle matching Image 2 */}
               <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center gap-2.5 px-7 py-2.5 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-600/20">
+                <div className="inline-flex items-center justify-center gap-2.5 px-7 py-2.5 rounded-full zaure-grad-primary text-white zaure-shadow-primary">
                   {icon}
                   <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">{title}</h1>
                 </div>
-                <p className="text-xs sm:text-sm text-slate-500 mt-3 font-medium">{subtitle}</p>
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-3 font-medium">{subtitle}</p>
               </div>
 
               {/* Error Banner */}

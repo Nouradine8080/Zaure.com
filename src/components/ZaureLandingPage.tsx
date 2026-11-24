@@ -222,7 +222,7 @@ export default function ZaureLandingPage() {
                 <div className="mt-8 flex flex-wrap items-center gap-4 sm:gap-6">
                   <Link
                     to={REGISTRATION_ROUTES.IDENTITE}
-                    className="min-h-[48px] px-7 py-3.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base font-bold inline-flex items-center gap-2.5 shadow-md shadow-blue-600/20 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                    className="min-h-[48px] px-7 py-3.5 rounded-full zaure-btn-primary zaure-focus-ring text-sm sm:text-base font-bold inline-flex items-center gap-2.5"
                   >
                     <span>Créer mon compte</span>
                     <ArrowRight className="w-4 h-4" />
@@ -241,7 +241,7 @@ export default function ZaureLandingPage() {
 
               {/* Right Visual Stage (Image 1 Portrait + 4 Domain Icon Tiles) */}
               <div className="lg:col-span-6 flex">
-                <div className="w-full rounded-3xl bg-gradient-to-br from-[#DBEAFE] via-[#EFF6FF] to-white border border-blue-200/80 p-4 sm:p-6 shadow-lg flex flex-col justify-between gap-4">
+                <div className="w-full rounded-3xl zaure-grad-surface-tint border border-blue-200/80 p-4 sm:p-6 zaure-shadow-card flex flex-col justify-between gap-4">
                   <div className="relative w-full aspect-[4/3] lg:flex-1 lg:min-h-[340px] rounded-2xl overflow-hidden bg-blue-100 border border-white/80">
                     {!heroImgFailed ? (
                       <img
@@ -252,7 +252,7 @@ export default function ZaureLandingPage() {
                         className="w-full h-full object-cover object-top"
                       />
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-sky-500 text-white p-6 text-center">
+                      <div className="w-full h-full flex flex-col items-center justify-center zaure-grad-hero text-white p-6 text-center">
                         <GraduationCap className="w-12 h-12 mb-3 opacity-90" />
                         <p className="text-lg font-extrabold">Communauté ZAURE</p>
                         <p className="text-sm text-blue-100 mt-1">

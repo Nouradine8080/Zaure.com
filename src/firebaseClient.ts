@@ -55,6 +55,11 @@ import {
   UserProfile, 
   Circle, 
   CircleMember, 
+  CircleJoinRequest,
+  CircleAnnouncement,
+  CircleEvent,
+  CircleVisibility,
+  CirclePostPermission,
   Capsule, 
   Comment, 
   Reaction, 
@@ -929,16 +934,46 @@ export const zaureService = {
     }
   },
 
-  createCircle: async (nom: string, description: string, categorie: string, image: string): Promise<Circle> => {
+  createCircle: async (
+    nom: string,
+    description: string,
+    categorie: string,
+    image: string,
+    options?: {
+      cover_image?: string;
+      visibility?: CircleVisibility;
+      rules?: string[];
+      post_permission?: CirclePostPermission;
+    }
+  ): Promise<Circle> => {
     if (!dbFirestore || !currentUser) throw new Error('Utilisateur non connecté.');
+    const now = new Date().toISOString();
+    const cleanedRules = (options?.rules || [])
+      .map((r) => r.trim().slice(0, 220))
+      .filter((r) => r.length > 0)
+      .slice(0, 20);
+
+    const logoImage =
+      (image || '').trim().slice(0, 350000) ||
+      'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&q=80&w=600';
+    const coverImage =
+      (options?.cover_image || '').trim().slice(0, 350000) || logoImage;
+
     const newCircle: Circle & { created_by: string } = {
       id: `circle-${Date.now()}`,
       nom: nom.trim().slice(0, 120),
       description: description.trim().slice(0, 1000),
       categorie: categorie.trim().slice(0, 60),
-      image: image || 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&q=80&w=600',
+      image: logoImage,
+      cover_image: coverImage,
+      visibility: options?.visibility || 'public',
+      rules: cleanedRules,
+      post_permission: options?.post_permission || 'all_members',
+      member_count: 1,
+      last_activity_at: now,
+      updated_at: now,
       created_by: currentUser.id,
-      created_at: new Date().toISOString()
+      created_at: now
     };
 
     try {
@@ -946,8 +981,10 @@ export const zaureService = {
       const member: CircleMember = {
         user_id: currentUser.id,
         circle_id: newCircle.id,
-        role: 'moderateur',
-        joined_at: new Date().toISOString()
+        role: 'admin',
+        joined_at: now,
+        user_nom: currentUser.nom,
+        user_avatar: currentUser.avatar_url || ''
       };
       await setDoc(doc(dbFirestore, 'circle_members', `${currentUser.id}_${newCircle.id}`), member);
     } catch (error) {
@@ -958,11 +995,22 @@ export const zaureService = {
 
   updateCircle: async (
     circleId: string,
-    updates: { nom?: string; description?: string; categorie?: string; image?: string }
+    updates: {
+      nom?: string;
+      description?: string;
+      categorie?: string;
+      image?: string;
+      cover_image?: string;
+      visibility?: CircleVisibility;
+      rules?: string[];
+      post_permission?: CirclePostPermission;
+    }
   ): Promise<Circle | null> => {
     if (!dbFirestore || !auth?.currentUser) throw new Error('Utilisateur non connecté.');
     const circleRef = doc(dbFirestore, 'circles', circleId);
-    const sanitized: Record<string, string> = {};
+    const sanitized: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
 
     if (typeof updates.nom === 'string') {
       const trimmedNom = updates.nom.trim().slice(0, 120);
@@ -993,6 +1041,28 @@ export const zaureService = {
       if (trimmedImg.length <= 350000) {
         sanitized.image = trimmedImg;
       }
+    }
+
+    if (typeof updates.cover_image === 'string') {
+      const trimmedCover = updates.cover_image.trim();
+      if (trimmedCover.length <= 350000) {
+        sanitized.cover_image = trimmedCover;
+      }
+    }
+
+    if (updates.visibility === 'public' || updates.visibility === 'private') {
+      sanitized.visibility = updates.visibility;
+    }
+
+    if (updates.post_permission === 'all_members' || updates.post_permission === 'admins_only') {
+      sanitized.post_permission = updates.post_permission;
+    }
+
+    if (Array.isArray(updates.rules)) {
+      sanitized.rules = updates.rules
+        .map((r) => String(r).trim().slice(0, 220))
+        .filter((r) => r.length > 0)
+        .slice(0, 20);
     }
 
     try {
@@ -1041,17 +1111,116 @@ export const zaureService = {
     }
   },
 
+  subscribeCircleMemberCounts: (callback: (counts: Record<string, number>) => void): (() => void) => {
+    if (!dbFirestore || !auth?.currentUser) {
+      callback({});
+      return () => {};
+    }
+    return onSnapshot(
+      collection(dbFirestore, 'circle_members'),
+      (snap) => {
+        const counts: Record<string, number> = {};
+        snap.forEach((d) => {
+          const data = d.data() as CircleMember;
+          if (data?.circle_id) {
+            counts[data.circle_id] = (counts[data.circle_id] || 0) + 1;
+          }
+        });
+        callback(counts);
+      },
+      (err) => {
+        console.warn('Info - subscribeCircleMemberCounts:', err);
+      }
+    );
+  },
+
+  subscribeUserCircleJoinRequests: (
+    userId: string,
+    callback: (circleIds: string[]) => void
+  ): (() => void) => {
+    if (!dbFirestore || !userId || !auth?.currentUser) {
+      callback([]);
+      return () => {};
+    }
+    const q = query(collection(dbFirestore, 'circle_join_requests'), where('user_id', '==', userId));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const ids: string[] = [];
+        snap.forEach((d) => {
+          const req = d.data() as CircleJoinRequest;
+          if (req?.circle_id && req.status === 'pending') {
+            ids.push(req.circle_id);
+          }
+        });
+        callback(ids);
+      },
+      (err) => {
+        console.warn('Info - subscribeUserCircleJoinRequests:', err);
+      }
+    );
+  },
+
+  requestJoinCircle: async (circleId: string): Promise<boolean> => {
+    if (!dbFirestore || !currentUser) return false;
+    const reqId = `${currentUser.id}_${circleId}`;
+    const payload: CircleJoinRequest = {
+      id: reqId,
+      circle_id: circleId,
+      user_id: currentUser.id,
+      user_nom: currentUser.nom || 'Membre ZAURE',
+      user_avatar: currentUser.avatar_url || '',
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    try {
+      await setDoc(doc(dbFirestore, 'circle_join_requests', reqId), payload);
+      return true;
+    } catch (error) {
+      console.warn('Info - Demande rejoindre cercle:', error);
+      return false;
+    }
+  },
+
+  cancelJoinCircleRequest: async (circleId: string, userId?: string): Promise<boolean> => {
+    const uid = userId || currentUser?.id;
+    if (!dbFirestore || !uid) return false;
+    try {
+      await deleteDoc(doc(dbFirestore, 'circle_join_requests', `${uid}_${circleId}`));
+      return true;
+    } catch (error) {
+      console.warn('Info - Annuler demande cercle:', error);
+      return false;
+    }
+  },
+
   joinCircle: async (circleId: string, userId: string): Promise<boolean> => {
     if (!dbFirestore) return false;
+    const now = new Date().toISOString();
     const newMember: CircleMember = {
       user_id: userId,
       circle_id: circleId,
       role: 'membre',
-      joined_at: new Date().toISOString()
+      joined_at: now,
+      ...(currentUser?.id === userId
+        ? { user_nom: currentUser.nom, user_avatar: currentUser.avatar_url || '' }
+        : {})
     };
 
     try {
       await setDoc(doc(dbFirestore, 'circle_members', `${userId}_${circleId}`), newMember);
+      try {
+        const snap = await getDoc(doc(dbFirestore, 'circles', circleId));
+        if (snap.exists()) {
+          const cur = (snap.data().member_count as number | undefined) ?? 0;
+          await updateDoc(doc(dbFirestore, 'circles', circleId), {
+            member_count: cur + 1,
+            updated_at: now
+          });
+        }
+      } catch {
+        // non-fatal counter update
+      }
       return true;
     } catch (error) {
       console.warn('Info - Rejoindre cercle:', error);
@@ -1063,10 +1232,356 @@ export const zaureService = {
     if (!dbFirestore) return false;
     try {
       await deleteDoc(doc(dbFirestore, 'circle_members', `${userId}_${circleId}`));
+      try {
+        const snap = await getDoc(doc(dbFirestore, 'circles', circleId));
+        if (snap.exists()) {
+          const cur = (snap.data().member_count as number | undefined) ?? 1;
+          await updateDoc(doc(dbFirestore, 'circles', circleId), {
+            member_count: Math.max(0, cur - 1),
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch {
+        // non-fatal counter update
+      }
       return true;
     } catch (error) {
       console.warn('Info - Quitter cercle:', error);
       return false;
+    }
+  },
+
+  subscribeCircleMembers: (
+    circleId: string,
+    callback: (members: (CircleMember & { profile?: UserProfile })[]) => void
+  ): (() => void) => {
+    if (!dbFirestore || !circleId || !auth?.currentUser) {
+      callback([]);
+      return () => {};
+    }
+    const q = query(collection(dbFirestore, 'circle_members'), where('circle_id', '==', circleId));
+    return onSnapshot(
+      q,
+      async (snap) => {
+        const rawMembers: CircleMember[] = [];
+        snap.forEach((d) => rawMembers.push(d.data() as CircleMember));
+
+        const missingIds = rawMembers
+          .filter((m) => !m.user_nom)
+          .map((m) => m.user_id);
+
+        const profileMap = new Map<string, UserProfile>();
+        if (missingIds.length > 0) {
+          await Promise.all(
+            Array.from(new Set(missingIds)).map(async (uid) => {
+              try {
+                const pSnap = await getDoc(doc(dbFirestore!, 'public_profiles', uid));
+                if (pSnap.exists()) {
+                  profileMap.set(uid, mapPublicProfileData(pSnap.id, pSnap.data()));
+                }
+              } catch {
+                // ignore
+              }
+            })
+          );
+        }
+
+        const enriched = rawMembers.map((m) => {
+          const profile = profileMap.get(m.user_id);
+          return {
+            ...m,
+            user_nom: m.user_nom || profile?.nom || 'Membre ZAURE',
+            user_avatar: m.user_avatar || profile?.avatar_url || '',
+            profile
+          };
+        });
+
+        const roleWeight: Record<string, number> = { admin: 0, moderateur: 1, membre: 2 };
+        enriched.sort((a, b) => (roleWeight[a.role] ?? 3) - (roleWeight[b.role] ?? 3));
+        callback(enriched);
+      },
+      (err) => {
+        console.warn('Info - subscribeCircleMembers:', err);
+      }
+    );
+  },
+
+  subscribeCircleJoinRequests: (
+    circleId: string,
+    callback: (requests: CircleJoinRequest[]) => void
+  ): (() => void) => {
+    if (!dbFirestore || !circleId || !auth?.currentUser) {
+      callback([]);
+      return () => {};
+    }
+    const q = query(collection(dbFirestore, 'circle_join_requests'), where('circle_id', '==', circleId));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list: CircleJoinRequest[] = [];
+        snap.forEach((d) => {
+          const req = d.data() as CircleJoinRequest;
+          if (req.status === 'pending') list.push(req);
+        });
+        list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        callback(list);
+      },
+      (err) => {
+        console.warn('Info - subscribeCircleJoinRequests:', err);
+      }
+    );
+  },
+
+  approveCircleJoinRequest: async (request: CircleJoinRequest): Promise<boolean> => {
+    if (!dbFirestore || !auth?.currentUser) return false;
+    const now = new Date().toISOString();
+    const member: CircleMember = {
+      user_id: request.user_id,
+      circle_id: request.circle_id,
+      role: 'membre',
+      joined_at: now,
+      user_nom: request.user_nom,
+      user_avatar: request.user_avatar || ''
+    };
+    try {
+      await setDoc(doc(dbFirestore, 'circle_members', `${request.user_id}_${request.circle_id}`), member);
+      await deleteDoc(doc(dbFirestore, 'circle_join_requests', request.id));
+      try {
+        const snap = await getDoc(doc(dbFirestore, 'circles', request.circle_id));
+        if (snap.exists()) {
+          const cur = (snap.data().member_count as number | undefined) ?? 0;
+          await updateDoc(doc(dbFirestore, 'circles', request.circle_id), {
+            member_count: cur + 1,
+            updated_at: now
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `circle_join_requests/${request.id}`);
+      return false;
+    }
+  },
+
+  rejectCircleJoinRequest: async (requestId: string): Promise<boolean> => {
+    if (!dbFirestore || !auth?.currentUser) return false;
+    try {
+      await deleteDoc(doc(dbFirestore, 'circle_join_requests', requestId));
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `circle_join_requests/${requestId}`);
+      return false;
+    }
+  },
+
+  updateCircleMemberRole: async (
+    circleId: string,
+    targetUserId: string,
+    role: 'membre' | 'moderateur' | 'admin'
+  ): Promise<boolean> => {
+    if (!dbFirestore || !auth?.currentUser) return false;
+    const memberId = `${targetUserId}_${circleId}`;
+    try {
+      await updateDoc(doc(dbFirestore, 'circle_members', memberId), { role });
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `circle_members/${memberId}`);
+      return false;
+    }
+  },
+
+  removeCircleMember: async (circleId: string, targetUserId: string): Promise<boolean> => {
+    if (!dbFirestore || !auth?.currentUser) return false;
+    const memberId = `${targetUserId}_${circleId}`;
+    try {
+      await deleteDoc(doc(dbFirestore, 'circle_members', memberId));
+      try {
+        const snap = await getDoc(doc(dbFirestore, 'circles', circleId));
+        if (snap.exists()) {
+          const cur = (snap.data().member_count as number | undefined) ?? 1;
+          await updateDoc(doc(dbFirestore, 'circles', circleId), {
+            member_count: Math.max(0, cur - 1),
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `circle_members/${memberId}`);
+      return false;
+    }
+  },
+
+  // --- CIRCLE ANNOUNCEMENTS ---
+  subscribeCircleAnnouncements: (
+    circleId: string,
+    callback: (items: CircleAnnouncement[]) => void
+  ): (() => void) => {
+    if (!dbFirestore || !circleId || !auth?.currentUser) {
+      callback([]);
+      return () => {};
+    }
+    const q = query(collection(dbFirestore, 'circle_announcements'), where('circle_id', '==', circleId));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list: CircleAnnouncement[] = [];
+        snap.forEach((d) => list.push(d.data() as CircleAnnouncement));
+        list.sort((a, b) => {
+          if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+        callback(list);
+      },
+      (err) => {
+        console.warn('Info - subscribeCircleAnnouncements:', err);
+      }
+    );
+  },
+
+  createCircleAnnouncement: async (
+    circleId: string,
+    title: string,
+    content: string,
+    isPinned = true
+  ): Promise<CircleAnnouncement> => {
+    if (!dbFirestore || !currentUser) throw new Error('Utilisateur non connecté.');
+    const now = new Date().toISOString();
+    const ann: CircleAnnouncement = {
+      id: `cann-${Date.now()}`,
+      circle_id: circleId,
+      author_id: currentUser.id,
+      author_nom: currentUser.nom || 'Administrateur',
+      author_avatar: currentUser.avatar_url || '',
+      title: title.trim().slice(0, 160),
+      content: content.trim().slice(0, 3000),
+      is_pinned: isPinned,
+      created_at: now,
+      updated_at: now
+    };
+    try {
+      await setDoc(doc(dbFirestore, 'circle_announcements', ann.id), ann);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `circle_announcements/${ann.id}`);
+    }
+    return ann;
+  },
+
+  togglePinCircleAnnouncement: async (annId: string, isPinned: boolean): Promise<void> => {
+    if (!dbFirestore || !auth?.currentUser) return;
+    try {
+      await updateDoc(doc(dbFirestore, 'circle_announcements', annId), {
+        is_pinned: isPinned,
+        updated_at: new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `circle_announcements/${annId}`);
+    }
+  },
+
+  deleteCircleAnnouncement: async (annId: string): Promise<void> => {
+    if (!dbFirestore || !auth?.currentUser) return;
+    try {
+      await deleteDoc(doc(dbFirestore, 'circle_announcements', annId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `circle_announcements/${annId}`);
+    }
+  },
+
+  // --- CIRCLE EVENTS ---
+  subscribeCircleEvents: (
+    circleId: string,
+    callback: (events: CircleEvent[]) => void
+  ): (() => void) => {
+    if (!dbFirestore || !circleId || !auth?.currentUser) {
+      callback([]);
+      return () => {};
+    }
+    const q = query(collection(dbFirestore, 'circle_events'), where('circle_id', '==', circleId));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list: CircleEvent[] = [];
+        snap.forEach((d) => list.push(d.data() as CircleEvent));
+        list.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+        callback(list);
+      },
+      (err) => {
+        console.warn('Info - subscribeCircleEvents:', err);
+      }
+    );
+  },
+
+  createCircleEvent: async (
+    circleId: string,
+    payload: {
+      title: string;
+      description: string;
+      event_date: string;
+      event_time?: string;
+      location?: string;
+      is_online: boolean;
+      meeting_link?: string;
+    }
+  ): Promise<CircleEvent> => {
+    if (!dbFirestore || !currentUser) throw new Error('Utilisateur non connecté.');
+    const now = new Date().toISOString();
+    const ev: CircleEvent = {
+      id: `cevt-${Date.now()}`,
+      circle_id: circleId,
+      created_by: currentUser.id,
+      creator_nom: currentUser.nom || 'Membre ZAURE',
+      title: payload.title.trim().slice(0, 160),
+      description: payload.description.trim().slice(0, 2000),
+      event_date: payload.event_date.trim().slice(0, 32),
+      event_time: (payload.event_time || '').trim().slice(0, 16),
+      location: (payload.location || '').trim().slice(0, 200),
+      is_online: Boolean(payload.is_online),
+      meeting_link: (payload.meeting_link || '').trim().slice(0, 400),
+      attendee_ids: [currentUser.id],
+      interested_ids: [],
+      created_at: now
+    };
+    try {
+      await setDoc(doc(dbFirestore, 'circle_events', ev.id), ev);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `circle_events/${ev.id}`);
+    }
+    return ev;
+  },
+
+  rsvpCircleEvent: async (eventId: string, status: 'going' | 'interested' | 'none'): Promise<void> => {
+    if (!dbFirestore || !currentUser) return;
+    const ref = doc(dbFirestore, 'circle_events', eventId);
+    try {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const data = snap.data() as CircleEvent;
+      const attendees = new Set(data.attendee_ids || []);
+      const interested = new Set(data.interested_ids || []);
+      attendees.delete(currentUser.id);
+      interested.delete(currentUser.id);
+      if (status === 'going') attendees.add(currentUser.id);
+      if (status === 'interested') interested.add(currentUser.id);
+      await updateDoc(ref, {
+        attendee_ids: Array.from(attendees).slice(0, 500),
+        interested_ids: Array.from(interested).slice(0, 500)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `circle_events/${eventId}`);
+    }
+  },
+
+  deleteCircleEvent: async (eventId: string): Promise<void> => {
+    if (!dbFirestore || !auth?.currentUser) return;
+    try {
+      await deleteDoc(doc(dbFirestore, 'circle_events', eventId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `circle_events/${eventId}`);
     }
   },
 
@@ -1210,9 +1725,10 @@ export const zaureService = {
 
   createCapsule: async (
     circleId: string, 
-    type: 'texte' | 'audio', 
+    type: 'texte' | 'audio' | 'video' | 'image' | 'document', 
     contenu: string, 
-    langue: 'fr' | 'ha' | 'en' = 'fr'
+    langue: 'fr' | 'ha' | 'en' = 'fr',
+    media?: { media_url?: string; media_name?: string; media_mime?: string }
   ): Promise<Capsule> => {
     if (!currentUser) throw new Error('Utilisateur non connecté.');
     if (!dbFirestore) throw new Error('Firestore non connecté.');
@@ -1227,6 +1743,11 @@ export const zaureService = {
       circleNom = circlesData.find(c => c.id === targetCircleId)?.nom || 'Cercle';
     }
 
+    const now = new Date().toISOString();
+    const safeMediaUrl = media?.media_url ? media.media_url.trim().slice(0, 650000) : undefined;
+    const safeMediaName = media?.media_name ? media.media_name.trim().slice(0, 200) : undefined;
+    const safeMediaMime = media?.media_mime ? media.media_mime.trim().slice(0, 100) : undefined;
+
     const newCapsule: Capsule = {
       id: `capsule-${Date.now()}`,
       auteur_id: currentUser.id,
@@ -1234,7 +1755,10 @@ export const zaureService = {
       type,
       contenu: safeContenu,
       langue_dorigine: langue,
-      created_at: new Date().toISOString(),
+      created_at: now,
+      ...(safeMediaUrl ? { media_url: safeMediaUrl } : {}),
+      ...(safeMediaName ? { media_name: safeMediaName } : {}),
+      ...(safeMediaMime ? { media_mime: safeMediaMime } : {}),
       auteur_nom: currentUser.nom,
       auteur_role: currentUser.role,
       auteur_avatar: currentUser.avatar_url || '',
@@ -1250,13 +1774,37 @@ export const zaureService = {
         type: newCapsule.type,
         contenu: newCapsule.contenu,
         langue_dorigine: newCapsule.langue_dorigine,
-        created_at: newCapsule.created_at
+        created_at: newCapsule.created_at,
+        ...(safeMediaUrl ? { media_url: safeMediaUrl } : {}),
+        ...(safeMediaName ? { media_name: safeMediaName } : {}),
+        ...(safeMediaMime ? { media_mime: safeMediaMime } : {})
       });
+      if (targetCircleId !== 'public') {
+        updateDoc(doc(dbFirestore, 'circles', targetCircleId), {
+          last_activity_at: now,
+          updated_at: now
+        }).catch(() => {});
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, `capsules/${newCapsule.id}`);
     }
 
     return newCapsule;
+  },
+
+  togglePinCapsule: async (capsuleId: string, isPinned: boolean): Promise<boolean> => {
+    if (!dbFirestore || !currentUser) return false;
+    try {
+      await updateDoc(doc(dbFirestore, 'capsules', capsuleId), {
+        is_pinned: isPinned,
+        pinned_by: currentUser.id,
+        updated_at: new Date().toISOString()
+      });
+      return true;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `capsules/${capsuleId}`);
+      return false;
+    }
   },
 
   deleteCapsule: async (capsuleId: string): Promise<boolean> => {

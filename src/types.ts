@@ -70,12 +70,22 @@ export interface UserReport {
   created_at: string;
 }
 
+export type CircleVisibility = 'public' | 'private';
+export type CirclePostPermission = 'all_members' | 'admins_only';
+
 export interface Circle {
   id: string;
   nom: string;
   description: string;
   categorie: string;
-  image: string;
+  image: string; // Logo / avatar du cercle (ou couverture historique)
+  cover_image?: string; // Bannière de couverture du cercle
+  visibility?: CircleVisibility;
+  rules?: string[];
+  post_permission?: CirclePostPermission;
+  member_count?: number;
+  last_activity_at?: string;
+  updated_at?: string;
   created_by?: string;
   created_at?: string;
 }
@@ -83,18 +93,66 @@ export interface Circle {
 export interface CircleMember {
   user_id: string;
   circle_id: string;
-  role: 'membre' | 'moderateur';
+  role: 'membre' | 'moderateur' | 'admin';
   joined_at: string;
+  user_nom?: string;
+  user_avatar?: string;
+}
+
+export interface CircleJoinRequest {
+  id: string; // `${user_id}_${circle_id}`
+  circle_id: string;
+  user_id: string;
+  user_nom: string;
+  user_avatar?: string;
+  status: 'pending';
+  created_at: string;
+}
+
+export interface CircleAnnouncement {
+  id: string;
+  circle_id: string;
+  author_id: string;
+  author_nom: string;
+  author_avatar?: string;
+  title: string;
+  content: string;
+  is_pinned: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CircleEvent {
+  id: string;
+  circle_id: string;
+  created_by: string;
+  creator_nom: string;
+  title: string;
+  description: string;
+  event_date: string;
+  event_time?: string;
+  location?: string;
+  is_online: boolean;
+  meeting_link?: string;
+  attendee_ids: string[];
+  interested_ids: string[];
+  created_at: string;
 }
 
 export interface Capsule {
   id: string;
   auteur_id: string;
   circle_id: string;
-  type: 'texte' | 'audio' | 'video' | 'image';
-  contenu: string; // text content, or base64 audio data URI
+  type: 'texte' | 'audio' | 'video' | 'image' | 'document';
+  contenu: string; // text content, or base64 audio/media URI
   langue_dorigine: 'fr' | 'ha' | 'en';
   created_at: string;
+  media_url?: string;
+  media_name?: string;
+  media_mime?: string;
+  is_pinned?: boolean;
+  pinned_by?: string;
+  updated_at?: string;
   // Joins (optional for display)
   auteur_nom?: string;
   auteur_role?: string;

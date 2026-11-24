@@ -67,6 +67,8 @@ import {
 } from './utils/appearancePreferences';
 import {
   Circle,
+  CircleVisibility,
+  CirclePostPermission,
   Capsule,
   UserProfile,
   CommunityMember,
@@ -78,12 +80,13 @@ import {
   UserSettings,
   DEFAULT_USER_SETTINGS
 } from './types';
-import CircleCard from './components/CircleCard';
 import CapsuleCard from './components/CapsuleCard';
 import AudioRecorder from './components/AudioRecorder';
 import ChatView from './components/ChatView';
 import SettingsView from './components/SettingsView';
 import CircleGroupPage from './components/CircleGroupPage';
+import CirclesExplorer from './components/circles/CirclesExplorer';
+import CreateCircleModal, { CreateCircleFormPayload } from './components/circles/CreateCircleModal';
 import AuthPortal from './components/AuthPortal';
 import ZaureLandingPage from './components/ZaureLandingPage';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -200,6 +203,8 @@ export default function App() {
   const [capsules, setCapsules] = useState<Capsule[]>(cachedCapsules);
   const [allUsers, setAllUsers] = useState<UserProfile[]>(cachedUsers);
   const [joinedCircleIds, setJoinedCircleIds] = useState<string[]>(cachedJoinedCircles);
+  const [circleMemberCounts, setCircleMemberCounts] = useState<Record<string, number>>({});
+  const [pendingCircleRequestIds, setPendingCircleRequestIds] = useState<string[]>([]);
 
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   const circlesRef = useRef<Circle[]>(circles);
@@ -259,8 +264,9 @@ export default function App() {
   // Feed filters, Search & UX helpers
   const [feedFilter, setFeedFilter] = useState<'all' | 'public' | 'joined' | 'audio' | 'questions'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [circleSearchQuery, setCircleSearchQuery] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('Tous');
   const [isFeedLoading, setIsFeedLoading] = useState<boolean>(cachedCapsules.length === 0);
   const [visibleFeedCount, setVisibleFeedCount] = useState<number>(10);
   const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
@@ -309,12 +315,6 @@ export default function App() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Circle form states
-  const [newCircleNom, setNewCircleNom] = useState('');
-  const [newCircleDesc, setNewCircleDesc] = useState('');
-  const [newCircleCat, setNewCircleCat] = useState('Médecine');
-  const [newCircleImg, setNewCircleImg] = useState('');
-
   // Capsule form states
   const [newCapsuleCircleId, setNewCapsuleCircleId] = useState('public');
   const [newCapsuleType, setNewCapsuleType] = useState<'texte' | 'audio'>('texte');
@@ -354,6 +354,7 @@ export default function App() {
       setIsAuthResolving(false);
       if (!user) {
         setJoinedCircleIds([]);
+        setPendingCircleRequestIds([]);
         setAllUsers([]);
         setCapsules([]);
         lastCapsulesScopeRef.current = '';
@@ -414,10 +415,19 @@ export default function App() {
 
     window.addEventListener('online', resyncOnWake);
     document.addEventListener('visibilitychange', resyncOnWake);
+
+    const unsubCounts = zaureService.subscribeCircleMemberCounts(setCircleMemberCounts);
+    const unsubPendingRequests = zaureService.subscribeUserCircleJoinRequests(
+      currentUserId,
+      setPendingCircleRequestIds
+    );
+
     return () => {
       active = false;
       window.removeEventListener('online', resyncOnWake);
       document.removeEventListener('visibilitychange', resyncOnWake);
+      unsubCounts();
+      unsubPendingRequests();
     };
   }, [isAuthResolving, currentUserId]);
 
@@ -605,11 +615,32 @@ export default function App() {
       if (success) {
         setJoinedCircleIds((prev) => prev.filter((id) => id !== circleId));
       }
-    } else {
-      const success = await zaureService.joinCircle(circleId, currentUser.id);
-      if (success) {
-        setJoinedCircleIds((prev) => [...prev, circleId]);
+      return;
+    }
+
+    const isPending = pendingCircleRequestIds.includes(circleId);
+    if (isPending) {
+      const cancelled = await zaureService.cancelJoinCircleRequest(circleId, currentUser.id);
+      if (cancelled) {
+        setPendingCircleRequestIds((prev) => prev.filter((id) => id !== circleId));
       }
+      return;
+    }
+
+    const targetCircle = circles.find((c) => c.id === circleId);
+    if (targetCircle?.visibility === 'private') {
+      const requested = await zaureService.requestJoinCircle(circleId);
+      if (requested) {
+        setPendingCircleRequestIds((prev) =>
+          prev.includes(circleId) ? prev : [...prev, circleId]
+        );
+      }
+      return;
+    }
+
+    const success = await zaureService.joinCircle(circleId, currentUser.id);
+    if (success) {
+      setJoinedCircleIds((prev) => (prev.includes(circleId) ? prev : [...prev, circleId]));
     }
   };
 
@@ -802,39 +833,39 @@ export default function App() {
   };
 
   // Create Circle Submit
-  const handleCreateCircleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCircleNom || !newCircleDesc) return;
-
-    const imgMap: { [key: string]: string } = {
-      'Médecine': 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&q=80&w=600',
-      'Langues': 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=600',
-      'Sciences': 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600',
-      'Culture': 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&q=80&w=600'
-    };
-
-    const imageUrl = newCircleImg || imgMap[newCircleCat] || imgMap['Sciences'];
-
-    try {
-      const added = await zaureService.createCircle(newCircleNom, newCircleDesc, newCircleCat, imageUrl);
-      const allCircles = await zaureService.getCircles();
-      setCircles(allCircles);
-      setJoinedCircleIds((prev) => [...prev, added.id]);
-      setFeedFilter('all');
-      navigate('/feed');
-      setNewCircleNom('');
-      setNewCircleDesc('');
-      setNewCircleImg('');
-      setShowCreateCircle(false);
-      loadCapsules();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleCreateCirclePayload = async (payload: CreateCircleFormPayload) => {
+    const added = await zaureService.createCircle(
+      payload.nom,
+      payload.description,
+      payload.categorie,
+      payload.image,
+      {
+        cover_image: payload.cover_image,
+        visibility: payload.visibility,
+        rules: payload.rules,
+        post_permission: payload.post_permission
+      }
+    );
+    const allCircles = await zaureService.getCircles();
+    setCircles(allCircles);
+    setJoinedCircleIds((prev) => (prev.includes(added.id) ? prev : [...prev, added.id]));
+    setShowCreateCircle(false);
+    navigate(`/circles/${encodeURIComponent(added.id)}`);
+    loadCapsules();
   };
 
   const handleUpdateCircle = async (
     circleId: string,
-    updates: { nom: string; description: string; categorie: string; image: string }
+    updates: {
+      nom?: string;
+      description?: string;
+      categorie?: string;
+      image?: string;
+      cover_image?: string;
+      visibility?: CircleVisibility;
+      post_permission?: CirclePostPermission;
+      rules?: string[];
+    }
   ) => {
     const updated = await zaureService.updateCircle(circleId, updates);
     if (updated) {
@@ -883,14 +914,6 @@ export default function App() {
       setIsPublishingCapsule(false);
     }
   };
-
-  // Quick preset suggestions for circle covers
-  const presetImages = [
-    { name: 'Santé Sahel', url: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=400' },
-    { name: 'Langues & Haoussa', url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=400' },
-    { name: 'Agro-écologie', url: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80&w=400' },
-    { name: 'Technologies', url: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=400' }
-  ];
 
   // Members list for @mentions on public out-of-circle posts
   const publicMentionMembers = useMemo<CommunityMember[]>(() => {
@@ -1038,23 +1061,6 @@ export default function App() {
       clearTimeout(clearTimer);
     };
   }, [focusedItemId, activeTab, displayedFeedItems, visibleFeedCount]);
-
-  // Filtered Circles based on search & category
-  const displayedCircles = useMemo(() => {
-    let list = circles;
-    if (categoryFilter !== 'all') {
-      list = list.filter((c) => c.categorie.toLowerCase().includes(categoryFilter.toLowerCase()));
-    }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      list = list.filter((c) => 
-        c.nom.toLowerCase().includes(query) || 
-        c.description.toLowerCase().includes(query) ||
-        c.categorie.toLowerCase().includes(query)
-      );
-    }
-    return list;
-  }, [circles, categoryFilter, searchQuery]);
 
   // Verified Mentors
   const mentorsList = useMemo(() => {
@@ -1320,12 +1326,12 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion={reducedMotionPref ? 'always' : 'user'}>
-      <div className="min-h-screen bg-[#F3F6FB] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden" id="main-app-container">
+      <div className="min-h-screen zaure-bg-canvas flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden" id="main-app-container">
       
       {/* ============================================================ */}
       {/* 1. TOP NAVBAR (ANDROID MOBILE FIRST + DESKTOP APP BAR) */}
       {/* ============================================================ */}
-      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 shadow-2xs w-full pt-[env(safe-area-inset-top,0px)]" id="header-navbar">
+      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 zaure-shadow-xs w-full pt-[env(safe-area-inset-top,0px)]" id="header-navbar">
         <div className="max-w-[1520px] w-full mx-auto px-2.5 sm:px-4 lg:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
           
           {/* ZONE GAUCHE : Hamburger (Mobile/Tablet) + Logo ZAURE */}
@@ -1350,7 +1356,7 @@ export default function App() {
               className="flex items-center gap-2 group shrink-0 min-h-[44px]"
               title="Accueil Zaure"
             >
-              <div className="bg-blue-600 text-white font-black text-base sm:text-lg tracking-wider rounded-xl w-9 h-9 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+              <div className="zaure-grad-primary text-white font-black text-base sm:text-lg tracking-wider rounded-xl w-9 h-9 flex items-center justify-center zaure-shadow-xs group-hover:scale-105 transition-transform">
                 Z
               </div>
               <span className="text-lg sm:text-xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
@@ -1629,7 +1635,7 @@ export default function App() {
         {/* ======================================================== */}
         <aside className="hidden lg:block w-60 xl:w-64 shrink-0 space-y-3 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-none">
           
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-2.5 shadow-2xs space-y-1">
+          <div className="zaure-card rounded-3xl p-2.5 space-y-1">
             <button
               type="button"
               onClick={() => {
@@ -2086,12 +2092,31 @@ export default function App() {
                     circle={circles.find((c) => c.id === selectedCircleId)!}
                     capsules={capsules}
                     isJoined={joinedCircleIds.includes(selectedCircleId)}
+                    isPending={pendingCircleRequestIds.includes(selectedCircleId)}
+                    memberCounts={circleMemberCounts}
                     currentUser={currentUser}
+                    bookmarkedIds={bookmarkedIds}
+                    onToggleBookmark={toggleBookmark}
+                    onAuthorClick={openUserProfile}
                     onBack={() => navigate('/circles')}
                     onToggleJoin={() => handleToggleJoinCircle(selectedCircleId)}
-                    onCreateCapsule={async (circleId, type, contenu, langue) => {
-                      const added = await zaureService.createCapsule(circleId, type, contenu, langue);
+                    onCreateCapsule={async (circleId, type, contenu, langue, media) => {
+                      const added = await zaureService.createCapsule(circleId, type, contenu, langue, media);
                       setCapsules((prev) => [added, ...prev]);
+                    }}
+                    onDeleteCapsule={async (capsuleId) => {
+                      const ok = await zaureService.deleteCapsule(capsuleId);
+                      if (ok) {
+                        setCapsules((prev) => prev.filter((c) => c.id !== capsuleId));
+                      }
+                    }}
+                    onTogglePinCapsule={async (capsuleId, nextPinned) => {
+                      const ok = await zaureService.togglePinCapsule(capsuleId, nextPinned);
+                      if (ok) {
+                        setCapsules((prev) =>
+                          prev.map((c) => (c.id === capsuleId ? { ...c, is_pinned: nextPinned } : c))
+                        );
+                      }
                     }}
                     onUpdateCircle={handleUpdateCircle}
                     onDeleteCircle={handleDeleteCircle}
@@ -2205,70 +2230,30 @@ export default function App() {
 
           {/* 5. VUE SPÉCIFIQUE : EXPLORATEUR DE TOUS LES CERCLES */}
           {parsedRoute.kind !== 'not_found' && activeTab === 'feed' && selectedCircleId === 'all' && feedSection === 'circles' && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
-                      <Compass className="w-5 h-5 text-blue-600" />
-                      <span>Explorer tous les Cercles de Savoir</span>
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Trouvez et rejoignez des communautés d'apprentissage thématiques au Sahel.
-                    </p>
-                  </div>
-                  
-                  {currentUser && (
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateCircle(true)}
-                      className="min-h-[38px] px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Créer un Cercle</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Category Pills Filter */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pt-4 scrollbar-none">
-                  {['all', 'Médecine', 'Langues', 'Sciences', 'Culture'].map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`min-h-[34px] px-3 py-1 text-xs font-bold rounded-full transition shrink-0 ${
-                        categoryFilter === cat
-                          ? 'bg-slate-950 text-white shadow-xs'
-                          : 'bg-[#F0F2F5] text-slate-600 hover:bg-slate-200/80'
-                      }`}
-                    >
-                      {cat === 'all' ? 'Toutes catégories' : cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grid of Circles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {displayedCircles.map((circle) => {
-                  const isJoined = joinedCircleIds.includes(circle.id);
-                  return (
-                    <CircleCard
-                      key={circle.id}
-                      circle={circle}
-                      isJoined={isJoined}
-                      currentUser={currentUser}
-                      onToggleJoin={() => handleToggleJoinCircle(circle.id)}
-                      onSelect={() => navigate(`/circles/${encodeURIComponent(circle.id)}`)}
-                      onUpdateCircle={handleUpdateCircle}
-                      onDeleteCircle={handleDeleteCircle}
-                      isActive={false}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+            <CirclesExplorer
+              circles={circles}
+              circlesLoaded={circlesLoaded}
+              capsules={capsules}
+              joinedCircleIds={joinedCircleIds}
+              pendingRequestCircleIds={pendingCircleRequestIds}
+              memberCounts={circleMemberCounts}
+              currentUser={currentUser}
+              categoryFilter={categoryFilter}
+              onCategoryFilterChange={setCategoryFilter}
+              searchQuery={circleSearchQuery}
+              onSearchQueryChange={setCircleSearchQuery}
+              onOpenCreateCircle={() => {
+                if (!currentUser) {
+                  setShowAuthModal(true);
+                  return;
+                }
+                setShowCreateCircle(true);
+              }}
+              onToggleJoinCircle={handleToggleJoinCircle}
+              onSelectCircle={(circleId) => navigate(`/circles/${encodeURIComponent(circleId)}`)}
+              onUpdateCircle={handleUpdateCircle}
+              onDeleteCircle={handleDeleteCircle}
+            />
           )}
 
           {/* 6. VUE PRINCIPALE : FIL D'ACTUALITÉ DU SAVOIR (FEED CENTRAL) */}
@@ -2738,30 +2723,30 @@ export default function App() {
                     {[1, 2, 3].map((n) => (
                       <div
                         key={n}
-                        className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] animate-pulse space-y-3.5"
+                        className="zaure-card rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-3.5"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-200 shrink-0" />
+                          <div className="w-10 h-10 rounded-full zaure-animate-shimmer shrink-0" />
                           <div className="space-y-2 flex-1">
-                            <div className="h-3.5 bg-slate-200 rounded w-1/3" />
-                            <div className="h-2.5 bg-slate-100 rounded w-1/4" />
+                            <div className="h-3.5 zaure-animate-shimmer rounded w-1/3" />
+                            <div className="h-2.5 zaure-animate-shimmer rounded w-1/4" />
                           </div>
                         </div>
                         <div className="space-y-2 pt-1">
-                          <div className="h-3 bg-slate-100 rounded w-full" />
-                          <div className="h-3 bg-slate-100 rounded w-5/6" />
+                          <div className="h-3 zaure-animate-shimmer rounded w-full" />
+                          <div className="h-3 zaure-animate-shimmer rounded w-5/6" />
                         </div>
-                        <div className="h-36 bg-slate-100 rounded-2xl w-full" />
-                        <div className="flex justify-between pt-2 border-t border-slate-100">
-                          <div className="h-7 bg-slate-100 rounded-xl w-20" />
-                          <div className="h-7 bg-slate-100 rounded-xl w-20" />
-                          <div className="h-7 bg-slate-100 rounded-xl w-20" />
+                        <div className="h-36 zaure-animate-shimmer rounded-2xl w-full" />
+                        <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <div className="h-7 zaure-animate-shimmer rounded-xl w-20" />
+                          <div className="h-7 zaure-animate-shimmer rounded-xl w-20" />
+                          <div className="h-7 zaure-animate-shimmer rounded-xl w-20" />
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : displayedFeedItems.length === 0 ? (
-                  <div className="bg-white border border-slate-200/85 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+                  <div className="zaure-card rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center zaure-animate-fade-in">
                     {/* Custom Zaure SVG Empty State Illustration */}
                     <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-blue-50/80 border border-blue-100 flex items-center justify-center">
                       <svg
@@ -2893,7 +2878,7 @@ export default function App() {
         <aside className="hidden xl:block w-72 2xl:w-80 shrink-0 space-y-4 sticky top-20 self-start max-h-[calc(100vh-5.5rem)] overflow-y-auto scrollbar-none">
           
           {/* 1. Mes cercles (Image 2 circular shortcut grid using REAL Firestore circles) */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-4 shadow-2xs">
+          <div className="zaure-card rounded-3xl p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-extrabold text-slate-900 dark:text-white">
                 Mes cercles
@@ -2908,7 +2893,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-4 gap-2">
-              {circles.slice(0, 3).map((circle) => (
+              {(userJoinedCircles.length > 0 ? userJoinedCircles : circles).slice(0, 3).map((circle) => (
                 <button
                   key={circle.id}
                   type="button"
@@ -2949,7 +2934,7 @@ export default function App() {
           </div>
 
           {/* 2. Activités récentes (Powered by LIVE Firestore notifications) */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-4 shadow-2xs">
+          <div className="zaure-card rounded-3xl p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-extrabold text-slate-900 dark:text-white">
                 Activités récentes
@@ -3098,7 +3083,7 @@ export default function App() {
       {/* ============================================================ */}
       <nav
         aria-label="Navigation Android principale"
-        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] z-50 px-0.5 pt-1 pb-safe-nav grid grid-cols-6 items-center"
+        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 zaure-shadow-nav z-50 px-0.5 pt-1 pb-safe-nav grid grid-cols-6 items-center"
         id="mobile-bottom-navigation"
       >
         {/* 1. Accueil */}
@@ -3247,115 +3232,11 @@ export default function App() {
       {/* ============================================================ */}
       {/* 4. MODAL : CRÉER UN CERCLE DE SAVOIR */}
       {/* ============================================================ */}
-      {showCreateCircle && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-slate-100">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-extrabold text-slate-950 text-base">Créer un Cercle de Savoir</h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateCircle(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-full"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 my-3 leading-relaxed">
-              Fédérez des praticiens, apprenants et enseignants autour d'une thématique au Sahel.
-            </p>
-
-            <form onSubmit={handleCreateCircleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Nom du cercle</label>
-                <input
-                  type="text"
-                  placeholder="Ex : Pédiatrie & Nourrissons, Proverbes Haoussa..."
-                  required
-                  value={newCircleNom}
-                  onChange={(e) => setNewCircleNom(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 bg-[#F0F2F5] focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Description d'apprentissage</label>
-                <textarea
-                  placeholder="Expliquez clairement ce que les membres apprendront et partageront dans ce cercle."
-                  required
-                  value={newCircleDesc}
-                  onChange={(e) => setNewCircleDesc(e.target.value)}
-                  rows={3}
-                  className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 bg-[#F0F2F5] focus:bg-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Catégorie</label>
-                  <select
-                    value={newCircleCat}
-                    onChange={(e) => setNewCircleCat(e.target.value)}
-                    className="w-full text-xs bg-[#F0F2F5] border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
-                  >
-                    <option value="Médecine">Médecine / Santé</option>
-                    <option value="Langues">Langues / Culture</option>
-                    <option value="Sciences">Sciences / Agriculture</option>
-                    <option value="Culture">Éducation générale</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Image de couverture</label>
-                  <input
-                    type="text"
-                    placeholder="URL (optionnelle)"
-                    value={newCircleImg}
-                    onChange={(e) => setNewCircleImg(e.target.value)}
-                    className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 bg-[#F0F2F5] focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold mb-1.5">Ou choisissez un thème prédéfini :</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {presetImages.map((img) => (
-                    <button
-                      key={img.name}
-                      type="button"
-                      onClick={() => setNewCircleImg(img.url)}
-                      className={`text-[9px] font-semibold p-1.5 border rounded-xl truncate transition ${
-                        newCircleImg === img.url 
-                          ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold' 
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                      }`}
-                    >
-                      {img.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateCircle(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-semibold transition"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-xs"
-                >
-                  Créer le cercle
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateCircleModal
+        isOpen={showCreateCircle}
+        onClose={() => setShowCreateCircle(false)}
+        onSubmit={handleCreateCirclePayload}
+      />
 
       {/* ============================================================ */}
       {/* 5. MODAL : AUTHENTIFICATION & INSCRIPTION RAPIDE (1 ÉTAPE)    */}

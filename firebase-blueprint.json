@@ -114,7 +114,7 @@
     },
     "Circle": {
       "title": "Circle",
-      "description": "Thematic knowledge sharing circle.",
+      "description": "Thematic knowledge sharing circle with visibility, rules, cover/avatar, and activity metrics.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
@@ -122,6 +122,13 @@
         "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
         "categorie": { "type": "string", "minLength": 1, "maxLength": 60 },
         "image": { "type": "string", "maxLength": 350000 },
+        "cover_image": { "type": "string", "maxLength": 350000 },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "rules": { "type": "array" },
+        "post_permission": { "type": "string", "enum": ["all_members", "admins_only"] },
+        "member_count": { "type": "integer" },
+        "last_activity_at": { "type": "string", "maxLength": 64 },
+        "updated_at": { "type": "string", "maxLength": 64 },
         "created_by": { "type": "string", "maxLength": 128 },
         "created_at": { "type": "string", "maxLength": 64 }
       },
@@ -129,28 +136,91 @@
     },
     "CircleMember": {
       "title": "CircleMember",
-      "description": "Membership record linking a user to a circle.",
+      "description": "Membership record linking a user to a circle with role.",
       "type": "object",
       "properties": {
         "user_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "role": { "type": "string", "enum": ["membre", "moderateur"] },
-        "joined_at": { "type": "string", "maxLength": 64 }
+        "role": { "type": "string", "enum": ["membre", "moderateur", "admin"] },
+        "joined_at": { "type": "string", "maxLength": 64 },
+        "user_nom": { "type": "string", "maxLength": 120 },
+        "user_avatar": { "type": "string", "maxLength": 350000 }
       },
       "required": ["user_id", "circle_id", "role", "joined_at"]
     },
+    "CircleJoinRequest": {
+      "title": "CircleJoinRequest",
+      "description": "Pending membership request for a private circle (${user_id}_${circle_id}).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "user_avatar": { "type": "string", "maxLength": 350000 },
+        "status": { "type": "string", "enum": ["pending"] },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "circle_id", "user_id", "user_nom", "status", "created_at"]
+    },
+    "CircleAnnouncement": {
+      "title": "CircleAnnouncement",
+      "description": "Official announcement inside a Circle, optionally pinned at top.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "author_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "author_nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "author_avatar": { "type": "string", "maxLength": 350000 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 3000 },
+        "is_pinned": { "type": "boolean" },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "updated_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "circle_id", "author_id", "author_nom", "title", "content", "is_pinned", "created_at"]
+    },
+    "CircleEvent": {
+      "title": "CircleEvent",
+      "description": "Scheduled event or webinar inside a Circle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "created_by": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "creator_nom": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "event_date": { "type": "string", "maxLength": 32 },
+        "event_time": { "type": "string", "maxLength": 16 },
+        "location": { "type": "string", "maxLength": 200 },
+        "is_online": { "type": "boolean" },
+        "meeting_link": { "type": "string", "maxLength": 400 },
+        "attendee_ids": { "type": "array" },
+        "interested_ids": { "type": "array" },
+        "created_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "circle_id", "created_by", "creator_nom", "title", "description", "event_date", "is_online", "attendee_ids", "interested_ids", "created_at"]
+    },
     "Capsule": {
       "title": "Capsule",
-      "description": "Educational text or audio capsule shared on the public feed or inside a circle.",
+      "description": "Educational text, audio, image, video, or document capsule shared on the public feed or inside a circle.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "auteur_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "circle_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Target circle ID or 'public' when published outside any circle." },
         "circleId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "type": { "type": "string", "enum": ["texte", "audio", "video", "image"] },
+        "type": { "type": "string", "enum": ["texte", "audio", "video", "image", "document"] },
         "contenu": { "type": "string", "minLength": 1, "maxLength": 650000 },
         "langue_dorigine": { "type": "string", "enum": ["fr", "ha", "en"] },
+        "media_url": { "type": "string", "maxLength": 650000 },
+        "media_name": { "type": "string", "maxLength": 200 },
+        "media_mime": { "type": "string", "maxLength": 100 },
+        "is_pinned": { "type": "boolean" },
+        "pinned_by": { "type": "string", "maxLength": 128 },
+        "updated_at": { "type": "string", "maxLength": 64 },
         "created_at": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "auteur_id", "circle_id", "type", "contenu", "langue_dorigine", "created_at"]
@@ -649,7 +719,19 @@
     },
     "/circle_members/{memberId}": {
       "schema": { "$ref": "#/entities/CircleMember" },
-      "description": "Owner-scoped circle membership links."
+      "description": "Circle membership links with role and display metadata."
+    },
+    "/circle_join_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/CircleJoinRequest" },
+      "description": "Pending join requests for private circles."
+    },
+    "/circle_announcements/{annId}": {
+      "schema": { "$ref": "#/entities/CircleAnnouncement" },
+      "description": "Official and pinned announcements inside circles."
+    },
+    "/circle_events/{eventId}": {
+      "schema": { "$ref": "#/entities/CircleEvent" },
+      "description": "Scheduled events and RSVPs inside circles."
     },
     "/capsules/{capsuleId}": {
       "schema": { "$ref": "#/entities/Capsule" },

@@ -1,17 +1,36 @@
 import React from 'react';
-import { Users, LogIn, Check, ArrowRight } from 'lucide-react';
-import { Circle, UserProfile } from '../types';
-import { useTranslation } from '../context/LanguageContext';
+import { Users, Check, Lock, Clock, Sparkles } from 'lucide-react';
+import { Circle, CirclePostPermission, CircleVisibility, UserProfile } from '../types';
 import CircleOptionsMenu from './CircleOptionsMenu';
+import {
+  formatCircleMemberCount,
+  formatCircleRelativeActivity,
+  getCircleActivityTimestamp,
+  getCircleMemberCount,
+  getCircleMembershipStatus
+} from './circles/circleHelpers';
 
 interface CircleCardProps {
   circle: Circle;
   isJoined: boolean;
+  isPending?: boolean;
+  memberCounts?: Record<string, number>;
+  capsuleCount?: number;
+  latestCapsuleAt?: string;
   onToggleJoin: () => Promise<void> | void;
   onSelect: () => void;
   onUpdateCircle?: (
     circleId: string,
-    updates: { nom: string; description: string; categorie: string; image: string }
+    updates: {
+      nom: string;
+      description: string;
+      categorie: string;
+      image: string;
+      cover_image?: string;
+      visibility?: CircleVisibility;
+      post_permission?: CirclePostPermission;
+      rules?: string[];
+    }
   ) => Promise<void>;
   onDeleteCircle?: (circleId: string) => Promise<void>;
   isActive: boolean;
@@ -22,6 +41,10 @@ interface CircleCardProps {
 export default function CircleCard({
   circle,
   isJoined,
+  isPending = false,
+  memberCounts,
+  capsuleCount = 0,
+  latestCapsuleAt,
   onToggleJoin,
   onSelect,
   onUpdateCircle,
@@ -29,115 +52,285 @@ export default function CircleCard({
   isActive,
   currentUser
 }: CircleCardProps) {
-  const { t } = useTranslation();
+  const memberCount = getCircleMemberCount(circle, memberCounts);
+  const memberLabel = formatCircleMemberCount(memberCount);
+  const membershipStatus = getCircleMembershipStatus(
+    circle,
+    isJoined ? [circle.id] : [],
+    isPending ? [circle.id] : []
+  );
+  const isPrivate = (circle.visibility || 'public') === 'private';
+
+  const latestAtMs = getCircleActivityTimestamp(
+    circle,
+    capsuleCount ? { [circle.id]: capsuleCount } : undefined,
+    latestCapsuleAt ? { [circle.id]: latestCapsuleAt } : undefined
+  );
+  const activityLabel = formatCircleRelativeActivity(latestAtMs);
+
+  const handleActionClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (membershipStatus === 'member') {
+      onSelect();
+    } else {
+      onToggleJoin();
+    }
+  };
+
+  const renderDesktopActionButton = () => {
+    if (membershipStatus === 'member') {
+      return (
+        <button
+          type="button"
+          onClick={handleActionClick}
+          className="min-h-[34px] px-3.5 py-1.5 rounded-full zaure-grad-primary text-white text-[11.5px] font-bold zaure-btn-press zaure-shadow-xs shrink-0"
+        >
+          Ouvrir le Cercle
+        </button>
+      );
+    }
+    if (membershipStatus === 'pending') {
+      return (
+        <button
+          type="button"
+          onClick={handleActionClick}
+          title="Cliquer pour annuler votre demande"
+          className="min-h-[34px] px-3.5 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[11px] font-bold zaure-btn-press shrink-0 flex items-center gap-1"
+        >
+          <Clock className="w-3 h-3 shrink-0" />
+          <span>Demande envoyée</span>
+        </button>
+      );
+    }
+    if (membershipStatus === 'private') {
+      return (
+        <button
+          type="button"
+          onClick={handleActionClick}
+          className="min-h-[34px] px-3.5 py-1.5 rounded-full border border-[#2563EB] text-[#2563EB] dark:text-blue-400 dark:border-blue-500 hover:bg-[#2563EB] hover:text-white text-[11px] font-bold zaure-btn-press shrink-0"
+        >
+          Demander à rejoindre
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={handleActionClick}
+        className="min-h-[34px] px-4 py-1.5 rounded-full border border-[#2563EB] text-[#2563EB] dark:text-blue-400 dark:border-blue-500 hover:bg-[#2563EB] hover:text-white text-xs font-bold zaure-btn-press shrink-0"
+      >
+        Rejoindre
+      </button>
+    );
+  };
+
+  const renderMobileActionButton = () => {
+    if (membershipStatus === 'member') {
+      return (
+        <button
+          type="button"
+          onClick={handleActionClick}
+          className="min-h-[32px] px-3.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[#2563EB] dark:text-blue-300 text-[11.5px] font-bold transition active:scale-95 shrink-0"
+        >
+          Ouvrir le Cercle
+        </button>
+      );
+    }
+    if (membershipStatus === 'pending') {
+      return (
+        <button
+          type="button"
+          onClick={handleActionClick}
+          className="min-h-[32px] px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-[11px] font-bold transition active:scale-95 shrink-0"
+        >
+          Demande envoyée
+        </button>
+      );
+    }
+    if (membershipStatus === 'private') {
+      return (
+        <button
+          type="button"
+          onClick={handleActionClick}
+          className="min-h-[32px] px-3 py-1 rounded-full bg-[#2563EB] hover:bg-blue-700 text-white text-[11px] font-bold transition shadow-2xs active:scale-95 shrink-0"
+        >
+          Demander à rejoindre
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={handleActionClick}
+        className="min-h-[32px] px-4 py-1 rounded-full bg-[#2563EB] hover:bg-blue-700 text-white text-[11.5px] font-bold transition shadow-2xs active:scale-95 shrink-0"
+      >
+        Rejoindre
+      </button>
+    );
+  };
 
   return (
     <article
-      className={`group relative rounded-2xl overflow-hidden transition-all duration-200 bg-white flex flex-col justify-between border ${
-        isActive 
-          ? 'border-blue-600 ring-2 ring-blue-500/20 shadow-md' 
-          : 'border-slate-200/80 hover:border-blue-500/40 hover:shadow-md'
-      }`}
+      onClick={onSelect}
       id={`circle-card-${circle.id}`}
+      className={`group cursor-pointer zaure-card-interactive rounded-2xl ${
+        isActive ? 'border-[#2563EB] ring-2 ring-blue-500/20' : ''
+      }`}
     >
-      {/* Cover Image & Category */}
-      <div 
-        className="relative h-32 sm:h-36 w-full bg-slate-900 overflow-hidden cursor-pointer select-none" 
-        onClick={onSelect}
-      >
-        <img
-          src={circle.image}
-          alt={circle.nom}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
-          referrerPolicy="no-referrer"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent" />
-        
-        {/* Unboxed clean metadata kicker */}
-        <div className="absolute top-3 left-3 pr-24 flex items-center gap-1.5 text-[11px] font-semibold text-white/90 drop-shadow-sm truncate">
-          <span>{circle.categorie}</span>
-          <span aria-hidden="true" className="text-red-400">·</span>
-          <span className="text-blue-200 font-medium truncate">Cercle de savoir</span>
+      {/* ANDROID / MOBILE LAYOUT (< 640px): Horizontal compact card matching reference image */}
+      <div className="flex sm:hidden items-center gap-3 p-3.5">
+        {/* Left Circular Avatar + Green Checkmark Badge */}
+        <div className="relative shrink-0">
+          <div className="w-14 h-14 rounded-full p-0.5 ring-2 ring-blue-500/25 bg-blue-50 dark:bg-slate-800 overflow-hidden">
+            {circle.image ? (
+              <img
+                src={circle.image}
+                alt={circle.nom}
+                className="w-full h-full rounded-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-black text-lg flex items-center justify-center">
+                {circle.nom.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+          <span
+            title={isPrivate ? 'Cercle privé' : 'Cercle vérifié & actif'}
+            className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-2xs ${
+              isPrivate ? 'bg-slate-700' : 'bg-[#22C55E]'
+            }`}
+          >
+            {isPrivate ? (
+              <Lock className="w-2.5 h-2.5 text-white" />
+            ) : (
+              <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+            )}
+          </span>
         </div>
 
-        <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
-          {isJoined && (
-            <div className="flex items-center gap-1 bg-blue-600 text-white text-[10px] font-extrabold px-2 py-1 rounded-lg backdrop-blur-xs shadow-xs">
-              <Check className="w-3 h-3 stroke-[3]" />
-              <span>Membre</span>
+        {/* Right Details */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-[14px] text-slate-900 dark:text-white leading-snug truncate group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
+                {circle.nom}
+              </h3>
             </div>
-          )}
-          <CircleOptionsMenu
-            variant="card"
-            circle={circle}
-            isJoined={isJoined}
-            currentUser={currentUser}
-            onOpenCircle={onSelect}
-            onToggleJoin={onToggleJoin}
-            onUpdateCircle={onUpdateCircle}
-            onDeleteCircle={onDeleteCircle}
-          />
-        </div>
+            <div className="-mt-1 -mr-1 shrink-0">
+              <CircleOptionsMenu
+                variant="card"
+                circle={circle}
+                isJoined={isJoined}
+                isPending={isPending}
+                currentUser={currentUser}
+                onOpenCircle={onSelect}
+                onToggleJoin={onToggleJoin}
+                onUpdateCircle={onUpdateCircle}
+                onDeleteCircle={onDeleteCircle}
+              />
+            </div>
+          </div>
 
-        <div className="absolute bottom-2.5 left-3 right-3">
-          <h3 className="font-extrabold text-white text-base leading-tight drop-shadow-sm line-clamp-1 group-hover:text-blue-200 transition-colors">
-            {circle.nom}
-          </h3>
+          <p className="text-[11.5px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+            {circle.description}
+          </p>
+
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+              <Users className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
+              <span className="truncate tabular-nums">{memberLabel}</span>
+            </div>
+            {renderMobileActionButton()}
+          </div>
         </div>
       </div>
 
-      {/* Circle details */}
-      <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between gap-3">
-        <p 
-          className="text-slate-600 text-xs line-clamp-2 leading-relaxed cursor-pointer hover:text-slate-900 transition-colors"
-          onClick={onSelect}
-        >
-          {circle.description}
-        </p>
-
-        {/* Action Controls - touch targets >= 44px */}
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleJoin();
-            }}
-            className={`min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition flex-1 ${
-              isJoined
-                ? 'bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 active:scale-[0.98]'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs active:scale-[0.98]'
-            }`}
-          >
-            {isJoined ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-blue-600" />
-                <span>Membre</span>
-              </>
+      {/* DESKTOP / TABLET LAYOUT (>= 640px): Centered circular card matching reference image */}
+      <div className="hidden sm:flex flex-col justify-between p-4 h-full relative">
+        {/* Top Row: Visibility Pill + 3-dot options menu */}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {isPrivate ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                <Lock className="w-2.5 h-2.5" />
+                <span>Privé</span>
+              </span>
             ) : (
-              <>
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Rejoindre</span>
-              </>
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-400 dark:text-slate-500 truncate">
+                <Sparkles className="w-3 h-3 text-blue-500 shrink-0" />
+                <span className="truncate">{circle.categorie}</span>
+              </span>
             )}
-          </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-            className={`min-h-[44px] px-3.5 py-2 text-xs font-bold rounded-xl border transition flex items-center justify-center gap-1 shrink-0 ${
-              isActive
-                ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                : 'border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
-            }`}
-            title="Consulter les capsules du cercle"
-          >
-            <span>Voir</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="-mr-1.5 -mt-1">
+            <CircleOptionsMenu
+              variant="card"
+              circle={circle}
+              isJoined={isJoined}
+              isPending={isPending}
+              currentUser={currentUser}
+              onOpenCircle={onSelect}
+              onToggleJoin={onToggleJoin}
+              onUpdateCircle={onUpdateCircle}
+              onDeleteCircle={onDeleteCircle}
+            />
+          </div>
+        </div>
+
+        {/* Center Logo & Text */}
+        <div className="flex flex-col items-center text-center px-1">
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full p-1 ring-2 ring-blue-500/25 bg-blue-50/70 dark:bg-slate-800 overflow-hidden group-hover:ring-blue-500/50 transition-all">
+              {circle.image ? (
+                <img
+                  src={circle.image}
+                  alt={circle.nom}
+                  className="w-full h-full rounded-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-black text-2xl flex items-center justify-center">
+                  {circle.nom.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <span
+              title={isPrivate ? 'Cercle privé' : 'Cercle actif'}
+              className={`absolute bottom-0.5 right-0.5 w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-xs ${
+                isPrivate ? 'bg-slate-700' : 'bg-[#22C55E]'
+              }`}
+            >
+              {isPrivate ? (
+                <Lock className="w-3 h-3 text-white" />
+              ) : (
+                <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+              )}
+            </span>
+          </div>
+
+          <h3 className="font-extrabold text-[15px] text-slate-900 dark:text-white mt-3 line-clamp-1 group-hover:text-[#2563EB] dark:group-hover:text-blue-400 transition-colors">
+            {circle.nom}
+          </h3>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 min-h-[2.25rem] leading-relaxed">
+            {circle.description}
+          </p>
+
+          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 mt-1.5">
+            {activityLabel}
+            {capsuleCount > 0 ? ` · ${capsuleCount} publication${capsuleCount > 1 ? 's' : ''}` : ''}
+          </p>
+        </div>
+
+        {/* Footer: Member count + Action Button */}
+        <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-slate-600 dark:text-slate-300 min-w-0">
+            <Users className="w-4 h-4 text-[#2563EB] shrink-0" />
+            <span className="truncate tabular-nums">{memberLabel}</span>
+          </div>
+          {renderDesktopActionButton()}
         </div>
       </div>
     </article>

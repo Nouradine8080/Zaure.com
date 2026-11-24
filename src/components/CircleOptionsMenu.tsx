@@ -17,10 +17,16 @@ import {
   ArrowRight,
   X,
   Camera,
-  AlertTriangle
+  AlertTriangle,
+  Globe,
+  Lock,
+  Image as ImageIcon,
+  Calendar,
+  Clock
 } from 'lucide-react';
-import { Circle, UserProfile } from '../types';
+import { Circle, CirclePostPermission, CircleVisibility, UserProfile } from '../types';
 import { compressImageFile } from '../utils/imageCompressor';
+import { ALL_CREATE_CIRCLE_CATEGORIES } from './circles/circleHelpers';
 
 export interface CircleLocalPrefs {
   muted: boolean;
@@ -81,15 +87,25 @@ const PRESET_COVERS = [
 interface CircleOptionsMenuProps {
   circle: Circle;
   isJoined: boolean;
+  isPending?: boolean;
   currentUser: UserProfile | null;
   variant?: 'header' | 'card';
   onOpenCircle?: () => void;
   onOpenPublish?: () => void;
-  onSelectTab?: (tab: 'feed' | 'about' | 'members') => void;
+  onSelectTab?: (tab: 'feed' | 'about' | 'members' | 'media' | 'events') => void;
   onToggleJoin: () => Promise<void> | void;
   onUpdateCircle?: (
     circleId: string,
-    updates: { nom: string; description: string; categorie: string; image: string }
+    updates: {
+      nom: string;
+      description: string;
+      categorie: string;
+      image: string;
+      cover_image?: string;
+      visibility?: CircleVisibility;
+      post_permission?: CirclePostPermission;
+      rules?: string[];
+    }
   ) => Promise<void>;
   onDeleteCircle?: (circleId: string) => Promise<void>;
 }
@@ -97,6 +113,7 @@ interface CircleOptionsMenuProps {
 export default function CircleOptionsMenu({
   circle,
   isJoined,
+  isPending = false,
   currentUser,
   variant = 'header',
   onOpenCircle,
@@ -120,16 +137,22 @@ export default function CircleOptionsMenu({
   const [editCategorie, setEditCategorie] = useState(circle.categorie);
   const [editDescription, setEditDescription] = useState(circle.description);
   const [editImage, setEditImage] = useState(circle.image);
+  const [editCoverImage, setEditCoverImage] = useState(circle.cover_image || circle.image);
+  const [editVisibility, setEditVisibility] = useState<CircleVisibility>(circle.visibility || 'public');
+  const [editPostPerm, setEditPostPerm] = useState<CirclePostPermission>(circle.post_permission || 'all_members');
+  const [editRulesText, setEditRulesText] = useState((circle.rules || []).join('\n'));
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = currentUser?.email?.toLowerCase() === 'mahamadougarbamoussa8080@gmail.com';
   const isCreator = Boolean(currentUser && circle.created_by && circle.created_by === currentUser.id);
   const canManageCircle = Boolean(currentUser && (isCreator || isAdmin));
+  const isPrivate = circle.visibility === 'private';
 
   useEffect(() => {
     setPrefs(readCirclePrefs(circle.id, currentUser?.id));
@@ -173,13 +196,17 @@ export default function CircleOptionsMenu({
     setEditCategorie(circle.categorie);
     setEditDescription(circle.description);
     setEditImage(circle.image);
+    setEditCoverImage(circle.cover_image || circle.image);
+    setEditVisibility(circle.visibility || 'public');
+    setEditPostPerm(circle.post_permission || 'all_members');
+    setEditRulesText((circle.rules || []).join('\n'));
     setEditError(null);
     setIsOpen(false);
     setShowEditModal(true);
   };
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/?circle=${encodeURIComponent(circle.id)}`;
+    const shareUrl = `${window.location.origin}/circles/${encodeURIComponent(circle.id)}`;
     try {
       await navigator.clipboard?.writeText?.(shareUrl);
     } catch {
@@ -239,7 +266,23 @@ export default function CircleOptionsMenu({
     try {
       const compressed = await compressImageFile(file, 720, 405, 0.78);
       if (compressed.length > 340000) {
-        setEditError('Image trop volumineuse après compression. Choisissez une image plus légère.');
+        setEditError('Image de couverture trop volumineuse après compression.');
+        return;
+      }
+      setEditCoverImage(compressed);
+    } catch {
+      setEditError("Impossible de traiter cette image.");
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditError(null);
+    try {
+      const compressed = await compressImageFile(file, 300, 300, 0.8);
+      if (compressed.length > 340000) {
+        setEditError('Logo trop volumineux après compression.');
         return;
       }
       setEditImage(compressed);
@@ -262,11 +305,20 @@ export default function CircleOptionsMenu({
     setIsSavingEdit(true);
     setEditError(null);
     try {
+      const parsedRules = editRulesText
+        .split('\n')
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0)
+        .slice(0, 20);
       await onUpdateCircle(circle.id, {
         nom: editNom.trim(),
-        categorie: editCategorie.trim() || 'Sciences',
+        categorie: editCategorie.trim() || 'Technologie',
         description: editDescription.trim(),
-        image: editImage.trim() || circle.image
+        image: editImage.trim() || circle.image,
+        cover_image: editCoverImage.trim() || editImage.trim() || circle.image,
+        visibility: editVisibility,
+        post_permission: editPostPerm,
+        rules: parsedRules
       });
       setShowEditModal(false);
     } catch (err: any) {
@@ -294,7 +346,7 @@ export default function CircleOptionsMenu({
           aria-haspopup="menu"
           aria-label={`Paramètres du cercle ${circle.nom}`}
           title="Paramètres et options du cercle"
-          className="w-9 h-9 rounded-xl bg-slate-950/75 hover:bg-slate-950/90 text-white backdrop-blur-md border border-white/20 flex items-center justify-center transition active:scale-95 shadow-sm"
+          className="w-8 h-8 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition active:scale-95"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
@@ -312,11 +364,11 @@ export default function CircleOptionsMenu({
           id="btn-circle-settings-menu"
           className={`min-h-[40px] px-3 py-2 rounded-xl border transition flex items-center gap-1.5 text-xs font-bold active:scale-95 ${
             isOpen
-              ? 'bg-blue-50 border-blue-300 text-blue-700'
-              : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+              ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+              : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
           }`}
         >
-          <MoreVertical className="w-4 h-4 text-slate-700 shrink-0" />
+          <MoreVertical className="w-4 h-4 shrink-0" />
           <span className="hidden sm:inline">Paramètres</span>
         </button>
       )}
@@ -325,18 +377,18 @@ export default function CircleOptionsMenu({
       {isOpen && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-72 sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-40 overflow-hidden animate-fadeIn text-left"
+          className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-40 overflow-hidden animate-fadeIn text-left"
         >
           {/* Dropdown Header */}
-          <div className="px-4 py-3 bg-[#F0F2F5] border-b border-slate-200/80 flex items-center justify-between gap-2">
+          <div className="px-4 py-3 bg-[#F3F6FB] dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                Paramètres du cercle
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Options du cercle
               </p>
-              <p className="text-xs font-extrabold text-slate-900 truncate mt-0.5">{circle.nom}</p>
+              <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate mt-0.5">{circle.nom}</p>
             </div>
-            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-blue-700 shrink-0">
-              {isCreator ? 'Créateur' : isAdmin ? 'Admin' : isJoined ? 'Membre' : 'Public'}
+            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-blue-700 dark:text-blue-400 shrink-0">
+              {isCreator ? 'Créateur' : isAdmin ? 'Admin' : isJoined ? 'Membre' : isPending ? 'En attente' : isPrivate ? 'Privé' : 'Public'}
             </span>
           </div>
 
@@ -383,7 +435,7 @@ export default function CircleOptionsMenu({
                     setIsOpen(false);
                     onSelectTab('about');
                   }}
-                  className="w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 hover:bg-[#F0F2F5] flex items-center gap-2.5 transition"
+                  className="w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-[#F3F6FB] dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
                 >
                   <Info className="w-4 h-4 text-slate-500 shrink-0" />
                   <span>À propos du cercle</span>
@@ -395,10 +447,34 @@ export default function CircleOptionsMenu({
                     setIsOpen(false);
                     onSelectTab('members');
                   }}
-                  className="w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 hover:bg-[#F0F2F5] flex items-center gap-2.5 transition"
+                  className="w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-[#F3F6FB] dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
                 >
                   <ShieldCheck className="w-4 h-4 text-slate-500 shrink-0" />
-                  <span>Règles & Membres</span>
+                  <span>Membres & Modération</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onSelectTab('media');
+                  }}
+                  className="w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-[#F3F6FB] dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
+                >
+                  <ImageIcon className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Médias partagés</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onSelectTab('events');
+                  }}
+                  className="w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-[#F3F6FB] dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
+                >
+                  <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Événements</span>
                 </button>
               </>
             )}
@@ -492,14 +568,26 @@ export default function CircleOptionsMenu({
               onClick={handleJoinAction}
               className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2.5 transition ${
                 isJoined
-                  ? 'text-slate-700 hover:bg-red-50 hover:text-red-700'
-                  : 'text-blue-700 hover:bg-blue-50'
+                  ? 'text-slate-700 dark:text-slate-200 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700'
+                  : isPending
+                    ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                    : 'text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40'
               }`}
             >
               {isJoined ? (
                 <>
                   <LogOut className="w-4 h-4 text-red-600 shrink-0" />
                   <span>Quitter ce cercle</span>
+                </>
+              ) : isPending ? (
+                <>
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Annuler la demande</span>
+                </>
+              ) : isPrivate ? (
+                <>
+                  <Lock className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Demander à rejoindre</span>
                 </>
               ) : (
                 <>
@@ -565,40 +653,73 @@ export default function CircleOptionsMenu({
                   </div>
                 )}
 
-                {/* Cover preview + upload */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Image de couverture
-                  </label>
-                  <div className="relative h-28 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200">
+                {/* Cover + Logo previews */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Image de couverture
+                    </label>
+                    <div className="relative h-28 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200 dark:border-slate-700">
+                      <img
+                        src={editCoverImage || editImage || circle.image}
+                        alt={editNom}
+                        className="w-full h-full object-cover opacity-85"
+                        referrerPolicy="no-referrer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute bottom-2 right-2 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Changer la couverture</span>
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCoverUpload}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-[#F3F6FB] dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700">
                     <img
                       src={editImage || circle.image}
                       alt={editNom}
-                      className="w-full h-full object-cover opacity-85"
+                      className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500/30 shrink-0 bg-white"
                       referrerPolicy="no-referrer"
                     />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Logo / Photo de profil du cercle</p>
+                      <p className="text-[10px] text-slate-500">Affiché dans la grille et l&apos;en-tête</p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute bottom-2 right-2 px-3 py-1.5 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition"
+                      onClick={() => logoInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-blue-600 hover:bg-blue-50 transition shrink-0"
                     >
-                      <Camera className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Changer la photo</span>
+                      Modifier
                     </button>
                     <input
-                      ref={fileInputRef}
+                      ref={logoInputRef}
                       type="file"
                       accept="image/*"
-                      onChange={handleCoverUpload}
+                      onChange={handleLogoUpload}
                       className="hidden"
                     />
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5 mt-2">
+
+                  <div className="grid grid-cols-4 gap-1.5">
                     {PRESET_COVERS.map((preset) => (
                       <button
                         key={preset.name}
                         type="button"
-                        onClick={() => setEditImage(preset.url)}
+                        onClick={() => {
+                          setEditCoverImage(preset.url);
+                          setEditImage(preset.url);
+                        }}
                         className={`text-[9px] font-semibold p-1.5 border rounded-xl truncate transition ${
                           editImage === preset.url
                             ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold'
@@ -622,23 +743,55 @@ export default function CircleOptionsMenu({
                     maxLength={120}
                     value={editNom}
                     onChange={(e) => setEditNom(e.target.value)}
-                    className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 bg-[#F0F2F5] focus:bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100 bg-[#F3F6FB] dark:bg-slate-800 focus:bg-white"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Catégorie
+                    </label>
+                    <select
+                      value={editCategorie}
+                      onChange={(e) => setEditCategorie(e.target.value)}
+                      className="w-full text-xs bg-[#F3F6FB] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100"
+                    >
+                      {ALL_CREATE_CIRCLE_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                      {!ALL_CREATE_CIRCLE_CATEGORIES.includes(editCategorie as any) && (
+                        <option value={editCategorie}>{editCategorie}</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Visibilité
+                    </label>
+                    <select
+                      value={editVisibility}
+                      onChange={(e) => setEditVisibility(e.target.value as CircleVisibility)}
+                      className="w-full text-xs bg-[#F3F6FB] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="public">Public (accès ouvert)</option>
+                      <option value="private">Privé (sur validation)</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Catégorie
+                    Autorisations de publication
                   </label>
                   <select
-                    value={editCategorie}
-                    onChange={(e) => setEditCategorie(e.target.value)}
-                    className="w-full text-xs bg-[#F0F2F5] border border-slate-200 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                    value={editPostPerm}
+                    onChange={(e) => setEditPostPerm(e.target.value as CirclePostPermission)}
+                    className="w-full text-xs bg-[#F3F6FB] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100"
                   >
-                    <option value="Médecine">Médecine / Santé</option>
-                    <option value="Langues">Langues / Culture</option>
-                    <option value="Sciences">Sciences / Agriculture</option>
-                    <option value="Culture">Éducation générale</option>
+                    <option value="all_members">Tous les membres peuvent publier</option>
+                    <option value="admins_only">Admins & Modérateurs uniquement</option>
                   </select>
                 </div>
 
@@ -652,16 +805,29 @@ export default function CircleOptionsMenu({
                     rows={3}
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
-                    className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 bg-[#F0F2F5] focus:bg-white resize-none"
+                    className="w-full text-xs px-3.5 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100 bg-[#F3F6FB] dark:bg-slate-800 focus:bg-white resize-none"
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Règles du cercle (une règle par ligne)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Ex : Respect mutuel&#10;Sources vérifiées uniquement"
+                    value={editRulesText}
+                    onChange={(e) => setEditRulesText(e.target.value)}
+                    className="w-full text-xs px-3.5 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100 bg-[#F3F6FB] dark:bg-slate-800 focus:bg-white resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
                     disabled={isSavingEdit}
-                    className="min-h-[40px] px-4 py-2 border border-slate-200 text-slate-600 text-xs rounded-xl hover:bg-slate-50 font-semibold transition"
+                    className="min-h-[40px] px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold transition"
                   >
                     Annuler
                   </button>

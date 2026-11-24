@@ -263,7 +263,7 @@ export default function AuthPortal({
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#EAF2FF] via-[#F4F8FF] to-[#DFECFF] flex flex-col items-center justify-center px-4 py-8 text-slate-900 font-sans selection:bg-blue-100">
+    <div className="relative min-h-screen overflow-hidden zaure-grad-canvas-soft flex flex-col items-center justify-center px-4 py-8 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-100">
       {/* Subtle Decorative Blue Geometric Background Waves matching mockup */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full bg-gradient-to-br from-blue-600/20 to-sky-400/15 blur-2xl" />
@@ -271,12 +271,12 @@ export default function AuthPortal({
         <div className="absolute -bottom-28 -right-16 w-[400px] h-[400px] rounded-full bg-gradient-to-tl from-blue-600/22 to-sky-400/10 blur-xl" />
       </div>
 
-      <div className="relative z-10 w-full max-w-[440px] mx-auto">
+      <div className="relative z-10 w-full max-w-[440px] mx-auto zaure-animate-scale-in">
         {/* Top Back to Landing & PWA Install */}
         <div className="mb-4 flex items-center justify-between gap-2">
           <Link
             to="/"
-            className="min-h-[40px] inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white/85 hover:bg-white border border-blue-100 px-3.5 py-2 rounded-full shadow-2xs transition"
+            className="min-h-[40px] inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white/85 hover:bg-white border border-blue-100 px-3.5 py-2 rounded-full zaure-shadow-xs zaure-btn-press"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Retour à l'accueil</span>
@@ -285,14 +285,14 @@ export default function AuthPortal({
         </div>
 
         {/* Centered Crisp White Login Card */}
-        <section className="w-full bg-white rounded-[28px] p-7 sm:p-9 shadow-[0_24px_60px_-18px_rgba(29,78,216,0.2)] border border-blue-100/90">
+        <section className="w-full bg-white dark:bg-slate-900 rounded-[28px] p-7 sm:p-9 zaure-shadow-modal border border-blue-100/90 dark:border-slate-800">
           {/* Top Brand Lockup matching Mockup */}
           <div className="flex flex-col items-center text-center">
             <Link
               to="/"
               className="inline-flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 rounded-xl"
             >
-              <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white font-black text-2xl shadow-md shadow-blue-600/25">
+              <span className="w-12 h-12 rounded-2xl zaure-grad-primary flex items-center justify-center text-white font-black text-2xl zaure-shadow-primary">
                 Z
               </span>
               <span className="flex flex-col items-start">

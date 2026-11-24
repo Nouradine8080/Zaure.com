@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Circle, UserProfile } from '../../types';
 import { DEFAULT_AVATAR_URL } from '../../constants/registration';
+import { ZAURE_SURFACES } from '../../styles/designSystem';
 
 export interface ProfileCompletionSummary {
   percent: number;
@@ -81,7 +82,7 @@ export default function DashboardWelcomeAndShortcuts({
       {currentUser && (
         <section
           aria-label="Bienvenue sur ZAURE"
-          className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-[#1D4ED8] via-[#2563EB] to-[#0EA5E9] text-white p-3 sm:p-5 shadow-md shadow-blue-600/15"
+          className={`${ZAURE_SURFACES.heroBanner} p-3 sm:p-5`}
         >
           <div
             aria-hidden="true"
@@ -194,13 +195,11 @@ export default function DashboardWelcomeAndShortcuts({
             className="w-[62px] sm:w-[68px] shrink-0 flex flex-col items-center text-center group"
           >
             <span
-              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition group-hover:scale-105 group-active:scale-95 ${
-                normalizedQuery === 'santé'
-                  ? 'bg-gradient-to-tr from-blue-700 to-sky-400 ring-2 ring-blue-500/30'
-                  : 'bg-gradient-to-tr from-blue-600 to-sky-400'
+              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] zaure-grad-sky-ring transition group-hover:scale-105 group-active:scale-95 ${
+                normalizedQuery === 'santé' ? 'ring-2 ring-blue-500/30' : ''
               }`}
             >
-              <span className="w-full h-full rounded-full bg-gradient-to-br from-rose-500 to-amber-500 border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">
+              <span className="w-full h-full rounded-full zaure-grad-health border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">
                 <HeartPulse className="w-6 h-6" />
               </span>
             </span>
@@ -216,13 +215,11 @@ export default function DashboardWelcomeAndShortcuts({
             className="w-[62px] sm:w-[68px] shrink-0 flex flex-col items-center text-center group"
           >
             <span
-              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition group-hover:scale-105 group-active:scale-95 ${
-                normalizedQuery === 'tech'
-                  ? 'bg-gradient-to-tr from-blue-700 to-sky-400 ring-2 ring-blue-500/30'
-                  : 'bg-gradient-to-tr from-blue-600 to-sky-400'
+              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] zaure-grad-sky-ring transition group-hover:scale-105 group-active:scale-95 ${
+                normalizedQuery === 'tech' ? 'ring-2 ring-blue-500/30' : ''
               }`}
             >
-              <span className="w-full h-full rounded-full bg-gradient-to-br from-slate-800 to-blue-700 border-2 border-white dark:border-slate-900 flex items-center justify-center text-sky-300">
+              <span className="w-full h-full rounded-full zaure-grad-tech border-2 border-white dark:border-slate-900 flex items-center justify-center text-sky-300">
                 <Cpu className="w-6 h-6" />
               </span>
             </span>
@@ -238,13 +235,11 @@ export default function DashboardWelcomeAndShortcuts({
             className="w-[62px] sm:w-[68px] shrink-0 flex flex-col items-center text-center group"
           >
             <span
-              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition group-hover:scale-105 group-active:scale-95 ${
-                normalizedQuery === 'étudiant'
-                  ? 'bg-gradient-to-tr from-blue-700 to-sky-400 ring-2 ring-blue-500/30'
-                  : 'bg-gradient-to-tr from-blue-600 to-sky-400'
+              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] zaure-grad-sky-ring transition group-hover:scale-105 group-active:scale-95 ${
+                normalizedQuery === 'étudiant' ? 'ring-2 ring-blue-500/30' : ''
               }`}
             >
-              <span className="w-full h-full rounded-full bg-gradient-to-br from-indigo-900 to-blue-600 border-2 border-white dark:border-slate-900 flex items-center justify-center text-amber-300">
+              <span className="w-full h-full rounded-full zaure-grad-education border-2 border-white dark:border-slate-900 flex items-center justify-center text-amber-300">
                 <GraduationCap className="w-6 h-6" />
               </span>
             </span>
@@ -259,8 +254,8 @@ export default function DashboardWelcomeAndShortcuts({
             onClick={onOpenCommunities}
             className="w-[62px] sm:w-[68px] shrink-0 flex flex-col items-center text-center group"
           >
-            <span className="w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-blue-600 to-sky-400 transition group-hover:scale-105 group-active:scale-95">
-              <span className="w-full h-full rounded-full bg-gradient-to-br from-sky-600 to-indigo-700 border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">
+            <span className="w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] zaure-grad-sky-ring transition group-hover:scale-105 group-active:scale-95">
+              <span className="w-full h-full rounded-full zaure-grad-community border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">
                 <UsersRound className="w-6 h-6" />
               </span>
             </span>
@@ -276,13 +271,11 @@ export default function DashboardWelcomeAndShortcuts({
             className="w-[62px] sm:w-[68px] shrink-0 flex flex-col items-center text-center group"
           >
             <span
-              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition group-hover:scale-105 group-active:scale-95 ${
-                activeFeedFilter === 'all' && !normalizedQuery
-                  ? 'bg-gradient-to-tr from-blue-600 to-sky-400 ring-2 ring-blue-500/30'
-                  : 'bg-gradient-to-tr from-blue-600 to-sky-400'
+              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] zaure-grad-sky-ring transition group-hover:scale-105 group-active:scale-95 ${
+                activeFeedFilter === 'all' && !normalizedQuery ? 'ring-2 ring-blue-500/30' : ''
               }`}
             >
-              <span className="w-full h-full rounded-full bg-gradient-to-br from-blue-700 to-cyan-500 border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">
+              <span className="w-full h-full rounded-full zaure-grad-news border-2 border-white dark:border-slate-900 flex items-center justify-center text-white">
                 <Globe className="w-6 h-6" />
               </span>
             </span>

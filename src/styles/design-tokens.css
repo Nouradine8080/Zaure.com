@@ -1,0 +1,466 @@
+/* ==========================================================================
+   ZAURE GLOBAL DESIGN SYSTEM — TOKENS, GRADIENTS, SHADOWS & ANIMATIONS
+   Couleurs · Dégradés · Ombres · Transitions & Animations (Light & Dark)
+   ========================================================================== */
+
+@theme {
+  /* Palette de marque ZAURE */
+  --color-zaure-50: #eff6ff;
+  --color-zaure-100: #dbeafe;
+  --color-zaure-200: #bfdbfe;
+  --color-zaure-300: #93c5fd;
+  --color-zaure-400: #60a5fa;
+  --color-zaure-500: #3b82f6;
+  --color-zaure-600: #2563eb;
+  --color-zaure-700: #1d4ed8;
+  --color-zaure-800: #1e40af;
+  --color-zaure-900: #1e3a8a;
+  --color-zaure-950: #0b1e4b;
+
+  --color-zaure-sky: #0ea5e9;
+  --color-zaure-night: #0f172a;
+  --color-zaure-night-deep: #020617;
+
+  /* Typographie */
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Ombres nommées Tailwind */
+  --shadow-zaure-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-zaure-card: 0 2px 10px -4px rgba(15, 23, 42, 0.06);
+  --shadow-zaure-card-hover: 0 12px 28px -8px rgba(37, 99, 235, 0.16);
+  --shadow-zaure-hero: 0 14px 34px -12px rgba(37, 99, 235, 0.44);
+  --shadow-zaure-primary: 0 8px 20px -6px rgba(37, 99, 235, 0.36);
+  --shadow-zaure-modal: 0 24px 60px -18px rgba(15, 23, 42, 0.28);
+  --shadow-zaure-nav: 0 -4px 20px rgba(15, 23, 42, 0.06);
+
+  /* Animations nommées Tailwind */
+  --animate-zaure-fade: zaureFadeIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-zaure-slide-up: zaureSlideUp 260ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-zaure-slide-down: zaureSlideDown 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-zaure-scale: zaureScaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-zaure-pop: zaurePop 240ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  --animate-zaure-shimmer: zaureShimmer 1.55s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
+   1. VARIABLES SÉMANTIQUES (MODE CLAIR PAR DÉFAUT)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Marque */
+  --zaure-brand-primary: #2563eb;
+  --zaure-brand-hover: #1d4ed8;
+  --zaure-brand-deep: #174ee2;
+  --zaure-brand-sky: #0ea5e9;
+  --zaure-brand-night: #0f172a;
+  --zaure-brand-night-deep: #020617;
+
+  /* Surfaces & Canevas (60-30-10) */
+  --zaure-bg-canvas: #f4f7fb;
+  --zaure-bg-surface: #ffffff;
+  --zaure-bg-surface-muted: #f0f2f5;
+  --zaure-bg-surface-elevated: #ffffff;
+  --zaure-bg-brand-soft: #eff6ff;
+  --zaure-bg-auth: #eaf2ff;
+
+  /* Bordures */
+  --zaure-border-subtle: rgba(15, 23, 42, 0.085);
+  --zaure-border-strong: rgba(15, 23, 42, 0.16);
+  --zaure-border-brand: rgba(37, 99, 235, 0.25);
+
+  /* Textes */
+  --zaure-text-primary: #0f172a;
+  --zaure-text-secondary: #475569;
+  --zaure-text-muted: #64748b;
+  --zaure-text-on-brand: #ffffff;
+
+  /* Sémantique */
+  --zaure-success: #16a34a;
+  --zaure-success-bright: #22c55e;
+  --zaure-success-soft: #ecfdf5;
+  --zaure-warning: #d97706;
+  --zaure-warning-soft: #fffbeb;
+  --zaure-danger: #dc2626;
+  --zaure-danger-soft: #fef2f2;
+  --zaure-info: #0284c7;
+  --zaure-info-soft: #f0f9ff;
+
+  /* Dégradés globaux */
+  --zaure-grad-hero: linear-gradient(125deg, #174ee2 0%, #1d63f0 52%, #0ea5e9 100%);
+  --zaure-grad-primary: linear-gradient(135deg, #1d4ed8 0%, #2563eb 58%, #3b82f6 100%);
+  --zaure-grad-night: linear-gradient(145deg, #0b1224 0%, #0f172a 55%, #1e3a8a 100%);
+  --zaure-grad-sky-ring: linear-gradient(45deg, #2563eb 0%, #0ea5e9 100%);
+  --zaure-grad-canvas-soft: linear-gradient(135deg, #eaf2ff 0%, #f5f9ff 50%, #dfecff 100%);
+  --zaure-grad-surface-tint: linear-gradient(145deg, #ffffff 0%, #f8fbff 60%, #eff6ff 100%);
+  --zaure-grad-scrim: linear-gradient(to top, rgba(2, 6, 23, 0.84) 0%, rgba(2, 6, 23, 0.4) 52%, transparent 100%);
+
+  /* Dégradés thématiques */
+  --zaure-grad-health: linear-gradient(135deg, #f43f5e 0%, #f59e0b 100%);
+  --zaure-grad-tech: linear-gradient(135deg, #1e293b 0%, #1d4ed8 100%);
+  --zaure-grad-education: linear-gradient(135deg, #312e81 0%, #2563eb 100%);
+  --zaure-grad-community: linear-gradient(135deg, #0284c7 0%, #4338ca 100%);
+  --zaure-grad-news: linear-gradient(135deg, #1d4ed8 0%, #06b6d4 100%);
+
+  /* Shimmer squelette discret (inspiré Facebook) */
+  --zaure-shimmer-bg: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.65) 0%,
+    rgba(241, 245, 249, 0.95) 50%,
+    rgba(226, 232, 240, 0.65) 100%
+  );
+
+  /* Ombres */
+  --zaure-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --zaure-shadow-card: 0 2px 10px -4px rgba(15, 23, 42, 0.06);
+  --zaure-shadow-card-hover: 0 12px 28px -8px rgba(37, 99, 235, 0.16);
+  --zaure-shadow-hero: 0 14px 34px -12px rgba(37, 99, 235, 0.44);
+  --zaure-shadow-primary: 0 8px 20px -6px rgba(37, 99, 235, 0.36);
+  --zaure-shadow-modal: 0 24px 60px -18px rgba(15, 23, 42, 0.28);
+  --zaure-shadow-nav: 0 -4px 20px rgba(15, 23, 42, 0.06);
+  --zaure-shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.22);
+
+  /* Courbes & Durées d'animation */
+  --zaure-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --zaure-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --zaure-duration-fast: 150ms;
+  --zaure-duration-base: 220ms;
+  --zaure-duration-slow: 320ms;
+}
+
+/* --------------------------------------------------------------------------
+   2. VARIABLES SÉMANTIQUES (MODE SOMBRE / BLEU NUIT)
+   -------------------------------------------------------------------------- */
+html.dark {
+  --zaure-bg-canvas: #020617;
+  --zaure-bg-surface: #0f172a;
+  --zaure-bg-surface-muted: #1e293b;
+  --zaure-bg-surface-elevated: #162033;
+  --zaure-bg-brand-soft: rgba(37, 99, 235, 0.16);
+  --zaure-bg-auth: #070e22;
+
+  --zaure-border-subtle: rgba(148, 163, 184, 0.16);
+  --zaure-border-strong: rgba(148, 163, 184, 0.28);
+  --zaure-border-brand: rgba(96, 165, 250, 0.35);
+
+  --zaure-text-primary: #f1f5f9;
+  --zaure-text-secondary: #cbd5e1;
+  --zaure-text-muted: #94a3b8;
+
+  --zaure-success-soft: rgba(22, 163, 74, 0.18);
+  --zaure-warning-soft: rgba(217, 119, 6, 0.18);
+  --zaure-danger-soft: rgba(220, 38, 38, 0.18);
+  --zaure-info-soft: rgba(2, 132, 199, 0.18);
+
+  --zaure-grad-canvas-soft: linear-gradient(135deg, #020617 0%, #0b142b 55%, #0f172a 100%);
+  --zaure-grad-surface-tint: linear-gradient(145deg, #0f172a 0%, #131f38 60%, #172554 100%);
+
+  --zaure-shimmer-bg: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.7) 0%,
+    rgba(51, 65, 85, 0.95) 50%,
+    rgba(30, 41, 59, 0.7) 100%
+  );
+
+  --zaure-shadow-xs: 0 1px 2px rgba(2, 6, 23, 0.35);
+  --zaure-shadow-card: 0 4px 14px -4px rgba(2, 6, 23, 0.55);
+  --zaure-shadow-card-hover: 0 14px 32px -8px rgba(37, 99, 235, 0.28);
+  --zaure-shadow-hero: 0 14px 36px -12px rgba(37, 99, 235, 0.45);
+  --zaure-shadow-primary: 0 8px 22px -6px rgba(37, 99, 235, 0.45);
+  --zaure-shadow-modal: 0 28px 64px -18px rgba(2, 6, 23, 0.78);
+  --zaure-shadow-nav: 0 -6px 24px rgba(2, 6, 23, 0.45);
+  --zaure-shadow-focus: 0 0 0 3px rgba(96, 165, 250, 0.3);
+}
+
+/* --------------------------------------------------------------------------
+   3. KEYFRAMES COMPOSITOR-ONLY (transform / opacity / background-position)
+   -------------------------------------------------------------------------- */
+@keyframes zaureFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zaureSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zaureSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zaureScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes zaurePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.84);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes zaureShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes zaureFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. CLASSES UTILITAIRES RÉUTILISABLES (.zaure-*)
+   -------------------------------------------------------------------------- */
+@layer components {
+  /* Fonds & Surfaces */
+  .zaure-bg-canvas {
+    background-color: var(--zaure-bg-canvas);
+    color: var(--zaure-text-primary);
+  }
+
+  .zaure-bg-surface {
+    background-color: var(--zaure-bg-surface);
+    color: var(--zaure-text-primary);
+  }
+
+  .zaure-bg-muted {
+    background-color: var(--zaure-bg-surface-muted);
+    color: var(--zaure-text-primary);
+  }
+
+  .zaure-card {
+    background-color: var(--zaure-bg-surface);
+    color: var(--zaure-text-primary);
+    border: 1px solid var(--zaure-border-subtle);
+    box-shadow: var(--zaure-shadow-card);
+    transition:
+      box-shadow var(--zaure-duration-base) var(--zaure-ease-out),
+      border-color var(--zaure-duration-base) var(--zaure-ease-out),
+      transform var(--zaure-duration-fast) var(--zaure-ease-out);
+  }
+
+  .zaure-card-interactive {
+    background-color: var(--zaure-bg-surface);
+    color: var(--zaure-text-primary);
+    border: 1px solid var(--zaure-border-subtle);
+    box-shadow: var(--zaure-shadow-card);
+    transition:
+      box-shadow var(--zaure-duration-base) var(--zaure-ease-out),
+      border-color var(--zaure-duration-base) var(--zaure-ease-out),
+      transform var(--zaure-duration-fast) var(--zaure-ease-out);
+  }
+
+  .zaure-card-interactive:hover {
+    box-shadow: var(--zaure-shadow-card-hover);
+    border-color: var(--zaure-border-brand);
+  }
+
+  /* Dégradés */
+  .zaure-grad-hero {
+    background-image: var(--zaure-grad-hero);
+  }
+
+  .zaure-grad-primary {
+    background-image: var(--zaure-grad-primary);
+  }
+
+  .zaure-grad-night {
+    background-image: var(--zaure-grad-night);
+  }
+
+  .zaure-grad-sky-ring {
+    background-image: var(--zaure-grad-sky-ring);
+  }
+
+  .zaure-grad-canvas-soft {
+    background-image: var(--zaure-grad-canvas-soft);
+  }
+
+  .zaure-grad-surface-tint {
+    background-image: var(--zaure-grad-surface-tint);
+  }
+
+  .zaure-grad-scrim {
+    background-image: var(--zaure-grad-scrim);
+  }
+
+  .zaure-grad-health {
+    background-image: var(--zaure-grad-health);
+  }
+
+  .zaure-grad-tech {
+    background-image: var(--zaure-grad-tech);
+  }
+
+  .zaure-grad-education {
+    background-image: var(--zaure-grad-education);
+  }
+
+  .zaure-grad-community {
+    background-image: var(--zaure-grad-community);
+  }
+
+  .zaure-grad-news {
+    background-image: var(--zaure-grad-news);
+  }
+
+  /* Ombres */
+  .zaure-shadow-xs {
+    box-shadow: var(--zaure-shadow-xs);
+  }
+
+  .zaure-shadow-card {
+    box-shadow: var(--zaure-shadow-card);
+  }
+
+  .zaure-shadow-card-hover {
+    box-shadow: var(--zaure-shadow-card-hover);
+  }
+
+  .zaure-shadow-hero {
+    box-shadow: var(--zaure-shadow-hero);
+  }
+
+  .zaure-shadow-primary {
+    box-shadow: var(--zaure-shadow-primary);
+  }
+
+  .zaure-shadow-modal {
+    box-shadow: var(--zaure-shadow-modal);
+  }
+
+  .zaure-shadow-nav {
+    box-shadow: var(--zaure-shadow-nav);
+  }
+
+  /* Boutons & Interactions */
+  .zaure-btn-press {
+    transition:
+      transform var(--zaure-duration-fast) var(--zaure-ease-out),
+      background-color var(--zaure-duration-fast) var(--zaure-ease-out),
+      border-color var(--zaure-duration-fast) var(--zaure-ease-out),
+      box-shadow var(--zaure-duration-fast) var(--zaure-ease-out),
+      opacity var(--zaure-duration-fast) var(--zaure-ease-out);
+  }
+
+  .zaure-btn-press:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .zaure-btn-primary {
+    background-image: var(--zaure-grad-primary);
+    color: var(--zaure-text-on-brand);
+    box-shadow: var(--zaure-shadow-primary);
+    transition:
+      transform var(--zaure-duration-fast) var(--zaure-ease-out),
+      filter var(--zaure-duration-fast) var(--zaure-ease-out),
+      box-shadow var(--zaure-duration-fast) var(--zaure-ease-out);
+  }
+
+  .zaure-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+
+  .zaure-btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .zaure-focus-ring:focus-visible {
+    outline: 2px solid var(--zaure-brand-primary);
+    outline-offset: 2px;
+    box-shadow: var(--zaure-shadow-focus);
+  }
+
+  /* Animations */
+  .animate-fadeIn,
+  .zaure-animate-fade-in {
+    animation: zaureFadeIn var(--zaure-duration-base) var(--zaure-ease-out) forwards;
+  }
+
+  .animate-slideUp,
+  .zaure-animate-slide-up {
+    animation: zaureSlideUp 260ms var(--zaure-ease-out) forwards;
+  }
+
+  .zaure-animate-slide-down {
+    animation: zaureSlideDown var(--zaure-duration-base) var(--zaure-ease-out) forwards;
+  }
+
+  .zaure-animate-scale-in {
+    animation: zaureScaleIn 200ms var(--zaure-ease-out) forwards;
+  }
+
+  .zaure-animate-pop {
+    animation: zaurePop 240ms var(--zaure-ease-spring) forwards;
+  }
+
+  .zaure-animate-shimmer {
+    background-image: var(--zaure-shimmer-bg);
+    background-size: 200% 100%;
+    animation: zaureShimmer 1.55s linear infinite;
+  }
+
+  .zaure-animate-float {
+    animation: zaureFloat 3.4s ease-in-out infinite;
+  }
+}
+
+/* Respect complet de prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fadeIn,
+  .zaure-animate-fade-in,
+  .animate-slideUp,
+  .zaure-animate-slide-up,
+  .zaure-animate-slide-down,
+  .zaure-animate-scale-in,
+  .zaure-animate-pop,
+  .zaure-animate-shimmer,
+  .zaure-animate-float {
+    animation: none !important;
+    transition: none !important;
+  }
+}

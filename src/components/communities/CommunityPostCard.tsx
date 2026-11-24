@@ -41,6 +41,7 @@ import { communityService } from '../../services/communityService';
 import { formatFileSize, getDocumentBadgeInfo } from '../../utils/fileValidation';
 import CommunityCommentsSection from './CommunityCommentsSection';
 import VoiceNotePlayer from '../VoiceNotePlayer';
+import { ZAURE_MOTION, ZAURE_SURFACES } from '../../styles/designSystem';
 
 interface CommunityPostCardProps {
   group: CommunityGroup;
@@ -338,10 +339,8 @@ export default function CommunityPostCard({
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className="bg-white dark:bg-slate-900 border border-slate-200/85 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.08)] transition-shadow duration-200 space-y-3.5 min-w-0 overflow-x-clip"
+      {...ZAURE_MOTION.fadeIn}
+      className={`${ZAURE_SURFACES.cardInteractive} p-3.5 sm:p-5 space-y-3.5 min-w-0 overflow-x-clip`}
     >
       {/* Status Banner (Pinned / Pending / Scheduled) */}
       {(post.isPinned || post.status !== 'published') && (

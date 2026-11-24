@@ -139,6 +139,49 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
+    // Cercles de Savoir RBAC Helpers
+    // -------------------------------------------------------------------------
+    function getCircleDoc(circleId) {
+      return get(/databases/$(database)/documents/circles/$(circleId));
+    }
+
+    function isCircleCreator(circleId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/circles/$(circleId)) &&
+        ('created_by' in getCircleDoc(circleId).data) &&
+        getCircleDoc(circleId).data.created_by == request.auth.uid;
+    }
+
+    function hasCircleMemberDoc(circleId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/circle_members/$(request.auth.uid + '_' + circleId));
+    }
+
+    function getCircleMemberDoc(circleId) {
+      return get(/databases/$(database)/documents/circle_members/$(request.auth.uid + '_' + circleId));
+    }
+
+    function isCircleManager(circleId) {
+      return isCircleCreator(circleId) || (
+        hasCircleMemberDoc(circleId) &&
+        getCircleMemberDoc(circleId).data.role in ['admin', 'moderateur']
+      );
+    }
+
+    function isPublicCircle(circleId) {
+      return exists(/databases/$(database)/documents/circles/$(circleId)) &&
+        (!('visibility' in getCircleDoc(circleId).data) || getCircleDoc(circleId).data.visibility == 'public');
+    }
+
+    function canPostInCircle(circleId) {
+      return isAdmin() || isCircleManager(circleId) || (
+        exists(/databases/$(database)/documents/circles/$(circleId)) &&
+        (isPublicCircle(circleId) || hasCircleMemberDoc(circleId)) &&
+        (!('post_permission' in getCircleDoc(circleId).data) || getCircleDoc(circleId).data.post_permission == 'all_members')
+      );
+    }
+
+    // -------------------------------------------------------------------------
     // Validation Blueprints (Server-Side Schema & Bounds Enforcement)
     // -------------------------------------------------------------------------
     function isValidPrivacyAudience(val) {
@@ -337,45 +380,121 @@ service cloud.firestore {
 
     function isValidCircle(data, circleId) {
       return data.keys().hasAll(['id', 'nom', 'description', 'categorie']) &&
-        data.keys().hasOnly(['id', 'nom', 'description', 'categorie', 'image', 'created_by', 'created_at']) &&
+        data.keys().hasOnly([
+          'id', 'nom', 'description', 'categorie', 'image', 'cover_image',
+          'visibility', 'rules', 'post_permission', 'member_count',
+          'last_activity_at', 'updated_at', 'created_by', 'created_at'
+        ]) &&
         data.id == circleId &&
         isValidId(data.id) &&
         data.nom is string && data.nom.size() >= 2 && data.nom.size() <= 120 &&
         data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
         data.categorie is string && data.categorie.size() >= 1 && data.categorie.size() <= 60 &&
         isOptionalString(data, 'image', 350000) &&
+        isOptionalString(data, 'cover_image', 350000) &&
+        (!( 'visibility' in data ) || (data.visibility is string && data.visibility in ['public', 'private'])) &&
+        (!( 'post_permission' in data ) || (data.post_permission is string && data.post_permission in ['all_members', 'admins_only'])) &&
+        (!( 'rules' in data ) || (data.rules is list && data.rules.size() <= 20 && (data.rules.size() == 0 || data.rules[0] is string))) &&
+        (!( 'member_count' in data ) || (data.member_count is int && data.member_count >= 0)) &&
+        isOptionalString(data, 'last_activity_at', 64) &&
+        isOptionalString(data, 'updated_at', 64) &&
         isOptionalString(data, 'created_by', 128) &&
         isOptionalString(data, 'created_at', 64);
     }
 
     function isValidCircleMember(data) {
       return data.keys().hasAll(['user_id', 'circle_id', 'role', 'joined_at']) &&
-        data.keys().hasOnly(['user_id', 'circle_id', 'role', 'joined_at']) &&
+        data.keys().hasOnly(['user_id', 'circle_id', 'role', 'joined_at', 'user_nom', 'user_avatar']) &&
         isValidId(data.user_id) &&
         isValidId(data.circle_id) &&
-        data.role is string && data.role in ['membre', 'moderateur'] &&
-        data.joined_at is string && data.joined_at.size() <= 64;
+        data.role is string && data.role in ['membre', 'moderateur', 'admin'] &&
+        data.joined_at is string && data.joined_at.size() <= 64 &&
+        isOptionalString(data, 'user_nom', 120) &&
+        isOptionalString(data, 'user_avatar', 350000);
+    }
+
+    function isValidCircleJoinRequest(data, reqId) {
+      return data.keys().hasAll(['id', 'circle_id', 'user_id', 'user_nom', 'status', 'created_at']) &&
+        data.keys().hasOnly(['id', 'circle_id', 'user_id', 'user_nom', 'user_avatar', 'status', 'created_at']) &&
+        data.id == reqId &&
+        isValidCompositeId(data.id) &&
+        isValidId(data.circle_id) &&
+        isValidId(data.user_id) &&
+        data.id == (data.user_id + '_' + data.circle_id) &&
+        data.user_nom is string && data.user_nom.size() >= 1 && data.user_nom.size() <= 120 &&
+        isOptionalString(data, 'user_avatar', 350000) &&
+        data.status == 'pending' &&
+        data.created_at is string && data.created_at.size() <= 64;
+    }
+
+    function isValidCircleAnnouncement(data, annId) {
+      return data.keys().hasAll(['id', 'circle_id', 'author_id', 'author_nom', 'title', 'content', 'is_pinned', 'created_at']) &&
+        data.keys().hasOnly(['id', 'circle_id', 'author_id', 'author_nom', 'author_avatar', 'title', 'content', 'is_pinned', 'created_at', 'updated_at']) &&
+        data.id == annId &&
+        isValidId(data.id) &&
+        isValidId(data.circle_id) &&
+        isValidId(data.author_id) &&
+        data.author_nom is string && data.author_nom.size() >= 1 && data.author_nom.size() <= 120 &&
+        isOptionalString(data, 'author_avatar', 350000) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 3000 &&
+        data.is_pinned is bool &&
+        data.created_at is string && data.created_at.size() <= 64 &&
+        isOptionalString(data, 'updated_at', 64);
+    }
+
+    function isValidCircleEvent(data, eventId) {
+      return data.keys().hasAll(['id', 'circle_id', 'created_by', 'creator_nom', 'title', 'description', 'event_date', 'is_online', 'attendee_ids', 'interested_ids', 'created_at']) &&
+        data.keys().hasOnly([
+          'id', 'circle_id', 'created_by', 'creator_nom', 'title', 'description',
+          'event_date', 'event_time', 'location', 'is_online', 'meeting_link',
+          'attendee_ids', 'interested_ids', 'created_at'
+        ]) &&
+        data.id == eventId &&
+        isValidId(data.id) &&
+        isValidId(data.circle_id) &&
+        isValidId(data.created_by) &&
+        data.creator_nom is string && data.creator_nom.size() >= 1 && data.creator_nom.size() <= 120 &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 160 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+        data.event_date is string && data.event_date.size() >= 1 && data.event_date.size() <= 32 &&
+        isOptionalString(data, 'event_time', 16) &&
+        isOptionalString(data, 'location', 200) &&
+        data.is_online is bool &&
+        isOptionalString(data, 'meeting_link', 400) &&
+        data.attendee_ids is list && data.attendee_ids.size() <= 500 &&
+        (data.attendee_ids.size() == 0 || data.attendee_ids[0] is string) &&
+        data.interested_ids is list && data.interested_ids.size() <= 500 &&
+        (data.interested_ids.size() == 0 || data.interested_ids[0] is string) &&
+        data.created_at is string && data.created_at.size() <= 64;
     }
 
     function isValidCapsule(data, capsuleId) {
       return data.keys().hasAll(['id', 'auteur_id', 'circle_id', 'type', 'contenu', 'langue_dorigine', 'created_at']) &&
         data.keys().hasOnly([
           'id', 'auteur_id', 'circle_id', 'circleId', 'type', 'contenu',
-          'langue_dorigine', 'created_at', 'auteur_nom', 'auteur_role', 'auteur_avatar', 'circle_nom'
+          'langue_dorigine', 'created_at', 'auteur_nom', 'auteur_role', 'auteur_avatar', 'circle_nom',
+          'media_url', 'media_name', 'media_mime', 'is_pinned', 'pinned_by', 'updated_at'
         ]) &&
         data.id == capsuleId &&
         isValidId(data.id) &&
         isValidId(data.auteur_id) &&
         isValidId(data.circle_id) &&
         (!( 'circleId' in data ) || data.circleId == data.circle_id) &&
-        data.type is string && data.type in ['texte', 'audio', 'video', 'image'] &&
+        data.type is string && data.type in ['texte', 'audio', 'video', 'image', 'document'] &&
         data.contenu is string && data.contenu.size() >= 1 && data.contenu.size() <= 650000 &&
         isValidLang(data.langue_dorigine) &&
         data.created_at is string && data.created_at.size() <= 64 &&
         isOptionalString(data, 'auteur_nom', 120) &&
         isOptionalString(data, 'auteur_role', 32) &&
         isOptionalString(data, 'auteur_avatar', 350000) &&
-        isOptionalString(data, 'circle_nom', 120);
+        isOptionalString(data, 'circle_nom', 120) &&
+        isOptionalString(data, 'media_url', 650000) &&
+        isOptionalString(data, 'media_name', 200) &&
+        isOptionalString(data, 'media_mime', 100) &&
+        (!( 'is_pinned' in data ) || data.is_pinned is bool) &&
+        isOptionalString(data, 'pinned_by', 128) &&
+        isOptionalString(data, 'updated_at', 64);
     }
 
     function isValidComment(data, commentId) {
@@ -934,7 +1053,13 @@ service cloud.firestore {
       );
       allow update: if isValidId(circleId) && isSignedIn() && isValidCircle(incoming(), circleId) && (
         isAdmin() ||
-        (('created_by' in existing()) && existing().created_by == request.auth.uid && incoming().created_by == existing().created_by)
+        (('created_by' in existing()) && existing().created_by == request.auth.uid && incoming().created_by == existing().created_by) ||
+        (isCircleManager(circleId) && incoming().id == existing().id && (!( 'created_by' in existing() ) || incoming().created_by == existing().created_by)) ||
+        (
+          incoming().id == existing().id &&
+          (!( 'created_by' in existing() ) || incoming().created_by == existing().created_by) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['member_count', 'last_activity_at', 'updated_at'])
+        )
       );
       allow delete: if isValidId(circleId) && isSignedIn() && (
         isAdmin() || (('created_by' in existing()) && existing().created_by == request.auth.uid)
@@ -942,13 +1067,125 @@ service cloud.firestore {
     }
 
     match /circle_members/{memberId} {
-      allow get: if isValidId(memberId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
-      allow create: if isValidId(memberId) && isSignedIn() && isValidCircleMember(incoming()) &&
+      allow get: if isValidCompositeId(memberId) && isSignedIn();
+      allow list: if isSignedIn() && existing().user_id is string && existing().circle_id is string;
+      allow create: if isValidCompositeId(memberId) && isSignedIn() && isValidCircleMember(incoming()) &&
+        memberId == (incoming().user_id + '_' + incoming().circle_id) &&
+        exists(/databases/$(database)/documents/circles/$(incoming().circle_id)) && (
+          isAdmin() ||
+          isCircleManager(incoming().circle_id) ||
+          (
+            incoming().user_id == request.auth.uid && (
+              isCircleCreator(incoming().circle_id) ||
+              (incoming().role == 'membre' && isPublicCircle(incoming().circle_id))
+            )
+          )
+        );
+      allow update: if isValidCompositeId(memberId) && isSignedIn() && isValidCircleMember(incoming()) &&
+        (isCircleManager(existing().circle_id) || isAdmin()) &&
+        incoming().user_id == existing().user_id &&
+        incoming().circle_id == existing().circle_id &&
+        incoming().joined_at == existing().joined_at;
+      allow delete: if isValidCompositeId(memberId) && isSignedIn() && (
+        existing().user_id == request.auth.uid ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+    }
+
+    match /circle_join_requests/{requestId} {
+      allow get: if isValidCompositeId(requestId) && isSignedIn() && (
+        existing().user_id == request.auth.uid ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().user_id == request.auth.uid ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+      allow create: if isValidCompositeId(requestId) && isSignedIn() &&
+        isValidCircleJoinRequest(incoming(), requestId) &&
         incoming().user_id == request.auth.uid &&
+        incoming().status == 'pending' &&
         exists(/databases/$(database)/documents/circles/$(incoming().circle_id));
       allow update: if false;
-      allow delete: if isValidId(memberId) && isSignedIn() && (existing().user_id == request.auth.uid || isAdmin());
+      allow delete: if isValidCompositeId(requestId) && isSignedIn() && (
+        existing().user_id == request.auth.uid ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+    }
+
+    match /circle_announcements/{annId} {
+      allow get: if isValidId(annId) && isSignedIn() && (
+        isPublicCircle(existing().circle_id) ||
+        hasCircleMemberDoc(existing().circle_id) ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isPublicCircle(existing().circle_id) ||
+        hasCircleMemberDoc(existing().circle_id) ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+      allow create: if isValidId(annId) && isSignedIn() &&
+        isValidCircleAnnouncement(incoming(), annId) &&
+        incoming().author_id == request.auth.uid &&
+        exists(/databases/$(database)/documents/circles/$(incoming().circle_id)) &&
+        (isCircleManager(incoming().circle_id) || isAdmin());
+      allow update: if isValidId(annId) && isSignedIn() &&
+        isValidCircleAnnouncement(incoming(), annId) &&
+        incoming().id == existing().id &&
+        incoming().circle_id == existing().circle_id &&
+        incoming().author_id == existing().author_id &&
+        incoming().created_at == existing().created_at &&
+        (isCircleManager(existing().circle_id) || isAdmin());
+      allow delete: if isValidId(annId) && isSignedIn() && (
+        existing().author_id == request.auth.uid ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+    }
+
+    match /circle_events/{eventId} {
+      allow get: if isValidId(eventId) && isSignedIn() && (
+        isPublicCircle(existing().circle_id) ||
+        hasCircleMemberDoc(existing().circle_id) ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        isPublicCircle(existing().circle_id) ||
+        hasCircleMemberDoc(existing().circle_id) ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
+      allow create: if isValidId(eventId) && isSignedIn() &&
+        isValidCircleEvent(incoming(), eventId) &&
+        incoming().created_by == request.auth.uid &&
+        exists(/databases/$(database)/documents/circles/$(incoming().circle_id)) &&
+        (hasCircleMemberDoc(incoming().circle_id) || isCircleManager(incoming().circle_id) || isAdmin());
+      allow update: if isValidId(eventId) && isSignedIn() &&
+        isValidCircleEvent(incoming(), eventId) &&
+        incoming().id == existing().id &&
+        incoming().circle_id == existing().circle_id &&
+        incoming().created_by == existing().created_by &&
+        incoming().created_at == existing().created_at && (
+          isAdmin() ||
+          existing().created_by == request.auth.uid ||
+          isCircleManager(existing().circle_id) ||
+          (
+            (isPublicCircle(existing().circle_id) || hasCircleMemberDoc(existing().circle_id)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['attendee_ids', 'interested_ids'])
+          )
+        );
+      allow delete: if isValidId(eventId) && isSignedIn() && (
+        existing().created_by == request.auth.uid ||
+        isCircleManager(existing().circle_id) ||
+        isAdmin()
+      );
     }
 
     match /capsules/{capsuleId} {
@@ -958,17 +1195,30 @@ service cloud.firestore {
         incoming().auteur_id == request.auth.uid &&
         (
           incoming().circle_id == 'public' ||
-          exists(/databases/$(database)/documents/circles/$(incoming().circle_id))
+          canPostInCircle(incoming().circle_id)
         );
       allow update: if isValidId(capsuleId) && isSignedIn() && isValidCapsule(incoming(), capsuleId) && (
-        isModerator() || (
+        isModerator() ||
+        (
+          existing().circle_id != 'public' &&
+          isCircleManager(existing().circle_id) &&
+          incoming().auteur_id == existing().auteur_id &&
+          incoming().circle_id == existing().circle_id &&
+          incoming().created_at == existing().created_at &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['is_pinned', 'pinned_by', 'updated_at'])
+        ) ||
+        (
           existing().auteur_id == request.auth.uid &&
           incoming().auteur_id == existing().auteur_id &&
           incoming().created_at == existing().created_at &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['contenu', 'langue_dorigine', 'type'])
+          incoming().diff(existing()).affectedKeys().hasOnly(['contenu', 'langue_dorigine', 'type', 'updated_at'])
         )
       );
-      allow delete: if isValidId(capsuleId) && isSignedIn() && (existing().auteur_id == request.auth.uid || isModerator());
+      allow delete: if isValidId(capsuleId) && isSignedIn() && (
+        existing().auteur_id == request.auth.uid ||
+        isModerator() ||
+        (existing().circle_id != 'public' && isCircleManager(existing().circle_id))
+      );
     }
 
     match /comments/{commentId} {
