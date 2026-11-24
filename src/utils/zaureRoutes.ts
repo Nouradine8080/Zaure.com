@@ -53,6 +53,7 @@ export interface ParsedZaureRoute {
     | 'admin'
     | 'auth'
     | 'registration'
+    | 'reset_password'
     | 'feed'
     | 'circles'
     | 'circle_detail'
@@ -98,6 +99,8 @@ export function parseZaureRoute(pathname: string, search = ''): ParsedZaureRoute
   const rawPath = (pathname || '/').replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(search || '');
 
+  const queryMode = params.get('mode')?.trim() || '';
+  const queryOobCode = params.get('oobCode')?.trim() || '';
   const queryCommunity = params.get('community')?.trim() || null;
   const queryInvite = params.get('invite')?.trim() || null;
   const queryProfile = params.get('profile')?.trim() || null;
@@ -120,6 +123,15 @@ export function parseZaureRoute(pathname: string, search = ''): ParsedZaureRoute
 
   if (rawPath === '/admin' || rawPath.startsWith('/admin/')) {
     return { ...base, kind: 'admin' };
+  }
+
+  if (
+    rawPath === '/reset-password' ||
+    rawPath === '/reinitialiser-mot-de-passe' ||
+    (rawPath === '/__/auth/action' && (queryMode === 'resetPassword' || Boolean(queryOobCode))) ||
+    (queryMode === 'resetPassword' && Boolean(queryOobCode))
+  ) {
+    return { ...base, kind: 'reset_password' };
   }
 
   if (rawPath === '/inscription' || rawPath.startsWith('/inscription/')) {

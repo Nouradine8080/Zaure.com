@@ -11,6 +11,8 @@ import {
   deleteUser,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
   sendEmailVerification,
   updateProfile,
   RecaptchaVerifier,
@@ -343,7 +345,19 @@ export const formatFirebaseAuthError = (err: any): string => {
     case 'auth/email-already-in-use':
       return "Cette adresse e-mail est déjà utilisée par un autre compte. Veuillez vous connecter.";
     case 'auth/weak-password':
-      return "Le mot de passe doit comporter au moins 6 caractères.";
+      return "Le mot de passe est insuffisant : il doit comporter au moins 6 caractères.";
+    case 'auth/expired-action-code':
+      return "Ce lien de réinitialisation a expiré. Veuillez demander un nouveau lien.";
+    case 'auth/invalid-action-code':
+      return "Ce lien de réinitialisation est invalide ou a déjà été utilisé.";
+    case 'auth/user-disabled':
+      return "Ce compte ZAURE a été désactivé. Contactez l'assistance.";
+    case 'auth/missing-continue-uri':
+      return "L'adresse de redirection du lien de réinitialisation est manquante.";
+    case 'auth/invalid-continue-uri':
+      return "L'adresse de redirection configurée est invalide.";
+    case 'auth/unauthorized-continue-uri':
+      return "Ce domaine de redirection n'est pas encore autorisé dans la configuration Firebase.";
     case 'auth/invalid-email':
       return "Le format de l'adresse e-mail est invalide.";
     case 'auth/popup-closed-by-user':
@@ -748,11 +762,95 @@ export const zaureService = {
     if (!auth) {
       return { success: false, error: 'Firebase n\'est pas connecté.' };
     }
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, error: 'Veuillez renseigner une adresse e-mail valide.' };
+    }
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      auth.languageCode = 'fr';
+    } catch {
+      // ignore readonly languageCode fallback
+    }
+    const continueUrl =
+      typeof window !== 'undefined' && window.location?.origin
+        ? `${window.location.origin}/reset-password`
+        : undefined;
+    try {
+      if (continueUrl) {
+        await sendPasswordResetEmail(auth, cleanEmail, {
+          url: continueUrl,
+          handleCodeInApp: false,
+        });
+      } else {
+        await sendPasswordResetEmail(auth, cleanEmail);
+      }
       return { success: true, error: null };
     } catch (err: any) {
+      if (
+        continueUrl &&
+        (err?.code === 'auth/unauthorized-continue-uri' || err?.code === 'auth/invalid-continue-uri')
+      ) {
+        try {
+          await sendPasswordResetEmail(auth, cleanEmail);
+          return { success: true, error: null };
+        } catch (fallbackErr: any) {
+          return { success: false, error: formatFirebaseAuthError(fallbackErr) };
+        }
+      }
       return { success: false, error: formatFirebaseAuthError(err) };
+    }
+  },
+
+  verifyPasswordResetCode: async (
+    oobCode: string
+  ): Promise<{ email: string | null; error: string | null; errorCode?: string }> => {
+    if (!auth) {
+      return { email: null, error: 'Firebase n\'est pas connecté.', errorCode: 'auth/unavailable' };
+    }
+    const cleanCode = oobCode.trim();
+    if (!cleanCode) {
+      return {
+        email: null,
+        error: 'Aucun code de réinitialisation valide n\'a été détecté dans ce lien.',
+        errorCode: 'auth/invalid-action-code',
+      };
+    }
+    try {
+      const verifiedEmail = await verifyPasswordResetCode(auth, cleanCode);
+      return { email: verifiedEmail, error: null };
+    } catch (err: any) {
+      return {
+        email: null,
+        error: formatFirebaseAuthError(err),
+        errorCode: err?.code,
+      };
+    }
+  },
+
+  confirmPasswordReset: async (
+    oobCode: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error: string | null; errorCode?: string }> => {
+    if (!auth) {
+      return { success: false, error: 'Firebase n\'est pas connecté.', errorCode: 'auth/unavailable' };
+    }
+    const cleanCode = oobCode.trim();
+    if (!cleanCode) {
+      return {
+        success: false,
+        error: 'Le code de réinitialisation est manquant ou invalide.',
+        errorCode: 'auth/invalid-action-code',
+      };
+    }
+    try {
+      await confirmPasswordReset(auth, cleanCode, newPassword);
+      return { success: true, error: null };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: formatFirebaseAuthError(err),
+        errorCode: err?.code,
+      };
     }
   },
 

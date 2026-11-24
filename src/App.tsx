@@ -88,6 +88,7 @@ import CircleGroupPage from './components/CircleGroupPage';
 import CirclesExplorer from './components/circles/CirclesExplorer';
 import CreateCircleModal, { CreateCircleFormPayload } from './components/circles/CreateCircleModal';
 import AuthPortal from './components/AuthPortal';
+import ResetPasswordPage from './components/ResetPasswordPage';
 import ZaureLandingPage from './components/ZaureLandingPage';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -1225,6 +1226,15 @@ export default function App() {
           <Route path="/admin/:moduleId" element={<AdminPortalRoot />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
+      </ErrorBoundary>
+    );
+  }
+
+  // 0.5. Dedicated Password Reset Page (accessible via email link regardless of session state)
+  if (parsedRoute.kind === 'reset_password') {
+    return (
+      <ErrorBoundary scopeLabel="Réinitialisation du mot de passe" variant="fullscreen">
+        <ResetPasswordPage />
       </ErrorBoundary>
     );
   }
