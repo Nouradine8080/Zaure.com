@@ -939,6 +939,97 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
+    // ZAURE Smart Algorithm Core Engine Validators
+    // -------------------------------------------------------------------------
+    function isValidAlgorithmMetadata(meta) {
+      return meta is map &&
+        meta.keys().size() <= 12 &&
+        !meta.keys().hasAny([
+          'password', 'motDePasse', 'email', 'phone', 'telephone',
+          'token', 'secret', 'messageContent', 'privateMessage', 'address', 'ssn'
+        ]);
+    }
+
+    function isValidAlgorithmEvent(data, eventId) {
+      return data.keys().hasAll(['id', 'userId', 'eventType', 'targetId', 'targetType', 'timestamp', 'metadata']) &&
+        data.keys().hasOnly(['id', 'userId', 'eventType', 'targetId', 'targetType', 'timestamp', 'metadata']) &&
+        data.id == eventId &&
+        isValidCompositeId(data.id) &&
+        isValidId(data.userId) &&
+        data.eventType is string && data.eventType in [
+          'post_view', 'post_like', 'post_comment', 'post_share', 'post_save',
+          'post_hide', 'post_report', 'video_view', 'video_completion',
+          'profile_visit', 'user_follow', 'circle_join', 'search'
+        ] &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 260 &&
+        data.targetType is string && data.targetType in ['post', 'capsule', 'video', 'profile', 'circle', 'group', 'search'] &&
+        data.timestamp is string && data.timestamp.size() >= 1 && data.timestamp.size() <= 64 &&
+        isValidAlgorithmMetadata(data.metadata);
+    }
+
+    function isValidUserInterestProfile(data, userId) {
+      return data.keys().hasAll(['userId', 'interests', 'topTopics', 'decayVersion', 'totalSignals', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'interests', 'topTopics', 'affinityAuthors', 'affinityCircles', 'decayVersion', 'totalSignals', 'updatedAt']) &&
+        data.userId == userId &&
+        isValidId(data.userId) &&
+        data.interests is map &&
+        data.interests.keys().size() <= 40 &&
+        data.topTopics is list &&
+        data.topTopics.size() <= 20 &&
+        (!( 'affinityAuthors' in data ) || (data.affinityAuthors is map && data.affinityAuthors.keys().size() <= 60)) &&
+        (!( 'affinityCircles' in data ) || (data.affinityCircles is map && data.affinityCircles.keys().size() <= 40)) &&
+        data.decayVersion is int && data.decayVersion >= 1 &&
+        data.totalSignals is int && data.totalSignals >= 0 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidContentSignal(data, contentId) {
+      return data.keys().hasAll([
+          'contentId', 'contentKind', 'contentType', 'authorId', 'categories',
+          'publishedAt', 'qualityScore', 'popularityScore', 'decayScore', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'contentId', 'contentKind', 'contentType', 'authorId', 'circleId',
+          'categories', 'topics', 'publishedAt', 'viewsCount', 'likesCount',
+          'commentsCount', 'sharesCount', 'savesCount', 'hidesCount',
+          'reportsCount', 'videoCompletionsCount', 'qualityScore',
+          'popularityScore', 'decayScore', 'updatedAt'
+        ]) &&
+        data.contentId == contentId &&
+        isValidCompositeId(data.contentId) &&
+        data.contentKind is string && data.contentKind in ['post', 'capsule'] &&
+        data.contentType is string && data.contentType.size() >= 1 && data.contentType.size() <= 32 &&
+        isValidId(data.authorId) &&
+        isOptionalString(data, 'circleId', 128) &&
+        data.categories is list && data.categories.size() <= 15 &&
+        isOptionalList(data, 'topics', 20) &&
+        data.publishedAt is string && data.publishedAt.size() <= 64 &&
+        data.qualityScore is number && data.qualityScore >= 0 &&
+        data.popularityScore is number && data.popularityScore >= 0 &&
+        data.decayScore is number && data.decayScore >= 0 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidAlgorithmUserStats(data, userId) {
+      return data.keys().hasAll(['userId', 'totalEvents', 'viewsCount', 'likesCount', 'commentsCount', 'sharesCount', 'savesCount', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'userId', 'totalEvents', 'viewsCount', 'likesCount', 'commentsCount',
+          'sharesCount', 'savesCount', 'videoCompletionsCount', 'searchesCount',
+          'activeDays', 'lastEventAt', 'updatedAt'
+        ]) &&
+        data.userId == userId &&
+        isValidId(data.userId) &&
+        data.totalEvents is int && data.totalEvents >= 0 &&
+        data.viewsCount is int && data.viewsCount >= 0 &&
+        data.likesCount is int && data.likesCount >= 0 &&
+        data.commentsCount is int && data.commentsCount >= 0 &&
+        data.sharesCount is int && data.sharesCount >= 0 &&
+        data.savesCount is int && data.savesCount >= 0 &&
+        isOptionalString(data, 'lastEventAt', 64) &&
+        data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    // -------------------------------------------------------------------------
     // Admin & Governance Collection Rules
     // -------------------------------------------------------------------------
     match /admins/{adminId} {
@@ -1749,6 +1840,45 @@ service cloud.firestore {
         incoming().userId == existing().userId &&
         incoming().createdAt == existing().createdAt;
       allow delete: if isValidId(ticketId) && isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // ZAURE Smart Algorithm Core Engine Collections (Zero-Trust Telemetry)
+    // -------------------------------------------------------------------------
+
+    // 26. Algorithm Events (Append-only own telemetry, zero PII, no cross-user reads)
+    match /algorithm_events/{eventId} {
+      allow get: if isValidCompositeId(eventId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidCompositeId(eventId) && isSignedIn() &&
+        isValidAlgorithmEvent(incoming(), eventId) &&
+        incoming().userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isValidCompositeId(eventId) && isAdmin();
+    }
+
+    // 27. User Interests (Owner-or-Admin read only; writes strictly Admin / Cloud Functions)
+    match /user_interests/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create, update: if isValidId(userId) && isAdmin() && isValidUserInterestProfile(incoming(), userId);
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // 28. Content Signals (Authenticated read without PII; writes strictly Admin / Cloud Functions)
+    match /content_signals/{contentId} {
+      allow get: if isValidCompositeId(contentId) && isSignedIn();
+      allow list: if isSignedIn() && existing().contentId is string;
+      allow create, update: if isValidCompositeId(contentId) && isAdmin() && isValidContentSignal(incoming(), contentId);
+      allow delete: if isValidCompositeId(contentId) && isAdmin();
+    }
+
+    // 29. Algorithm User Stats (Owner-or-Admin read only; writes strictly Admin / Cloud Functions)
+    match /algorithm_user_stats/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create, update: if isValidId(userId) && isAdmin() && isValidAlgorithmUserStats(incoming(), userId);
+      allow delete: if isValidId(userId) && isAdmin();
     }
   }
 }

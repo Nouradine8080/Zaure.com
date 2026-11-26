@@ -21,13 +21,15 @@ import {
   Pin,
   Trash2,
   FileText,
-  Download
+  Download,
+  EyeOff
 } from 'lucide-react';
 import { Capsule, Comment, Reaction, UserProfile } from '../types';
 import { zaureService } from '../firebaseClient';
 import { useTranslation } from '../context/LanguageContext';
 import { ZAURE_MOTION, ZAURE_SURFACES } from '../styles/designSystem';
 import VoiceNotePlayer from './VoiceNotePlayer';
+import { algorithmCoreService } from '../services/algorithm';
 
 interface CapsuleCardProps {
   capsule: Capsule;
@@ -126,10 +128,52 @@ export default function CapsuleCard({
   const [showMenu, setShowMenu] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const videoCompletedRef = useRef(false);
+  const [isHiddenByUser, setIsHiddenByUser] = useState<boolean>(() =>
+    algorithmCoreService.isTargetHidden(capsule.id, currentUser?.id)
+  );
+
+  useEffect(() => {
+    setIsHiddenByUser(algorithmCoreService.isTargetHidden(capsule.id, currentUser?.id));
+  }, [capsule.id, currentUser?.id]);
 
   useEffect(() => {
     loadReactionsAndComments();
   }, [capsule.id]);
+
+  // Passive non-blocking post_view tracking (55% visible for >= 650ms)
+  useEffect(() => {
+    if (isHiddenByUser || !currentUser?.id || typeof IntersectionObserver === 'undefined') return;
+    const el = cardRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          if (!timer) {
+            timer = setTimeout(() => {
+              algorithmCoreService.trackCapsuleInteraction({
+                userId: currentUser.id,
+                eventType: 'post_view',
+                capsule
+              });
+            }, 650);
+          }
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: 0.55 }
+    );
+    observer.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [capsule.id, currentUser?.id, isHiddenByUser]);
 
   useEffect(() => {
     if (!showMenu) return;
@@ -155,9 +199,18 @@ export default function CapsuleCard({
 
   const handleReact = async (type: 'utile' | 'merci' | 'question') => {
     if (!currentUser) return;
+    const wasActive = reactions.some((r) => r.user_id === currentUser.id && r.type === type);
     try {
       const updated = await zaureService.toggleReaction(capsule.id, type);
       setReactions(updated);
+      if (!wasActive) {
+        algorithmCoreService.trackCapsuleInteraction({
+          userId: currentUser.id,
+          eventType: 'post_like',
+          capsule,
+          reactionType: type
+        });
+      }
     } catch (e) {
       console.error(e);
     }
@@ -173,6 +226,11 @@ export default function CapsuleCard({
       const added = await zaureService.addComment(capsule.id, newCommentText.trim());
       setComments((prev) => [...prev, added]);
       setNewCommentText('');
+      algorithmCoreService.trackCapsuleInteraction({
+        userId: currentUser.id,
+        eventType: 'post_comment',
+        capsule
+      });
     } catch (e: any) {
       setCommentError(e?.message || 'Impossible de publier ce commentaire.');
     } finally {
@@ -198,6 +256,13 @@ export default function CapsuleCard({
       } catch {
         // ignore
       }
+    }
+    if (currentUser?.id) {
+      algorithmCoreService.trackCapsuleInteraction({
+        userId: currentUser.id,
+        eventType: 'post_share',
+        capsule
+      });
     }
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2200);
@@ -247,8 +312,30 @@ export default function CapsuleCard({
     ? capsule.contenu
     : 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
 
+  if (isHiddenByUser) {
+    return (
+      <div className={`${ZAURE_SURFACES.card} px-4 py-3 flex items-center justify-between gap-3 text-xs text-slate-500`}>
+        <span className="flex items-center gap-2">
+          <EyeOff className="w-4 h-4 text-slate-400 shrink-0" />
+          <span>Publication masquée. Ce signal améliore votre futur fil personnalisé.</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            algorithmCoreService.unhideTarget(capsule.id);
+            setIsHiddenByUser(false);
+          }}
+          className="font-bold text-blue-600 hover:underline shrink-0"
+        >
+          Annuler
+        </button>
+      </div>
+    );
+  }
+
   return (
     <motion.article
+      ref={cardRef}
       {...ZAURE_MOTION.fadeIn}
       className={`${ZAURE_SURFACES.cardInteractive} p-3.5 sm:p-5 space-y-3.5 min-w-0 overflow-x-clip ${
         capsule.is_pinned ? 'border-blue-300 dark:border-blue-800 ring-1 ring-blue-500/15' : ''
@@ -392,6 +479,13 @@ export default function CapsuleCard({
                     type="button"
                     onClick={() => {
                       setShowMenu(false);
+                      if (!isBookmarked && currentUser?.id) {
+                        algorithmCoreService.trackCapsuleInteraction({
+                          userId: currentUser.id,
+                          eventType: 'post_save',
+                          capsule
+                        });
+                      }
                       onToggleBookmark();
                     }}
                     className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-800 hover:bg-slate-50 flex items-center gap-2.5 transition"
@@ -427,6 +521,25 @@ export default function CapsuleCard({
                   <Share2 className="w-4 h-4 text-slate-500" />
                   <span>Partager</span>
                 </button>
+
+                {currentUser && currentUser.id !== capsule.auteur_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      algorithmCoreService.trackCapsuleInteraction({
+                        userId: currentUser.id,
+                        eventType: 'post_hide',
+                        capsule
+                      });
+                      setIsHiddenByUser(true);
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5 transition"
+                  >
+                    <EyeOff className="w-4 h-4 text-slate-500" />
+                    <span>Masquer cette publication</span>
+                  </button>
+                )}
 
                 {canModerate && onTogglePin && (
                   <button
@@ -512,6 +625,46 @@ export default function CapsuleCard({
               playsInline
               preload="metadata"
               className="w-full max-h-96 object-contain"
+              onPlay={(e) => {
+                if (!currentUser?.id) return;
+                const v = e.currentTarget;
+                algorithmCoreService.trackCapsuleInteraction({
+                  userId: currentUser.id,
+                  eventType: 'video_view',
+                  capsule,
+                  durationSec: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined
+                });
+              }}
+              onTimeUpdate={(e) => {
+                if (!currentUser?.id || videoCompletedRef.current) return;
+                const v = e.currentTarget;
+                if (!Number.isFinite(v.duration) || v.duration <= 0) return;
+                const rate = v.currentTime / v.duration;
+                if (rate >= 0.85) {
+                  videoCompletedRef.current = true;
+                  algorithmCoreService.trackCapsuleInteraction({
+                    userId: currentUser.id,
+                    eventType: 'video_completion',
+                    capsule,
+                    watchedSec: Math.round(v.currentTime),
+                    durationSec: Math.round(v.duration),
+                    completionRate: Math.round(rate * 100) / 100
+                  });
+                }
+              }}
+              onEnded={(e) => {
+                if (!currentUser?.id || videoCompletedRef.current) return;
+                videoCompletedRef.current = true;
+                const v = e.currentTarget;
+                algorithmCoreService.trackCapsuleInteraction({
+                  userId: currentUser.id,
+                  eventType: 'video_completion',
+                  capsule,
+                  watchedSec: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined,
+                  durationSec: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined,
+                  completionRate: 1
+                });
+              }}
             />
           </div>
         )}
@@ -648,7 +801,16 @@ export default function CapsuleCard({
             <motion.button
               type="button"
               whileTap={{ scale: 0.92 }}
-              onClick={onToggleBookmark}
+              onClick={() => {
+                if (!isBookmarked && currentUser?.id) {
+                  algorithmCoreService.trackCapsuleInteraction({
+                    userId: currentUser.id,
+                    eventType: 'post_save',
+                    capsule
+                  });
+                }
+                onToggleBookmark();
+              }}
               className={`min-h-[40px] px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
                 isBookmarked ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100/80'
               }`}

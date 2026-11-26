@@ -42,6 +42,7 @@ import { formatFileSize, getDocumentBadgeInfo } from '../../utils/fileValidation
 import CommunityCommentsSection from './CommunityCommentsSection';
 import VoiceNotePlayer from '../VoiceNotePlayer';
 import { ZAURE_MOTION, ZAURE_SURFACES } from '../../styles/designSystem';
+import { algorithmCoreService } from '../../services/algorithm';
 
 interface CommunityPostCardProps {
   group: CommunityGroup;
@@ -185,6 +186,49 @@ export default function CommunityPostCard({
 
   const menuRef = useRef<HTMLDivElement>(null);
   const reactionRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const videoCompletedSetRef = useRef<Set<number>>(new Set());
+  const [isHiddenByUser, setIsHiddenByUser] = useState<boolean>(() =>
+    algorithmCoreService.isTargetHidden(post.id, currentUser?.id)
+  );
+
+  useEffect(() => {
+    setIsHiddenByUser(algorithmCoreService.isTargetHidden(post.id, currentUser?.id));
+  }, [post.id, currentUser?.id]);
+
+  // Passive non-blocking post_view tracking (55% visible for >= 650ms)
+  useEffect(() => {
+    if (isHiddenByUser || !currentUser?.id || typeof IntersectionObserver === 'undefined') return;
+    const el = cardRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          if (!timer) {
+            timer = setTimeout(() => {
+              algorithmCoreService.trackPostInteraction({
+                userId: currentUser.id,
+                eventType: 'post_view',
+                post,
+                group
+              });
+            }, 650);
+          }
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: 0.55 }
+    );
+    observer.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [post.id, currentUser?.id, isHiddenByUser]);
 
   useEffect(() => {
     if (!showMenu && !showReactionPicker) return;
@@ -247,6 +291,12 @@ export default function CommunityPostCard({
     }
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2400);
+    algorithmCoreService.trackPostInteraction({
+      userId: currentUser.id,
+      eventType: 'post_share',
+      post,
+      group
+    });
     await communityService.incrementPostShare(post.id, {
       post,
       actor: currentUser,
@@ -286,6 +336,13 @@ export default function CommunityPostCard({
       reporter: currentUser,
       reason: reportReason,
       details: reportDetails
+    });
+    algorithmCoreService.trackPostInteraction({
+      userId: currentUser.id,
+      eventType: 'post_report',
+      post,
+      group,
+      reason: reportReason
     });
     setReportSent(true);
     setTimeout(() => {
@@ -337,8 +394,30 @@ export default function CommunityPostCard({
   const commentsCount = Math.max(0, comments.length || post.commentCount);
   const reactionCount = Math.max(0, reactions.length || post.reactionCount);
 
+  if (isHiddenByUser) {
+    return (
+      <div className={`${ZAURE_SURFACES.card} px-4 py-3 flex items-center justify-between gap-3 text-xs text-slate-500`}>
+        <span className="flex items-center gap-2">
+          <EyeOff className="w-4 h-4 text-slate-400 shrink-0" />
+          <span>Publication masquée. Ce signal améliore votre futur fil personnalisé.</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            algorithmCoreService.unhideTarget(post.id);
+            setIsHiddenByUser(false);
+          }}
+          className="font-bold text-blue-600 hover:underline shrink-0"
+        >
+          Annuler
+        </button>
+      </div>
+    );
+  }
+
   return (
     <motion.article
+      ref={cardRef}
       {...ZAURE_MOTION.fadeIn}
       className={`${ZAURE_SURFACES.cardInteractive} p-3.5 sm:p-5 space-y-3.5 min-w-0 overflow-x-clip`}
     >
@@ -511,6 +590,14 @@ export default function CommunityPostCard({
                   type="button"
                   onClick={() => {
                     setShowMenu(false);
+                    if (!isSaved) {
+                      algorithmCoreService.trackPostInteraction({
+                        userId: currentUser.id,
+                        eventType: 'post_save',
+                        post,
+                        group
+                      });
+                    }
                     communityService.toggleSavePost(post.id, currentUser.id, isSaved);
                   }}
                   className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-800 hover:bg-slate-50 flex items-center gap-2.5 transition"
@@ -558,6 +645,26 @@ export default function CommunityPostCard({
                   >
                     <Edit3 className="w-4 h-4 text-slate-600" />
                     <span>Modifier le texte</span>
+                  </button>
+                )}
+
+                {!isAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      algorithmCoreService.trackPostInteraction({
+                        userId: currentUser.id,
+                        eventType: 'post_hide',
+                        post,
+                        group
+                      });
+                      setIsHiddenByUser(true);
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition"
+                  >
+                    <EyeOff className="w-4 h-4 text-slate-500" />
+                    <span>Masquer cette publication</span>
                   </button>
                 )}
 
@@ -787,6 +894,48 @@ export default function CommunityPostCard({
             playsInline
             preload="metadata"
             className="w-full max-h-[440px] bg-black"
+            onPlay={(e) => {
+              const v = e.currentTarget;
+              algorithmCoreService.trackPostInteraction({
+                userId: currentUser.id,
+                eventType: 'video_view',
+                post,
+                group,
+                durationSec: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined
+              });
+            }}
+            onTimeUpdate={(e) => {
+              const v = e.currentTarget;
+              if (!Number.isFinite(v.duration) || v.duration <= 0) return;
+              const rate = v.currentTime / v.duration;
+              if (rate >= 0.85 && !videoCompletedSetRef.current.has(i)) {
+                videoCompletedSetRef.current.add(i);
+                algorithmCoreService.trackPostInteraction({
+                  userId: currentUser.id,
+                  eventType: 'video_completion',
+                  post,
+                  group,
+                  watchedSec: Math.round(v.currentTime),
+                  durationSec: Math.round(v.duration),
+                  completionRate: Math.round(rate * 100) / 100
+                });
+              }
+            }}
+            onEnded={(e) => {
+              const v = e.currentTarget;
+              if (!videoCompletedSetRef.current.has(i)) {
+                videoCompletedSetRef.current.add(i);
+                algorithmCoreService.trackPostInteraction({
+                  userId: currentUser.id,
+                  eventType: 'video_completion',
+                  post,
+                  group,
+                  watchedSec: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined,
+                  durationSec: Number.isFinite(v.duration) ? Math.round(v.duration) : undefined,
+                  completionRate: 1
+                });
+              }
+            }}
           />
           <div className="px-3.5 py-2 bg-slate-900/95 flex items-center justify-between text-[11px] text-slate-300">
             <span className="flex items-center gap-1.5 truncate">
@@ -960,14 +1109,20 @@ export default function CommunityPostCard({
           <motion.button
             type="button"
             whileTap={{ scale: 0.93 }}
-            onClick={() =>
-              communityService.togglePostReaction(
-                post,
-                currentUser,
-                userReaction?.type || 'like',
-                userReaction
-              )
-            }
+            onClick={() => {
+              const nextType = userReaction?.type || 'like';
+              const isAddingOrChanging = !userReaction || userReaction.type !== nextType;
+              if (isAddingOrChanging) {
+                algorithmCoreService.trackPostInteraction({
+                  userId: currentUser.id,
+                  eventType: 'post_like',
+                  post,
+                  group,
+                  reactionType: nextType
+                });
+              }
+              communityService.togglePostReaction(post, currentUser, nextType, userReaction);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               setShowReactionPicker((prev) => !prev);
@@ -1027,6 +1182,15 @@ export default function CommunityPostCard({
                     whileTap={{ scale: 0.9 }}
                     onClick={() => {
                       setShowReactionPicker(false);
+                      if (!userReaction || userReaction.type !== opt.type) {
+                        algorithmCoreService.trackPostInteraction({
+                          userId: currentUser.id,
+                          eventType: 'post_like',
+                          post,
+                          group,
+                          reactionType: opt.type
+                        });
+                      }
                       communityService.togglePostReaction(post, currentUser, opt.type, userReaction);
                     }}
                     className={`px-2 py-1.5 rounded-xl transition flex flex-col items-center text-[10px] font-semibold ${
@@ -1078,7 +1242,17 @@ export default function CommunityPostCard({
         <motion.button
           type="button"
           whileTap={{ scale: 0.93 }}
-          onClick={() => communityService.toggleSavePost(post.id, currentUser.id, isSaved)}
+          onClick={() => {
+            if (!isSaved) {
+              algorithmCoreService.trackPostInteraction({
+                userId: currentUser.id,
+                eventType: 'post_save',
+                post,
+                group
+              });
+            }
+            communityService.toggleSavePost(post.id, currentUser.id, isSaved);
+          }}
           className={`flex-1 min-h-[42px] px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
             isSaved ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100/80'
           }`}

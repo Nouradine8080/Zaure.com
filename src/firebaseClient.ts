@@ -3082,6 +3082,13 @@ export const zaureService = {
       await updateDoc(settingsRef, {
         utilisateurs_bloques: arrayUnion(targetUserId)
       });
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(
+          new CustomEvent('zaure:blocked-users-updated', {
+            detail: { userId: currentUser.id, targetUserId, action: 'block' }
+          })
+        );
+      }
       return true;
     } catch (e) {
       try {
@@ -3089,6 +3096,13 @@ export const zaureService = {
           ...DEFAULT_USER_SETTINGS,
           utilisateurs_bloques: [targetUserId]
         }, { merge: true });
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(
+            new CustomEvent('zaure:blocked-users-updated', {
+              detail: { userId: currentUser.id, targetUserId, action: 'block' }
+            })
+          );
+        }
         return true;
       } catch (err) {
         console.error('Erreur blocage utilisateur:', err);
@@ -3104,6 +3118,13 @@ export const zaureService = {
       await updateDoc(settingsRef, {
         utilisateurs_bloques: arrayRemove(targetUserId)
       });
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(
+          new CustomEvent('zaure:blocked-users-updated', {
+            detail: { userId: currentUser.id, targetUserId, action: 'unblock' }
+          })
+        );
+      }
       return true;
     } catch (err) {
       console.error('Erreur déblocage utilisateur:', err);

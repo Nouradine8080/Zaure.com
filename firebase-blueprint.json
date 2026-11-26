@@ -698,6 +698,98 @@
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "userId", "userName", "category", "subject", "description", "status", "createdAt", "updatedAt"]
+    },
+    "AlgorithmEvent": {
+      "title": "AlgorithmEvent",
+      "description": "Immutable, non-PII user interaction telemetry event ingested by ZAURE Smart Algorithm Core Engine.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "post_view", "post_like", "post_comment", "post_share", "post_save",
+            "post_hide", "post_report", "video_view", "video_completion",
+            "profile_visit", "user_follow", "circle_join", "search"
+          ]
+        },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 260 },
+        "targetType": {
+          "type": "string",
+          "enum": ["post", "capsule", "video", "profile", "circle", "group", "search"]
+        },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "metadata": { "type": "object" }
+      },
+      "required": ["id", "userId", "eventType", "targetId", "targetType", "timestamp", "metadata"]
+    },
+    "UserInterestProfile": {
+      "title": "UserInterestProfile",
+      "description": "Owner-scoped dynamic user interest weights inferred strictly by server/Cloud Functions from interactions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "interests": { "type": "object" },
+        "topTopics": { "type": "array" },
+        "affinityAuthors": { "type": "object" },
+        "affinityCircles": { "type": "object" },
+        "decayVersion": { "type": "integer" },
+        "totalSignals": { "type": "integer" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "interests", "topTopics", "decayVersion", "totalSignals", "updatedAt"]
+    },
+    "ContentSignal": {
+      "title": "ContentSignal",
+      "description": "Server-computed engagement, quality, and popularity velocity metrics per post or capsule without PII.",
+      "type": "object",
+      "properties": {
+        "contentId": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contentKind": { "type": "string", "enum": ["post", "capsule"] },
+        "contentType": { "type": "string", "maxLength": 32 },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "circleId": { "type": "string", "maxLength": 128 },
+        "categories": { "type": "array" },
+        "topics": { "type": "array" },
+        "publishedAt": { "type": "string", "maxLength": 64 },
+        "viewsCount": { "type": "integer" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "sharesCount": { "type": "integer" },
+        "savesCount": { "type": "integer" },
+        "hidesCount": { "type": "integer" },
+        "reportsCount": { "type": "integer" },
+        "videoCompletionsCount": { "type": "integer" },
+        "qualityScore": { "type": "number" },
+        "popularityScore": { "type": "number" },
+        "decayScore": { "type": "number" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": [
+        "contentId", "contentKind", "contentType", "authorId", "categories",
+        "publishedAt", "qualityScore", "popularityScore", "decayScore", "updatedAt"
+      ]
+    },
+    "AlgorithmUserStats": {
+      "title": "AlgorithmUserStats",
+      "description": "Owner-scoped aggregate behavioral counters computed securely server-side.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "totalEvents": { "type": "integer" },
+        "viewsCount": { "type": "integer" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "sharesCount": { "type": "integer" },
+        "savesCount": { "type": "integer" },
+        "videoCompletionsCount": { "type": "integer" },
+        "searchesCount": { "type": "integer" },
+        "activeDays": { "type": "integer" },
+        "lastEventAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "totalEvents", "viewsCount", "likesCount", "commentsCount", "sharesCount", "savesCount", "updatedAt"]
     }
   },
   "firestore": {
@@ -832,6 +924,22 @@
     "/support_tickets/{ticketId}": {
       "schema": { "$ref": "#/entities/SupportTicket" },
       "description": "User-submitted support requests and bug reports readable by owner or staff."
+    },
+    "/algorithm_events/{eventId}": {
+      "schema": { "$ref": "#/entities/AlgorithmEvent" },
+      "description": "Owner-only readable, append-only non-PII user interaction telemetry events."
+    },
+    "/user_interests/{userId}": {
+      "schema": { "$ref": "#/entities/UserInterestProfile" },
+      "description": "Owner-only readable dynamic interest profile managed strictly by server/Cloud Functions."
+    },
+    "/content_signals/{contentId}": {
+      "schema": { "$ref": "#/entities/ContentSignal" },
+      "description": "Non-PII content quality, engagement, and popularity velocity metrics managed strictly by server/Cloud Functions."
+    },
+    "/algorithm_user_stats/{userId}": {
+      "schema": { "$ref": "#/entities/AlgorithmUserStats" },
+      "description": "Owner-only readable behavioral engagement stats managed strictly by server/Cloud Functions."
     }
   }
 }

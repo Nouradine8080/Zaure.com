@@ -6,6 +6,23 @@ import { createServer as createViteServer } from 'vite';
 import { initializeApp, getApps, getApp } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import {
+  computeContentScores,
+  extractTopicsFromText,
+  foldEventIntoContentSignal,
+  foldEventIntoInterestProfile,
+  foldEventIntoUserStats,
+  isValidFirestoreDocId,
+  normalizeCategoryToTopic,
+  sanitizeAlgorithmMetadata,
+  VALID_ALGORITHM_EVENT_TYPES
+} from './src/services/algorithm/algorithmConfig.ts';
+import type {
+  AlgorithmEvent,
+  AlgorithmUserStats,
+  ContentSignal,
+  UserInterestProfile
+} from './src/types/algorithm.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -454,6 +471,321 @@ async function startServer() {
       });
 
       return res.json({ ok: true, targetUid, disabled: Boolean(disabled) });
+    } catch (err) {
+      return handleServerError(res, err);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // ZAURE SMART ALGORITHM CORE ENGINE SERVER ENDPOINTS
+  // Uses verifyIdToken (works without IAM) + adminDb persistence when IAM allows
+  // -------------------------------------------------------------------------
+  async function verifyAlgorithmCaller(req: express.Request): Promise<{ uid: string; email: string }> {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      throw new Error('UNAUTHORIZED:Jeton Bearer Firebase manquant.');
+    }
+    const idToken = authHeader.slice('Bearer '.length).trim();
+    if (!idToken) {
+      throw new Error('UNAUTHORIZED:Jeton Bearer vide.');
+    }
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    return {
+      uid: decoded.uid,
+      email: decoded.email || ''
+    };
+  }
+
+  function sanitizeIncomingEventForCaller(raw: unknown, callerUid: string): AlgorithmEvent | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const obj = raw as Record<string, unknown>;
+    if (obj.userId !== callerUid) {
+      throw new Error('FORBIDDEN:Usurpation userId détectée dans un événement algorithmique.');
+    }
+    if (typeof obj.eventType !== 'string' || !(VALID_ALGORITHM_EVENT_TYPES as readonly string[]).includes(obj.eventType)) {
+      return null;
+    }
+    if (typeof obj.id !== 'string' || !isValidFirestoreDocId(obj.id, 260)) return null;
+    if (typeof obj.targetId !== 'string' || obj.targetId.length < 1 || obj.targetId.length > 260) return null;
+    const validTargets = ['post', 'capsule', 'video', 'profile', 'circle', 'group', 'search'];
+    if (typeof obj.targetType !== 'string' || !validTargets.includes(obj.targetType)) return null;
+
+    const rawMeta =
+      obj.metadata && typeof obj.metadata === 'object' && !Array.isArray(obj.metadata)
+        ? (obj.metadata as Record<string, unknown>)
+        : {};
+
+    return {
+      id: obj.id,
+      userId: callerUid,
+      eventType: obj.eventType as AlgorithmEvent['eventType'],
+      targetId: obj.targetId,
+      targetType: obj.targetType as AlgorithmEvent['targetType'],
+      timestamp: typeof obj.timestamp === 'string' && obj.timestamp.length <= 64 ? obj.timestamp : new Date().toISOString(),
+      metadata: sanitizeAlgorithmMetadata(rawMeta)
+    };
+  }
+
+  app.post('/api/algorithm/ingest', async (req, res) => {
+    try {
+      const caller = await verifyAlgorithmCaller(req);
+      const rawEvents = Array.isArray((req.body as { events?: unknown[] })?.events)
+        ? (req.body as { events: unknown[] }).events
+        : [];
+
+      if (rawEvents.length === 0 || rawEvents.length > 25) {
+        return res.status(400).json({ error: 'INVALID_BATCH', message: 'Le lot doit contenir entre 1 et 25 événements.' });
+      }
+
+      const validEvents: AlgorithmEvent[] = [];
+      for (const rawEvt of rawEvents) {
+        const sanitized = sanitizeIncomingEventForCaller(rawEvt, caller.uid);
+        if (sanitized) validEvents.push(sanitized);
+      }
+
+      if (validEvents.length === 0) {
+        return res.status(400).json({ error: 'NO_VALID_EVENTS', message: 'Aucun événement valide dans la requête.' });
+      }
+
+      let persistedToFirestore = false;
+      let iamNotice: string | null = null;
+      let existingInterests: UserInterestProfile | null = null;
+      let existingStats: AlgorithmUserStats | null = null;
+      const existingSignals = new Map<string, ContentSignal | null>();
+
+      try {
+        const [interestSnap, statsSnap] = await Promise.all([
+          adminDb.collection('user_interests').doc(caller.uid).get(),
+          adminDb.collection('algorithm_user_stats').doc(caller.uid).get()
+        ]);
+        existingInterests = interestSnap.exists ? (interestSnap.data() as UserInterestProfile) : null;
+        existingStats = statsSnap.exists ? (statsSnap.data() as AlgorithmUserStats) : null;
+
+        const targetContentIds = Array.from(
+          new Set(
+            validEvents
+              .filter((e) => e.targetType === 'post' || e.targetType === 'capsule' || e.targetType === 'video')
+              .map((e) => e.targetId)
+          )
+        );
+        for (const cid of targetContentIds) {
+          const cSnap = await adminDb.collection('content_signals').doc(cid).get();
+          existingSignals.set(cid, cSnap.exists ? (cSnap.data() as ContentSignal) : null);
+        }
+      } catch (err) {
+        if (isIamPermissionError(err)) {
+          iamNotice = 'IAM_PERMISSION_REQUIRED';
+        } else {
+          throw err;
+        }
+      }
+
+      let nextInterests = existingInterests;
+      let nextStats = existingStats;
+      const updatedSignals = new Map<string, ContentSignal>();
+
+      for (const evt of validEvents) {
+        nextInterests = foldEventIntoInterestProfile(nextInterests, evt);
+        nextStats = foldEventIntoUserStats(nextStats, evt);
+        if (evt.targetType === 'post' || evt.targetType === 'capsule' || evt.targetType === 'video') {
+          const prevSignal = updatedSignals.get(evt.targetId) ?? existingSignals.get(evt.targetId) ?? null;
+          updatedSignals.set(evt.targetId, foldEventIntoContentSignal(prevSignal, evt));
+        }
+      }
+
+      if (!iamNotice && nextInterests && nextStats) {
+        try {
+          const batch = adminDb.batch();
+          batch.set(adminDb.collection('user_interests').doc(caller.uid), nextInterests, { merge: true });
+          batch.set(adminDb.collection('algorithm_user_stats').doc(caller.uid), nextStats, { merge: true });
+          updatedSignals.forEach((signal, contentId) => {
+            batch.set(adminDb.collection('content_signals').doc(contentId), signal, { merge: true });
+          });
+          await batch.commit();
+          persistedToFirestore = true;
+        } catch (err) {
+          if (isIamPermissionError(err)) {
+            iamNotice = 'IAM_PERMISSION_REQUIRED';
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      return res.json({
+        ok: true,
+        processedCount: validEvents.length,
+        persistedToFirestore,
+        ...(iamNotice ? { iamNotice } : {}),
+        userInterests: nextInterests,
+        userStats: nextStats,
+        contentSignals: Array.from(updatedSignals.values())
+      });
+    } catch (err) {
+      return handleServerError(res, err);
+    }
+  });
+
+  app.post('/api/algorithm/validate-sensitive-event', async (req, res) => {
+    try {
+      const caller = await verifyAlgorithmCaller(req);
+      const sanitized = sanitizeIncomingEventForCaller(req.body, caller.uid);
+      if (!sanitized || (sanitized.eventType !== 'post_hide' && sanitized.eventType !== 'post_report')) {
+        return res.status(400).json({ error: 'INVALID_SENSITIVE_EVENT', message: 'Événement sensible invalide.' });
+      }
+
+      let persistedToFirestore = false;
+      let iamNotice: string | null = null;
+
+      try {
+        await adminDb.collection('algorithm_events').doc(sanitized.id).set(sanitized);
+        const existingSignalSnap = await adminDb.collection('content_signals').doc(sanitized.targetId).get();
+        const existingSignal = existingSignalSnap.exists ? (existingSignalSnap.data() as ContentSignal) : null;
+        const nextSignal = foldEventIntoContentSignal(existingSignal, sanitized);
+        await adminDb.collection('content_signals').doc(sanitized.targetId).set(nextSignal, { merge: true });
+        persistedToFirestore = true;
+      } catch (err) {
+        if (isIamPermissionError(err)) {
+          iamNotice = 'IAM_PERMISSION_REQUIRED';
+        } else {
+          throw err;
+        }
+      }
+
+      return res.json({
+        ok: true,
+        event: sanitized,
+        persistedToFirestore,
+        ...(iamNotice ? { iamNotice } : {})
+      });
+    } catch (err) {
+      return handleServerError(res, err);
+    }
+  });
+
+  app.post('/api/algorithm/analyze-content', async (req, res) => {
+    try {
+      await verifyAlgorithmCaller(req);
+      const body = req.body as {
+        contentId?: string;
+        contentKind?: 'post' | 'capsule';
+        contentType?: string;
+        authorId?: string;
+        circleId?: string;
+        categoryHint?: string;
+        text?: string;
+        publishedAt?: string;
+        viewsCount?: number;
+        likesCount?: number;
+        commentsCount?: number;
+        sharesCount?: number;
+        savesCount?: number;
+        hidesCount?: number;
+        reportsCount?: number;
+        videoCompletionsCount?: number;
+        hasRichMedia?: boolean;
+      };
+
+      if (!body.contentId || !isValidFirestoreDocId(body.contentId, 260)) {
+        return res.status(400).json({ error: 'INVALID_CONTENT_ID', message: 'contentId invalide.' });
+      }
+      if (!body.authorId || !isValidFirestoreDocId(body.authorId, 128)) {
+        return res.status(400).json({ error: 'INVALID_AUTHOR_ID', message: 'authorId invalide.' });
+      }
+
+      const topics = extractTopicsFromText(body.text || '', body.categoryHint);
+      const mappedCategory = normalizeCategoryToTopic(body.categoryHint);
+      const categories = mappedCategory
+        ? Array.from(new Set([mappedCategory, ...topics]))
+        : topics.length > 0
+          ? topics
+          : ['societe'];
+
+      const publishedAt = body.publishedAt || new Date().toISOString();
+      const scores = computeContentScores({
+        publishedAt,
+        viewsCount: Math.max(0, Number(body.viewsCount) || 0),
+        likesCount: Math.max(0, Number(body.likesCount) || 0),
+        commentsCount: Math.max(0, Number(body.commentsCount) || 0),
+        sharesCount: Math.max(0, Number(body.sharesCount) || 0),
+        savesCount: Math.max(0, Number(body.savesCount) || 0),
+        hidesCount: Math.max(0, Number(body.hidesCount) || 0),
+        reportsCount: Math.max(0, Number(body.reportsCount) || 0),
+        videoCompletionsCount: Math.max(0, Number(body.videoCompletionsCount) || 0),
+        hasRichMedia: Boolean(body.hasRichMedia)
+      });
+
+      const signal: ContentSignal = {
+        contentId: body.contentId,
+        contentKind: body.contentKind === 'capsule' ? 'capsule' : 'post',
+        contentType: (body.contentType || 'text').slice(0, 32),
+        authorId: body.authorId,
+        circleId: (body.circleId || 'public').slice(0, 128),
+        categories,
+        topics,
+        publishedAt,
+        viewsCount: Math.max(0, Number(body.viewsCount) || 0),
+        likesCount: Math.max(0, Number(body.likesCount) || 0),
+        commentsCount: Math.max(0, Number(body.commentsCount) || 0),
+        sharesCount: Math.max(0, Number(body.sharesCount) || 0),
+        savesCount: Math.max(0, Number(body.savesCount) || 0),
+        hidesCount: Math.max(0, Number(body.hidesCount) || 0),
+        reportsCount: Math.max(0, Number(body.reportsCount) || 0),
+        videoCompletionsCount: Math.max(0, Number(body.videoCompletionsCount) || 0),
+        ...scores,
+        updatedAt: new Date().toISOString()
+      };
+
+      let persistedToFirestore = false;
+      let iamNotice: string | null = null;
+      try {
+        await adminDb.collection('content_signals').doc(signal.contentId).set(signal, { merge: true });
+        persistedToFirestore = true;
+      } catch (err) {
+        if (isIamPermissionError(err)) {
+          iamNotice = 'IAM_PERMISSION_REQUIRED';
+        } else {
+          throw err;
+        }
+      }
+
+      return res.json({
+        ok: true,
+        signal,
+        persistedToFirestore,
+        ...(iamNotice ? { iamNotice } : {})
+      });
+    } catch (err) {
+      return handleServerError(res, err);
+    }
+  });
+
+  app.get('/api/algorithm/profile', async (req, res) => {
+    try {
+      const caller = await verifyAlgorithmCaller(req);
+      try {
+        const [interestSnap, statsSnap] = await Promise.all([
+          adminDb.collection('user_interests').doc(caller.uid).get(),
+          adminDb.collection('algorithm_user_stats').doc(caller.uid).get()
+        ]);
+        return res.json({
+          ok: true,
+          persistedToFirestore: true,
+          userInterests: interestSnap.exists ? interestSnap.data() : null,
+          userStats: statsSnap.exists ? statsSnap.data() : null
+        });
+      } catch (err) {
+        if (isIamPermissionError(err)) {
+          return res.json({
+            ok: true,
+            persistedToFirestore: false,
+            iamNotice: 'IAM_PERMISSION_REQUIRED',
+            userInterests: null,
+            userStats: null
+          });
+        }
+        throw err;
+      }
     } catch (err) {
       return handleServerError(res, err);
     }

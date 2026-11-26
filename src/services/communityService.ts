@@ -51,6 +51,7 @@ import {
   extractMentionedUserIds,
   notificationService
 } from './notificationService';
+import { algorithmCoreService } from './algorithm';
 
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -423,6 +424,9 @@ export const communityService = {
         });
       }
       await batch.commit();
+      if (status === 'active') {
+        algorithmCoreService.trackCommunityJoin(user.id, group);
+      }
       return memberDoc;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `group_members/${memberId}`);

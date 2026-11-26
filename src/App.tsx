@@ -58,6 +58,7 @@ import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import { isFirebaseAuthSettled, zaureService } from './firebaseClient';
 import { communityService, PUBLIC_FEED_GROUP } from './services/communityService';
 import { notificationService } from './services/notificationService';
+import { profileService } from './services/profileService';
 import { settingsService } from './services/settingsService';
 import {
   applyAndPersistAppearancePreferences,
@@ -134,6 +135,18 @@ import {
   ZAURE_ICON_CHIPS,
   ZAURE_SURFACES
 } from './styles/designSystem';
+import {
+  algorithmCoreService,
+  algorithmEventService,
+  algorithmUserService,
+  contentAnalysisService,
+  interestAnalysisService,
+  smartFeedEngine,
+  type AlgorithmUserStats,
+  type FeedRankingMode,
+  type SmartFeedResult,
+  type UserInterestProfile
+} from './services/algorithm';
 
 export default function App() {
   const { t, language, setLanguage } = useTranslation();
@@ -214,6 +227,7 @@ export default function App() {
   const [pendingCircleRequestIds, setPendingCircleRequestIds] = useState<string[]>([]);
 
   const currentUserRef = useRef<UserProfile | null>(currentUser);
+  const lastAuthUserIdRef = useRef<string | null>(cachedUserSession?.id || null);
   const circlesRef = useRef<Circle[]>(circles);
   const allUsersRef = useRef<UserProfile[]>(allUsers);
   const capsulesRef = useRef<Capsule[]>(capsules);
@@ -268,7 +282,21 @@ export default function App() {
     [notifications]
   );
 
-  // Feed filters, Search & UX helpers
+  // Feed filters, Smart Feed mode, Search & UX helpers
+  const [feedMode, setFeedMode] = useState<FeedRankingMode>(() => {
+    try {
+      const uid = cachedUserSession?.id;
+      const saved = uid ? localStorage.getItem(`zaure_feed_mode_${uid}`) : null;
+      return saved === 'following' ? 'following' : 'for_you';
+    } catch {
+      return 'for_you';
+    }
+  });
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [blockedAuthorIds, setBlockedAuthorIds] = useState<string[]>([]);
+  const [smartUserInterests, setSmartUserInterests] = useState<UserInterestProfile | null>(null);
+  const [smartUserStats, setSmartUserStats] = useState<AlgorithmUserStats | null>(null);
+  const [smartFeedRefreshEpoch, setSmartFeedRefreshEpoch] = useState<number>(0);
   const [feedFilter, setFeedFilter] = useState<'all' | 'public' | 'joined' | 'audio' | 'questions'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [circleSearchQuery, setCircleSearchQuery] = useState('');
@@ -278,6 +306,16 @@ export default function App() {
   const [visibleFeedCount, setVisibleFeedCount] = useState<number>(10);
   const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
 
+  useEffect(() => {
+    try {
+      if (currentUser?.id) {
+        localStorage.setItem(`zaure_feed_mode_${currentUser.id}`, feedMode);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [feedMode, currentUser?.id]);
+
   // Public Facebook-style out-of-circle posts
   const [publicPosts, setPublicPosts] = useState<GroupPost[]>([]);
   const [publicPostComments, setPublicPostComments] = useState<PostComment[]>([]);
@@ -286,10 +324,11 @@ export default function App() {
   const [composerPostInitialType, setComposerPostInitialType] = useState<GroupPostType>('text');
   const [showComposerMore, setShowComposerMore] = useState(false);
   
-  // Bookmarks (saved locally for quick access)
+  // Bookmarks (saved per user UID for clean account isolation)
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('zaure_bookmarks');
+      const uid = cachedUserSession?.id;
+      const saved = uid ? localStorage.getItem(`zaure_bookmarks_${uid}`) : null;
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -333,17 +372,39 @@ export default function App() {
   // Wait for Firebase Auth SDK to restore auth.currentUser before mounting authenticated views & Firestore queries
   const [isAuthResolving, setIsAuthResolving] = useState<boolean>(() => !cachedUserSession);
 
-  // Persistence of bookmarks
+  // Persistence of bookmarks (strictly scoped by active user UID)
   const toggleBookmark = (id: string) => {
+    const uid = currentUserRef.current?.id;
     setBookmarkedIds((prev) => {
       const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
       try {
-        localStorage.setItem('zaure_bookmarks', JSON.stringify(updated));
+        if (uid) {
+          localStorage.setItem(`zaure_bookmarks_${uid}`, JSON.stringify(updated));
+        }
       } catch {
         // ignore storage error
       }
       return updated;
     });
+  };
+
+  const resetTransientAlgorithmAndFeedState = (prevUid?: string | null, nextUid?: string | null) => {
+    algorithmEventService.clearSessionCaches();
+    algorithmCoreService.syncActiveUser(nextUid || null);
+    smartFeedEngine.clearAllCaches(prevUid || undefined);
+    if (!nextUid) {
+      smartFeedEngine.clearAllCaches();
+    }
+    interestAnalysisService.clearUserCache();
+    algorithmUserService.clearUserCache();
+    contentAnalysisService.clearCache();
+    try {
+      localStorage.removeItem('zaure_capsules_cache');
+      localStorage.removeItem('zaure_joined_circles_cache');
+      localStorage.removeItem('zaure_users_cache');
+    } catch {
+      // ignore storage errors
+    }
   };
 
   useEffect(() => {
@@ -357,15 +418,46 @@ export default function App() {
     const unsubscribeAuth = zaureService.onAuthStateChangedListener((user) => {
       settled = true;
       window.clearTimeout(safetyTimer);
-      setCurrentUser(user);
-      setIsAuthResolving(false);
-      if (!user) {
+      const prevUid = lastAuthUserIdRef.current;
+      const nextUid = user?.id || null;
+
+      if (prevUid !== nextUid) {
+        resetTransientAlgorithmAndFeedState(prevUid, nextUid);
         setJoinedCircleIds([]);
         setPendingCircleRequestIds([]);
-        setAllUsers([]);
+        setFollowingIds([]);
+        setBlockedAuthorIds([]);
+        setSmartUserInterests(null);
+        setSmartUserStats(null);
         setCapsules([]);
+        setPublicPosts([]);
         lastCapsulesScopeRef.current = '';
+
+        if (!nextUid) {
+          setAllUsers([]);
+          setBookmarkedIds([]);
+          setFeedMode('for_you');
+        } else {
+          try {
+            const nextBookmarksRaw = localStorage.getItem(`zaure_bookmarks_${nextUid}`);
+            setBookmarkedIds(nextBookmarksRaw ? JSON.parse(nextBookmarksRaw) : []);
+          } catch {
+            setBookmarkedIds([]);
+          }
+          try {
+            const nextMode = localStorage.getItem(`zaure_feed_mode_${nextUid}`);
+            setFeedMode(nextMode === 'following' ? 'following' : 'for_you');
+          } catch {
+            setFeedMode('for_you');
+          }
+        }
+        lastAuthUserIdRef.current = nextUid;
+      } else {
+        algorithmCoreService.syncActiveUser(nextUid);
       }
+
+      setCurrentUser(user);
+      setIsAuthResolving(false);
     });
 
     // Real-time circles listener (hydrates immediately from IndexedDB cache & stays synced across tabs)
@@ -394,21 +486,90 @@ export default function App() {
   useEffect(() => {
     if (isAuthResolving || !currentUserId) return;
 
+    algorithmCoreService.initialize();
+    smartFeedEngine.ensureRegistered();
+    void algorithmCoreService.flushPendingEvents(currentUserId);
+
+    try {
+      const cachedFollowRaw = localStorage.getItem(`zaure_following_cache_${currentUserId}`);
+      if (cachedFollowRaw) {
+        const parsed = JSON.parse(cachedFollowRaw);
+        if (Array.isArray(parsed)) setFollowingIds(parsed);
+      }
+    } catch {
+      // ignore cache parse errors
+    }
+
     let active = true;
     const hydrateUserScope = () => {
       Promise.all([
         zaureService.getJoinedCircleIds(currentUserId).catch(() => [] as string[]),
-        zaureService.getAvailableUsers().catch(() => [] as UserProfile[])
-      ]).then(([joined, users]) => {
+        zaureService.getAvailableUsers().catch(() => [] as UserProfile[]),
+        zaureService.getBlockedUserIds().catch(() => [] as string[]),
+        interestAnalysisService.getUserInterests(currentUserId).catch(() => null),
+        algorithmUserService.getUserStats(currentUserId).catch(() => null)
+      ]).then(([joined, users, blocked, interests, stats]) => {
         if (!active) return;
         setJoinedCircleIds(joined);
         if (users.length > 0) {
           setAllUsers(users);
         }
+        setBlockedAuthorIds(blocked);
+        if (interests) setSmartUserInterests(interests);
+        if (stats) setSmartUserStats(stats);
       });
     };
 
     hydrateUserScope();
+
+    const unsubFollowing = profileService.subscribeFollowing(currentUserId, (follows) => {
+      if (!active) return;
+      const ids = follows.map((f) => f.followingId);
+      setFollowingIds((prev) => {
+        const changed =
+          prev.length !== ids.length || prev.some((id, idx) => id !== ids[idx]);
+        if (changed) {
+          smartFeedEngine.invalidateFeedCache(currentUserId);
+          setSmartFeedRefreshEpoch((n) => n + 1);
+        }
+        return ids;
+      });
+      try {
+        localStorage.setItem(`zaure_following_cache_${currentUserId}`, JSON.stringify(ids));
+      } catch {
+        // ignore storage quota errors
+      }
+    });
+
+    const handleBlockedUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string; targetUserId?: string; action?: 'block' | 'unblock' }>).detail;
+      if (detail?.userId && detail.userId !== currentUserId) return;
+      if (detail?.targetUserId && detail.action === 'block') {
+        setBlockedAuthorIds((prev) =>
+          prev.includes(detail.targetUserId!) ? prev : [...prev, detail.targetUserId!]
+        );
+      } else if (detail?.targetUserId && detail.action === 'unblock') {
+        setBlockedAuthorIds((prev) => prev.filter((id) => id !== detail.targetUserId));
+      }
+      smartFeedEngine.invalidateFeedCache(currentUserId);
+      setSmartFeedRefreshEpoch((n) => n + 1);
+      zaureService
+        .getBlockedUserIds()
+        .then((fresh) => {
+          if (active) setBlockedAuthorIds(fresh);
+        })
+        .catch(() => {});
+    };
+
+    const handleSafetySignalUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string }>).detail;
+      if (detail?.userId && detail.userId !== currentUserId) return;
+      smartFeedEngine.invalidateFeedCache(currentUserId);
+      setSmartFeedRefreshEpoch((n) => n + 1);
+    };
+
+    window.addEventListener('zaure:blocked-users-updated', handleBlockedUpdated);
+    window.addEventListener('zaure:algorithm-signal-updated', handleSafetySignalUpdated);
 
     let lastResyncAt = Date.now();
     const resyncOnWake = () => {
@@ -431,8 +592,11 @@ export default function App() {
 
     return () => {
       active = false;
+      window.removeEventListener('zaure:blocked-users-updated', handleBlockedUpdated);
+      window.removeEventListener('zaure:algorithm-signal-updated', handleSafetySignalUpdated);
       window.removeEventListener('online', resyncOnWake);
       document.removeEventListener('visibilitychange', resyncOnWake);
+      unsubFollowing();
       unsubCounts();
       unsubPendingRequests();
     };
@@ -560,10 +724,48 @@ export default function App() {
     }
   };
 
-  // Reset progressive feed pagination on filter/search changes & track scroll for Back-to-Top
+  // Reset progressive feed pagination on filter/mode/search changes & track scroll for Back-to-Top
   useEffect(() => {
     setVisibleFeedCount(10);
-  }, [feedFilter, feedSection, searchQuery, selectedCircleId]);
+  }, [feedMode, feedFilter, feedSection, searchQuery, selectedCircleId]);
+
+  // Refresh in-memory SmartFeed interests/stats when user switches feed mode or triggers refresh
+  useEffect(() => {
+    if (!currentUserId || feedSection !== 'feed') return;
+    let active = true;
+    Promise.all([
+      interestAnalysisService.getUserInterests(currentUserId).catch(() => null),
+      algorithmUserService.getUserStats(currentUserId).catch(() => null)
+    ]).then(([interests, stats]) => {
+      if (!active) return;
+      if (interests) setSmartUserInterests(interests);
+      if (stats) setSmartUserStats(stats);
+    });
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, feedMode, smartFeedRefreshEpoch, feedSection]);
+
+  // Debounced search telemetry for ZAURE Smart Algorithm (strictly non-blocking, min 2 chars)
+  useEffect(() => {
+    if (!currentUserId) return;
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) return;
+    const timer = window.setTimeout(() => {
+      algorithmCoreService.trackSearch(currentUserId, trimmed, undefined, 'feed');
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [currentUserId, searchQuery]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const trimmed = circleSearchQuery.trim();
+    if (trimmed.length < 2) return;
+    const timer = window.setTimeout(() => {
+      algorithmCoreService.trackSearch(currentUserId, trimmed, undefined, 'circles');
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [currentUserId, circleSearchQuery]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -621,6 +823,8 @@ export default function App() {
       const success = await zaureService.leaveCircle(circleId, currentUser.id);
       if (success) {
         setJoinedCircleIds((prev) => prev.filter((id) => id !== circleId));
+        smartFeedEngine.invalidateFeedCache(currentUser.id);
+        setSmartFeedRefreshEpoch((n) => n + 1);
       }
       return;
     }
@@ -648,6 +852,11 @@ export default function App() {
     const success = await zaureService.joinCircle(circleId, currentUser.id);
     if (success) {
       setJoinedCircleIds((prev) => (prev.includes(circleId) ? prev : [...prev, circleId]));
+      smartFeedEngine.invalidateFeedCache(currentUser.id);
+      setSmartFeedRefreshEpoch((n) => n + 1);
+      if (targetCircle) {
+        algorithmCoreService.trackCircleJoin(currentUser.id, targetCircle);
+      }
     }
   };
 
@@ -825,11 +1034,27 @@ export default function App() {
 
   const executeSignOut = async () => {
     setIsLoggingOut(true);
+    const prevUid = currentUser?.id || null;
     try {
+      if (prevUid) {
+        await algorithmCoreService.flushPendingEvents(prevUid).catch(() => {});
+      }
       localStorage.removeItem('zaure_user_session_cache');
       await zaureService.signOut();
+      resetTransientAlgorithmAndFeedState(prevUid, null);
+      lastAuthUserIdRef.current = null;
       setCurrentUser(null);
+      setAllUsers([]);
+      setCapsules([]);
+      setPublicPosts([]);
       setJoinedCircleIds([]);
+      setPendingCircleRequestIds([]);
+      setFollowingIds([]);
+      setBlockedAuthorIds([]);
+      setBookmarkedIds([]);
+      setFeedMode('for_you');
+      setSmartUserInterests(null);
+      setSmartUserStats(null);
       setDirectChatUser(null);
       setChatMobileView('list');
       setShowLogoutConfirm(false);
@@ -881,6 +1106,8 @@ export default function App() {
       const fresh = await zaureService.getCircles();
       setCircles(fresh);
     }
+    smartFeedEngine.invalidateFeedCache();
+    setSmartFeedRefreshEpoch((n) => n + 1);
   };
 
   const handleDeleteCircle = async (circleId: string) => {
@@ -888,6 +1115,8 @@ export default function App() {
     if (success) {
       setCircles((prev) => prev.filter((c) => c.id !== circleId));
       setJoinedCircleIds((prev) => prev.filter((id) => id !== circleId));
+      smartFeedEngine.invalidateFeedCache();
+      setSmartFeedRefreshEpoch((n) => n + 1);
       if (selectedCircleId === circleId) {
         navigate('/circles');
       }
@@ -968,12 +1197,24 @@ export default function App() {
     return result;
   }, [capsules, feedSection, feedFilter, searchQuery, bookmarkedIds]);
 
-  // Merged Home Feed (Facebook-style public posts outside circles + capsules)
-  const displayedFeedItems = useMemo(() => {
-    type UnifiedFeedItem =
-      | { kind: 'capsule'; id: string; createdAt: string; data: Capsule }
-      | { kind: 'post'; id: string; createdAt: string; data: GroupPost };
+  const circlesLookup = useMemo(() => {
+    const map = new Map<string, Circle>();
+    circles.forEach((c) => map.set(c.id, c));
+    return map;
+  }, [circles]);
 
+  const usersLookup = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    allUsers.forEach((u) => map.set(u.id, u));
+    return map;
+  }, [allUsers]);
+
+  type UnifiedFeedItem =
+    | { kind: 'capsule'; id: string; createdAt: string; data: Capsule }
+    | { kind: 'post'; id: string; createdAt: string; data: GroupPost };
+
+  // Merged Home Feed ranked by SmartFeedEngine (Pour vous / Abonnements) with chronological rescue fallback
+  const smartFeedResult = useMemo<SmartFeedResult<UnifiedFeedItem>>(() => {
     const items: UnifiedFeedItem[] = displayedCapsules.map((c) => ({
       kind: 'capsule',
       id: c.id,
@@ -1035,8 +1276,34 @@ export default function App() {
       });
     }
 
-    items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    return items;
+    // Bookmarks & active search stay strictly chronological while still enforcing all security/privacy exclusions
+    if (feedSection !== 'feed' || searchQuery.trim().length > 0) {
+      return smartFeedEngine.chronologicalFallback(
+        items,
+        {
+          userId: currentUser?.id || null,
+          mode: feedSection === 'bookmarks' ? 'for_you' : feedMode,
+          followingIds,
+          joinedCircleIds,
+          blockedAuthorIds,
+          circlesById: circlesLookup,
+          usersById: usersLookup
+        },
+        'search_or_bookmarks'
+      );
+    }
+
+    return smartFeedEngine.rankFeedSynchronously(items, {
+      userId: currentUser?.id || null,
+      mode: feedMode,
+      followingIds,
+      joinedCircleIds,
+      blockedAuthorIds,
+      circlesById: circlesLookup,
+      usersById: usersLookup,
+      userInterests: smartUserInterests,
+      userStats: smartUserStats
+    });
   }, [
     displayedCapsules,
     publicPosts,
@@ -1044,7 +1311,56 @@ export default function App() {
     feedFilter,
     feedSection,
     searchQuery,
-    currentUser
+    currentUser,
+    feedMode,
+    followingIds,
+    joinedCircleIds,
+    blockedAuthorIds,
+    circlesLookup,
+    usersLookup,
+    smartUserInterests,
+    smartUserStats,
+    smartFeedRefreshEpoch
+  ]);
+
+  const displayedFeedItems = useMemo<UnifiedFeedItem[]>(
+    () => smartFeedResult.items.map((entry) => entry.item),
+    [smartFeedResult]
+  );
+
+  // Background Android cache refresh & throttled Firestore signal sync (non-blocking)
+  useEffect(() => {
+    if (!currentUserId || feedSection !== 'feed' || searchQuery.trim().length > 0) return;
+    const candidates = smartFeedResult.items.map((e) => e.item);
+    if (candidates.length === 0) return;
+    let active = true;
+    smartFeedEngine
+      .rankFeed(candidates, {
+        userId: currentUserId,
+        mode: feedMode,
+        followingIds,
+        joinedCircleIds,
+        blockedAuthorIds,
+        circlesById: circlesLookup,
+        usersById: usersLookup,
+        userInterests: smartUserInterests,
+        userStats: smartUserStats
+      })
+      .catch(() => {
+        if (!active) return;
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    currentUserId,
+    feedMode,
+    feedSection,
+    smartFeedRefreshEpoch,
+    smartFeedResult.totalCandidates,
+    blockedAuthorIds,
+    joinedCircleIdsKey,
+    followingIds
   ]);
 
   // Scroll cleanly to target post/capsule opened from Notifications Center
@@ -2645,12 +2961,60 @@ export default function App() {
                 </div>
               )}
 
-              {/* C. À LA UNE & FILTRES DISCRETS DU FLUX */}
-              <div className="flex flex-col gap-2 px-0.5 pt-0.5">
+              {/* C. À LA UNE, MODES DU FIL (POUR VOUS / ABONNEMENTS) & FILTRES */}
+              <div className="flex flex-col gap-2.5 px-0.5 pt-0.5">
+                {feedSection === 'feed' && (
+                  <div className="flex items-center justify-between gap-2 bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-1 shadow-2xs">
+                    <div className="grid grid-cols-2 flex-1 gap-1" role="tablist" aria-label="Mode du fil d'actualité">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={feedMode === 'for_you'}
+                        onClick={() => {
+                          setFeedMode('for_you');
+                          setSmartFeedRefreshEpoch((n) => n + 1);
+                        }}
+                        className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
+                          feedMode === 'for_you'
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                        <span>Pour vous</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={feedMode === 'following'}
+                        onClick={() => {
+                          setFeedMode('following');
+                          setSmartFeedRefreshEpoch((n) => n + 1);
+                        }}
+                        className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
+                          feedMode === 'following'
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <Users className="w-3.5 h-3.5 shrink-0" />
+                        <span>Abonnements</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-xs sm:text-sm font-extrabold text-slate-950 dark:text-white flex items-center gap-1.5">
                     <Flame className="w-4 h-4 text-blue-600" />
-                    <span>{feedSection === 'bookmarks' ? 'Savoirs enregistrés' : 'À la une'}</span>
+                    <span>
+                      {feedSection === 'bookmarks'
+                        ? 'Savoirs enregistrés'
+                        : feedMode === 'following'
+                          ? 'Vos abonnements'
+                          : 'À la une'}
+                    </span>
                   </h2>
                   <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
                     <button
@@ -2802,7 +3166,29 @@ export default function App() {
                       Aucune publication dans ce flux
                     </h4>
 
-                    {feedFilter === 'joined' ? (
+                    {feedMode === 'following' && feedSection === 'feed' ? (
+                      <div className="max-w-md mx-auto mt-2">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                          Aucune publication des personnes que vous suivez ou de vos Cercles pour le moment. Découvrez de nouveaux contenus dans « Pour vous » ou rejoignez des Cercles !
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFeedMode('for_you')}
+                            className={`min-h-[40px] px-4 py-2 ${ZAURE_SURFACES.gradientButton} text-xs`}
+                          >
+                            Passer à « Pour vous »
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate('/circles')}
+                            className="min-h-[40px] px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition"
+                          >
+                            Explorer les cercles
+                          </button>
+                        </div>
+                      </div>
+                    ) : feedFilter === 'joined' ? (
                       <div className="max-w-md mx-auto mt-2">
                         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                           Vous n'avez pas encore de publications de vos cercles. Rejoignez des cercles de savoir pour composer votre fil !
@@ -2849,7 +3235,7 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    {displayedFeedItems.slice(0, visibleFeedCount).map((item) => {
+                    {smartFeedEngine.paginateFeed<UnifiedFeedItem>(displayedFeedItems, 1, visibleFeedCount).items.map((item: UnifiedFeedItem) => {
                       const itemDomKey = item.kind === 'post' ? `pub_${item.id}` : `cap_${item.id}`;
                       const isHighlighted = focusedItemId === itemDomKey;
                       return (

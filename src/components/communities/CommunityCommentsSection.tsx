@@ -23,6 +23,7 @@ import {
 import { collection, getDocs } from 'firebase/firestore';
 import { dbFirestore, normalizePrivacySettings, zaureService } from '../../firebaseClient';
 import { communityService } from '../../services/communityService';
+import { algorithmCoreService } from '../../services/algorithm';
 
 interface CommunityCommentsSectionProps {
   group: CommunityGroup;
@@ -183,6 +184,12 @@ export default function CommunityCommentsSection({
         replyingTo?.id || null,
         selectedMentions
       );
+      algorithmCoreService.trackPostInteraction({
+        userId: currentUser.id,
+        eventType: 'post_comment',
+        post,
+        group
+      });
       setNewComment('');
       setReplyingTo(null);
       setSelectedMentions([]);

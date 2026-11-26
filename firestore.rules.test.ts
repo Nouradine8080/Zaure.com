@@ -134,3 +134,121 @@ export const DIRTY_DOZEN_ADMIN_CASES = [
     expected: 'PERMISSION_DENIED'
   }
 ] as const;
+
+export const DIRTY_DOZEN_ALGORITHM_CASES = [
+  {
+    id: 'ALG-DD-01',
+    name: 'User spoofs another userId when creating /algorithm_events/{id}',
+    collection: 'algorithm_events',
+    operation: 'create',
+    actor: { uid: 'user_a' },
+    payload: {
+      id: 'evt_spoof_1',
+      userId: 'user_b',
+      eventType: 'post_like',
+      targetId: 'post_1',
+      targetType: 'post',
+      timestamp: '2026-01-01T00:00:00Z',
+      metadata: {}
+    },
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-02',
+    name: 'User attempts to read or list another user algorithm_events',
+    collection: 'algorithm_events',
+    operation: 'list',
+    actor: { uid: 'user_a' },
+    targetUserId: 'user_b',
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-03',
+    name: 'Standard user attempts to update or delete own telemetry event',
+    collection: 'algorithm_events',
+    operation: 'delete',
+    actor: { uid: 'user_a' },
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-04',
+    name: 'Standard user attempts PII injection in algorithm_events.metadata',
+    collection: 'algorithm_events',
+    operation: 'create',
+    actor: { uid: 'user_a' },
+    payload: {
+      id: 'evt_pii_1',
+      userId: 'user_a',
+      eventType: 'search',
+      targetId: 'q_test',
+      targetType: 'search',
+      timestamp: '2026-01-01T00:00:00Z',
+      metadata: { email: 'leak@zaure.com', password: 'secret' }
+    },
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-05',
+    name: 'Standard user attempts direct write to /user_interests/{uid}',
+    collection: 'user_interests',
+    operation: 'create',
+    actor: { uid: 'user_a' },
+    payload: {
+      userId: 'user_a',
+      interests: { technologie: 100 },
+      topTopics: ['technologie'],
+      decayVersion: 1,
+      totalSignals: 999,
+      updatedAt: '2026-01-01T00:00:00Z'
+    },
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-06',
+    name: 'Standard user attempts direct write to /content_signals/{contentId}',
+    collection: 'content_signals',
+    operation: 'create',
+    actor: { uid: 'user_a' },
+    payload: {
+      contentId: 'post_1',
+      contentKind: 'post',
+      contentType: 'text',
+      authorId: 'user_a',
+      categories: ['technologie'],
+      publishedAt: '2026-01-01T00:00:00Z',
+      qualityScore: 100,
+      popularityScore: 100,
+      decayScore: 100,
+      updatedAt: '2026-01-01T00:00:00Z'
+    },
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-07',
+    name: 'Standard user attempts direct write to /algorithm_user_stats/{uid}',
+    collection: 'algorithm_user_stats',
+    operation: 'create',
+    actor: { uid: 'user_a' },
+    payload: {
+      userId: 'user_a',
+      totalEvents: 1000,
+      viewsCount: 500,
+      likesCount: 200,
+      commentsCount: 100,
+      sharesCount: 50,
+      savesCount: 50,
+      updatedAt: '2026-01-01T00:00:00Z'
+    },
+    expected: 'PERMISSION_DENIED'
+  },
+  {
+    id: 'ALG-DD-08',
+    name: 'User reads another user /user_interests/{otherUid} or /algorithm_user_stats/{otherUid}',
+    collection: 'user_interests',
+    operation: 'get',
+    actor: { uid: 'user_a' },
+    targetUserId: 'user_b',
+    expected: 'PERMISSION_DENIED'
+  }
+] as const;
+

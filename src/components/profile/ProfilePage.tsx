@@ -70,8 +70,13 @@ import ProfileMediaGallery from './ProfileMediaGallery';
 import FollowListModal from './FollowListModal';
 import EditProfileModal from './EditProfileModal';
 import ProfilePrivacyModal from './ProfilePrivacyModal';
-import { ZaureGeometricBackdrop } from '../ui/ZaureGeometricBackdrop';
-import { ZAURE_GLOWS, ZAURE_ICON_CHIPS, ZAURE_SURFACES } from '../../styles/designSystem';
+import ZaureGeometricBackdrop from '../ui/ZaureGeometricBackdrop';
+import {
+  ZAURE_GLOWS,
+  ZAURE_ICON_CHIPS,
+  ZAURE_SURFACES
+} from '../../styles/designSystem';
+import { algorithmCoreService } from '../../services/algorithm';
 
 export type ProfileTabId = 'publications' | 'about' | 'photos' | 'videos' | 'communities';
 
@@ -196,6 +201,12 @@ export default function ProfilePage({
   }, [initialProfileUser.id, isOwnProfile, currentUser.email]);
 
   useEffect(() => {
+    if (!isOwnProfile && profile.id && profile.id !== currentUser.id) {
+      algorithmCoreService.trackProfileVisit(currentUser.id, profile.id, profile.profession);
+    }
+  }, [profile.id, profile.profession, isOwnProfile, currentUser.id]);
+
+  useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
     }
@@ -307,6 +318,11 @@ export default function ProfilePage({
         if (targetUserId === profile.id) notify(`Vous ne suivez plus ${profile.nom}.`);
       } else {
         await profileService.followUser(currentUser.id, targetUserId);
+        algorithmCoreService.trackUserFollow(
+          currentUser.id,
+          targetUserId,
+          targetUserId === profile.id ? profile.profession : undefined
+        );
         if (targetUserId === profile.id) notify(`Vous suivez maintenant ${profile.nom}.`);
       }
     } catch (err: any) {

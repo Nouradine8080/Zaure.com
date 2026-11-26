@@ -20,3 +20,25 @@
 10. **Moderator updates `/platform_settings/global`**: `MODERATOR` attempts `setDoc(doc(db, 'platform_settings', 'global'), { maintenanceMode: true })` -> `PERMISSION_DENIED`.
 11. **User writes `/platform_notifications/{id}`**: Regular user creates global broadcast notification -> `PERMISSION_DENIED`.
 12. **ID Poisoning / Ghost Fields on `/user_moderation/{id}`**: Admin writes 2KB document ID or undeclared field `ghostFlag: true` -> `PERMISSION_DENIED`.
+
+---
+
+# Zaure Smart Algorithm Core Engine Security Specification (Phase 1)
+
+## 3. Algorithmic Telemetry & Score Integrity Invariants
+1. **Strict Telemetry Isolation (`/algorithm_events`)**: Authenticated users may ONLY create events where `userId == request.auth.uid`, and may ONLY `get`/`list` their own events (`existing().userId == request.auth.uid || isAdmin()`). Telemetry events are append-only for standard users (`update`/`delete` denied unless `isAdmin()`).
+2. **Zero PII / Sensitive Data Rejection**: `algorithm_events.metadata` strictly rejects any sensitive keys (`password`, `motDePasse`, `email`, `phone`, `telephone`, `token`, `secret`, `messageContent`, `privateMessage`, `address`, `ssn`) and bounds metadata size (`<= 12` keys). Private message contents and credentials are never collected.
+3. **Server-Authoritative Score Protection**: Standard users CANNOT create, update, or delete `/user_interests/{userId}`, `/content_signals/{contentId}`, or `/algorithm_user_stats/{userId}` directly. Only Cloud Functions (Admin SDK) or verified `isAdmin()` staff can write algorithmic weights, content quality/popularity scores, and user stats.
+4. **Scoped Score Read Access**: `/user_interests/{userId}` and `/algorithm_user_stats/{userId}` are strictly owner-or-admin readable (`isOwner(userId) || isAdmin()`). `/content_signals/{contentId}` stores zero PII and is readable only by authenticated users (`isSignedIn()`).
+
+## 4. Algorithmic "Dirty Dozen" Payloads (All Must Return PERMISSION_DENIED)
+13. **Event User Spoofing**: `USER_A` creates `/algorithm_events/{id}` with `userId: 'USER_B'` -> `PERMISSION_DENIED`.
+14. **Cross-User Event Snooping**: `USER_A` calls `getDoc` or `getDocs(query(collection(db, 'algorithm_events'), where('userId', '==', 'USER_B')))` -> `PERMISSION_DENIED`.
+15. **Telemetry Tampering / Deletion**: `USER_A` calls `updateDoc` or `deleteDoc` on own `/algorithm_events/{id}` -> `PERMISSION_DENIED`.
+16. **PII Injection in Metadata**: `USER_A` sends `metadata: { email: 'x@y.com' }` or `metadata: { password: '...' }` or `metadata: { messageContent: 'hello' }` -> `PERMISSION_DENIED`.
+17. **Direct User Interest Manipulation**: `USER_A` writes `/user_interests/{USER_A}` to fake topic scores -> `PERMISSION_DENIED`.
+18. **Direct Content Score Boosting**: `USER_A` writes `/content_signals/{postId}` to inflate `qualityScore` / `popularityScore` -> `PERMISSION_DENIED`.
+19. **Direct Algorithmic Stats Manipulation**: `USER_A` writes `/algorithm_user_stats/{USER_A}` -> `PERMISSION_DENIED`.
+20. **Cross-User Interest Reading**: `USER_A` reads `/user_interests/{USER_B}` or `/algorithm_user_stats/{USER_B}` -> `PERMISSION_DENIED`.
+21. **Invalid Event Type / Ghost Field**: `USER_A` submits `eventType: 'unknown_action'` or undeclared top-level field `ghostScore: 999` -> `PERMISSION_DENIED`.
+
